@@ -293,20 +293,20 @@ def upgrade() -> None:
         $$ language 'plpgsql';
     """)
 
+    op.execute("DROP TRIGGER IF EXISTS update_users_updated_at ON users;")
     op.execute("""
-        DROP TRIGGER IF EXISTS update_users_updated_at ON users;
         CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
 
+    op.execute("DROP TRIGGER IF EXISTS update_workers_updated_at ON workers;")
     op.execute("""
-        DROP TRIGGER IF EXISTS update_workers_updated_at ON workers;
         CREATE TRIGGER update_workers_updated_at BEFORE UPDATE ON workers
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
 
+    op.execute("DROP TRIGGER IF EXISTS update_config_updated_at ON config;")
     op.execute("""
-        DROP TRIGGER IF EXISTS update_config_updated_at ON config;
         CREATE TRIGGER update_config_updated_at BEFORE UPDATE ON config
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
