@@ -70,7 +70,7 @@ services:
 
     ports:
       # Only expose for debugging - remove in production
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:45432:5432"
 
     logging:
       driver: "json-file"
@@ -110,7 +110,7 @@ services:
 
     ports:
       # Only expose for debugging - remove in production
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:46379:6379"
 
     logging:
       driver: "json-file"
