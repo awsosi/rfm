@@ -34,6 +34,11 @@ def upgrade() -> None:
     - Default configuration values
     """
 
+    # Create extensions
+    op.execute("""
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    """)
+
     # Create ENUM types
     op.execute("""
         CREATE TYPE userrole AS ENUM ('admin', 'operator', 'viewer');
@@ -69,6 +74,8 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_index(op.f('ix_users_role'), 'users', ['role'], unique=False)
+    op.create_index(op.f('ix_users_is_active'), 'users', ['is_active'], unique=False)
 
     # Create sessions table
     op.create_table(
@@ -214,17 +221,43 @@ def upgrade() -> None:
         ('enable_sybase_auth', 'false', 'boolean', 'Enable external Sybase authentication'),
         ('sybase_auth_url', '', 'string', 'Sybase API URL for authentication'),
         ('sybase_auth_timeout', '2', 'int', 'Sybase authentication timeout in seconds'),
+        ('sybase_auth_stored_proc', '', 'string', 'Sybase stored procedure name for auth'),
         ('enable_syslog', 'false', 'boolean', 'Enable syslog integration'),
         ('syslog_host', '', 'string', 'Syslog server hostname'),
         ('syslog_port', '514', 'int', 'Syslog server port'),
+        ('syslog_protocol', 'UDP', 'string', 'Syslog protocol (UDP/TCP)'),
         ('enable_remote_audit_api', 'false', 'boolean', 'Enable remote audit log API push'),
         ('remote_audit_api_url', '', 'string', 'Remote audit API endpoint URL'),
+        ('remote_audit_api_token', '', 'string', 'Authentication token for remote audit API'),
+        ('remote_audit_api_timeout', '5', 'int', 'Remote audit API timeout in seconds'),
         ('log_retention_days', '14', 'int', 'Number of days to retain compressed logs'),
+        ('enable_log_compression', 'true', 'boolean', 'Enable automatic log compression'),
         ('worker_heartbeat_interval', '30', 'int', 'Worker heartbeat interval in seconds'),
         ('worker_heartbeat_timeout', '90', 'int', 'Worker considered offline after this many seconds'),
+        ('worker_timeout', '300', 'int', 'Worker command timeout in seconds'),
+        ('worker_retry_attempts', '3', 'int', 'Number of retry attempts for failed worker operations'),
         ('operation_timeout', '3600', 'int', 'Maximum operation execution time in seconds'),
         ('enable_auto_rollback', 'true', 'boolean', 'Automatically rollback failed operations'),
-        ('max_file_listing_items', '1000', 'int', 'Maximum items to return in directory listing (lazy loading)');
+        ('max_file_listing_items', '1000', 'int', 'Maximum items to return in directory listing'),
+        ('enable_lazy_loading', 'true', 'boolean', 'Enable lazy loading for large directory listings'),
+        ('enable_ip_whitelist', 'false', 'boolean', 'Enable IP address whitelisting'),
+        ('ip_whitelist', '[]', 'json', 'JSON array of allowed IP addresses/ranges'),
+        ('enable_rate_limiting', 'true', 'boolean', 'Enable API rate limiting'),
+        ('rate_limit_requests_per_minute', '60', 'int', 'Maximum API requests per minute per user'),
+        ('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode (API read-only)'),
+        ('maintenance_message', 'System is under maintenance', 'string', 'Message displayed during maintenance');
+    """)
+
+    # Create system statistics view
+    op.execute("""
+        CREATE OR REPLACE VIEW system_stats AS
+        SELECT
+            (SELECT COUNT(*) FROM users WHERE is_active = true) as active_users,
+            (SELECT COUNT(*) FROM workers WHERE status = 'active') as active_workers,
+            (SELECT COUNT(*) FROM operations WHERE status = 'in_progress') as operations_in_progress,
+            (SELECT COUNT(*) FROM operations WHERE created_at > NOW() - INTERVAL '24 hours') as operations_today,
+            (SELECT COUNT(*) FROM sessions WHERE expires_at > NOW()) as active_sessions,
+            (SELECT pg_size_pretty(pg_database_size(current_database()))) as database_size;
     """)
 
     # Create trigger to auto-update updated_at timestamp
@@ -260,6 +293,9 @@ def downgrade() -> None:
 
     WARNING: This is destructive and will delete all data.
     """
+    # Drop view
+    op.execute("DROP VIEW IF EXISTS system_stats;")
+
     # Drop triggers
     op.execute("DROP TRIGGER IF EXISTS update_config_updated_at ON config;")
     op.execute("DROP TRIGGER IF EXISTS update_workers_updated_at ON workers;")
@@ -301,6 +337,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_sessions_id'), table_name='sessions')
     op.drop_table('sessions')
 
+    op.drop_index(op.f('ix_users_is_active'), table_name='users')
+    op.drop_index(op.f('ix_users_role'), table_name='users')
     op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')
@@ -311,3 +349,6 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS operationtype;")
     op.execute("DROP TYPE IF EXISTS workerstatus;")
     op.execute("DROP TYPE IF EXISTS userrole;")
+
+    # Drop extensions
+    op.execute("DROP EXTENSION IF EXISTS \"uuid-ossp\";")
