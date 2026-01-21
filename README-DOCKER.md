@@ -223,7 +223,7 @@ See `.env.example` for complete configuration options.
 - **Image**: `postgres:16-alpine`
 - **Purpose**: Primary data store for users, operations, audit logs
 - **Persistence**: `postgres-data` volume (survives container restarts)
-- **Initialization**: Runs `init-db.sql` on first startup
+- **Initialization**: Schema managed by Alembic migrations on API startup
 - **Health Check**: `pg_isready` every 10 seconds
 
 **Access PostgreSQL Shell:**
@@ -801,8 +801,8 @@ docker-compose up -d
 - `docker-compose.yml` - Service orchestration
 - `Dockerfile.api` - API container build
 - `Dockerfile.webui` - WebUI container build
-- `init-db.sql` - Database initialization
 - `.env.example` - Configuration template
+- Database schema managed by Alembic migrations in `backend/alembic/`
 
 ### Support
 
