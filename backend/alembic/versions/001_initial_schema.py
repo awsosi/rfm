@@ -39,25 +39,45 @@ def upgrade() -> None:
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
     """)
 
-    # Create ENUM types
+    # Create ENUM types (with IF NOT EXISTS check)
     op.execute("""
-        CREATE TYPE userrole AS ENUM ('admin', 'operator', 'viewer');
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
+                CREATE TYPE userrole AS ENUM ('admin', 'operator', 'viewer');
+            END IF;
+        END $$;
     """)
 
     op.execute("""
-        CREATE TYPE workerstatus AS ENUM ('active', 'suspended', 'pending');
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workerstatus') THEN
+                CREATE TYPE workerstatus AS ENUM ('active', 'suspended', 'pending');
+            END IF;
+        END $$;
     """)
 
     op.execute("""
-        CREATE TYPE operationtype AS ENUM ('copy', 'move', 'delete', 'mkdir');
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operationtype') THEN
+                CREATE TYPE operationtype AS ENUM ('copy', 'move', 'delete', 'mkdir');
+            END IF;
+        END $$;
     """)
 
     op.execute("""
-        CREATE TYPE operationstatus AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'rolled_back');
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operationstatus') THEN
+                CREATE TYPE operationstatus AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'rolled_back');
+            END IF;
+        END $$;
     """)
 
     op.execute("""
-        CREATE TYPE configtype AS ENUM ('string', 'int', 'json', 'boolean');
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'configtype') THEN
+                CREATE TYPE configtype AS ENUM ('string', 'int', 'json', 'boolean');
+            END IF;
+        END $$;
     """)
 
     # Create users table
@@ -208,7 +228,8 @@ def upgrade() -> None:
             '$argon2id$v=19$m=65536,t=3,p=4$kxMCoNQ6p1QqxTiHUGqNUQ$+yGg0YZMk3gqGZb5ZZWqJqHZ5C8xLBzN5sZq4gZQwWk',
             'admin',
             true
-        );
+        )
+        ON CONFLICT (username) DO NOTHING;
     """)
 
     # Insert default configuration values
@@ -245,7 +266,8 @@ def upgrade() -> None:
         ('enable_rate_limiting', 'true', 'boolean', 'Enable API rate limiting'),
         ('rate_limit_requests_per_minute', '60', 'int', 'Maximum API requests per minute per user'),
         ('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode (API read-only)'),
-        ('maintenance_message', 'System is under maintenance', 'string', 'Message displayed during maintenance');
+        ('maintenance_message', 'System is under maintenance', 'string', 'Message displayed during maintenance')
+        ON CONFLICT (key) DO NOTHING;
     """)
 
     # Create system statistics view
@@ -272,16 +294,19 @@ def upgrade() -> None:
     """)
 
     op.execute("""
+        DROP TRIGGER IF EXISTS update_users_updated_at ON users;
         CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
 
     op.execute("""
+        DROP TRIGGER IF EXISTS update_workers_updated_at ON workers;
         CREATE TRIGGER update_workers_updated_at BEFORE UPDATE ON workers
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
 
     op.execute("""
+        DROP TRIGGER IF EXISTS update_config_updated_at ON config;
         CREATE TRIGGER update_config_updated_at BEFORE UPDATE ON config
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """)
