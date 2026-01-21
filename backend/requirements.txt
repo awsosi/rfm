@@ -80,9 +80,6 @@ requests==2.31.0
 # ------------------------------------------------------------------------------
 # Data Validation & Serialization
 # ------------------------------------------------------------------------------
-# Python data validation
-pydantic==2.5.3
-
 # JSON handling
 orjson==3.9.12
 
@@ -92,8 +89,7 @@ orjson==3.9.12
 # Structured logging
 loguru==0.7.2
 
-# Syslog client
-python-syslog==2.0.1
+# Note: Syslog support is available via Python's built-in logging.handlers.SysLogHandler
 
 # ------------------------------------------------------------------------------
 # Task Queue (Optional - for background jobs)
@@ -107,9 +103,6 @@ celery==5.3.6
 # Testing framework
 pytest==7.4.4
 pytest-asyncio==0.23.3
-
-# FastAPI test client
-httpx==0.26.0
 
 # Mock/fixtures
 pytest-mock==3.12.0
@@ -131,9 +124,6 @@ ruff==0.1.14
 
 # Type checking
 mypy==1.8.0
-
-# SQL type stubs
-sqlalchemy[mypy]==2.0.25
 
 # ------------------------------------------------------------------------------
 # Utilities
