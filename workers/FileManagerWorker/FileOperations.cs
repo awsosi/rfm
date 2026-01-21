@@ -67,17 +67,17 @@ namespace FileManagerWorker
                 throw new UnauthorizedAccessException($"Path is outside allowed boundaries: {fullPath}");
             }
 
-            // Additional check: ensure no system directories are accessed
-            var systemDirs = new[] { "Windows", "System32", "Program Files", "ProgramData" };
-            foreach (var sysDir in systemDirs)
-            {
-                if (fullPath.Contains(sysDir, StringComparison.OrdinalIgnoreCase))
-                {
-                    Logger.Warn("Attempted access to system directory: {0}", fullPath);
-                    throw new UnauthorizedAccessException($"Access to system directories is forbidden: {fullPath}");
-                }
-            }
-        }
+			// Additional check: ensure no system directories are accessed
+			var systemDirs = new[] { "Windows", "System32", "Program Files", "ProgramData" };
+			foreach (var sysDir in systemDirs)
+			{
+				if (fullPath.IndexOf(sysDir, StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					Logger.Warn("Attempted access to system directory: {0}", fullPath);
+					throw new UnauthorizedAccessException($"Access to system directories is forbidden: {fullPath}");
+				}
+			}
+		}
 
         /// <summary>
         /// Copies file or directory

@@ -123,7 +123,7 @@ namespace FileManagerWorker
                     x.UseNLog();
                 });
 
-                if (exitCode == TopshelfExitCode.Ok)
+                if ((int)exitCode == (int)TopshelfExitCode.Ok)
                 {
                     Console.WriteLine("Service installed successfully.");
                     return 0;

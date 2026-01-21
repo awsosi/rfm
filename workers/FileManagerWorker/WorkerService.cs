@@ -1,9 +1,11 @@
 using System;
 using System.Configuration;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using NLog;
 using FileManagerWorker.Models;
+using NLog;
 
 namespace FileManagerWorker
 {
@@ -52,7 +54,11 @@ namespace FileManagerWorker
 
                 // Initialize components
                 _certManager = new CertificateManager();
-                _apiClient = new ApiClient(config.ApiUrl, _certManager);
+				_certManager.StoreMode = Debugger.IsAttached || Environment.GetCommandLineArgs().Contains("/debug")
+	                ? CertificateManager.CertStoreMode.CurrentUser
+	                : CertificateManager.CertStoreMode.LocalMachine;
+				Logger.Info("Using certificate store: {0}", _certManager.StoreMode);
+				_apiClient = new ApiClient(config.ApiUrl, _certManager);
                 _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix);
                 _rollbackManager = new RollbackManager();
                 _commandHandler = new CommandHandler(_fileOps, _rollbackManager, _apiClient);

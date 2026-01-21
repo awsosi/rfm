@@ -14,10 +14,15 @@ namespace FileManagerWorker
         private const string CertificateSubject = "CN=FileManagerWorker";
         private const string CertificateFriendlyName = "FileManagerWorker Client Certificate";
 
-        /// <summary>
-        /// Gets or creates a client certificate for mTLS
-        /// </summary>
-        public X509Certificate2 GetOrCreateCertificate()
+		public enum CertStoreMode { CurrentUser, LocalMachine }
+		public CertStoreMode StoreMode { get; set; } = CertStoreMode.LocalMachine;  // Domyœlnie LocalMachine dla service
+
+		private X509Store GetStore(StoreName name, OpenFlags flags) =>
+			new(name, StoreMode == CertStoreMode.CurrentUser ? StoreLocation.CurrentUser : StoreLocation.LocalMachine);
+		/// <summary>
+		/// Gets or creates a client certificate for mTLS
+		/// </summary>
+		public X509Certificate2 GetOrCreateCertificate()
         {
             try
             {
@@ -53,7 +58,7 @@ namespace FileManagerWorker
         {
             try
             {
-                using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
+                using (var store = GetStore(StoreName.My, OpenFlags.ReadOnly))
                 {
                     store.Open(OpenFlags.ReadOnly);
 
@@ -128,7 +133,10 @@ namespace FileManagerWorker
                     // Set friendly name
                     certificate.FriendlyName = CertificateFriendlyName;
 
-                    return certificate;
+					// Export PFX z kluczem prywatnym i zaimportuj z flagami
+					var pfxBytes = certificate.Export(X509ContentType.Pfx);
+					return new X509Certificate2(pfxBytes, (string)null,
+						X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
                 }
             }
             catch (Exception ex)
@@ -145,12 +153,13 @@ namespace FileManagerWorker
         {
             try
             {
-                using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
-                {
+                using (var store = GetStore(StoreName.My, OpenFlags.ReadWrite))
+				{
                     store.Open(OpenFlags.ReadWrite);
                     store.Add(certificate);
-                    Logger.Info("Certificate stored in LocalMachine\\My store");
-                }
+					Logger.Info("Certificate stored in {0}\\My store",
+	                    StoreMode == CertStoreMode.CurrentUser ? "CurrentUser" : "LocalMachine");
+				}
             }
             catch (Exception ex)
             {
@@ -193,8 +202,8 @@ namespace FileManagerWorker
         {
             try
             {
-                using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
-                {
+				using (var store = GetStore(StoreName.My, OpenFlags.ReadOnly))
+				{
                     store.Open(OpenFlags.ReadOnly);
 
                     var certificates = store.Certificates.Find(
@@ -225,8 +234,8 @@ namespace FileManagerWorker
         {
             try
             {
-                using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
-                {
+                using (var store = GetStore(StoreName.My, OpenFlags.ReadWrite))
+				{
                     store.Open(OpenFlags.ReadWrite);
 
                     var certificates = store.Certificates.Find(

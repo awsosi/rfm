@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using FileManagerWorker.Models;
 using Newtonsoft.Json;
 using NLog;
-using FileManagerWorker.Models;
 
 namespace FileManagerWorker
 {
@@ -23,9 +24,13 @@ namespace FileManagerWorker
         private readonly HttpClient _httpClient;
         private readonly CertificateManager _certManager;
         private X509Certificate2 _clientCertificate;
-        private bool _isRegistered = false;
+        private bool _isRegistered = false;private static bool IsNetworkFailure(HttpRequestException ex) =>
+        	ex.InnerException is SocketException sock &&
+	        (sock.SocketErrorCode == SocketError.ConnectionRefused ||
+	         sock.SocketErrorCode == SocketError.TimedOut ||
+	         sock.SocketErrorCode == SocketError.HostUnreachable);
 
-        public ApiClient(string apiUrl, CertificateManager certManager)
+		public ApiClient(string apiUrl, CertificateManager certManager)
         {
             _apiUrl = apiUrl?.TrimEnd('/');
             _certManager = certManager;
@@ -85,12 +90,12 @@ namespace FileManagerWorker
                     return false;
                 }
             }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Error registering worker");
-                return false;
-            }
-        }
+			catch (HttpRequestException ex) when (ex.InnerException is SocketException sockEx && sockEx.SocketErrorCode == SocketError.ConnectionRefused)
+			{
+				Logger.Warn("Central API offline ({APIUrl}): {Message}. Retrying...", _apiUrl, ex.Message);
+				return false;
+			}
+		}
 
         /// <summary>
         /// Long-polls for commands from Central API
@@ -135,7 +140,12 @@ namespace FileManagerWorker
                     return null;
                 }
             }
-            catch (TaskCanceledException)
+			catch (HttpRequestException ex) when (IsNetworkFailure(ex))
+			{
+				Logger.Debug("API unreachable during poll ({APIUrl}): {Message}", _apiUrl, ex.Message);
+				return null;
+			}
+			catch (TaskCanceledException)
             {
                 // Normal cancellation, don't log as error
                 return null;
@@ -247,7 +257,12 @@ namespace FileManagerWorker
 
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
+			catch (HttpRequestException ex) when (IsNetworkFailure(ex))
+			{
+				Logger.Debug("API unreachable during poll: {Message}", ex.Message);
+				return false;
+			}
+			catch (Exception ex)
             {
                 Logger.Debug(ex, "Heartbeat failed");
                 return false;
