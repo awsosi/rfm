@@ -133,7 +133,6 @@ rfm/
 ├── docker-compose.yml                # Docker orchestration
 ├── Dockerfile.api                    # API container build
 ├── Dockerfile.webui                  # WebUI container build
-├── init-db.sql                       # Database initialization
 ├── INTEGRATION_VERIFICATION_REPORT.md # Integration verification
 └── README.md                         # This file
 ```
