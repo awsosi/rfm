@@ -1,0 +1,427 @@
+"""
+SQLAlchemy ORM models for the Modular File Manager Application.
+
+All models follow enterprise standards:
+- UTC timezone-aware timestamps
+- Proper foreign key relationships with cascades
+- Indexed columns for query optimization
+- Type hints for all fields
+"""
+
+from datetime import datetime, timezone
+from enum import Enum as PyEnum
+from typing import Optional
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    JSON,
+)
+from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.sql import func
+
+
+class Base(DeclarativeBase):
+    """Base class for all ORM models."""
+    pass
+
+
+class UserRole(str, PyEnum):
+    """User role enumeration for RBAC."""
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+
+
+class WorkerStatus(str, PyEnum):
+    """Worker status enumeration."""
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    PENDING = "pending"
+
+
+class OperationType(str, PyEnum):
+    """File operation types."""
+    COPY = "copy"
+    MOVE = "move"
+    DELETE = "delete"
+    MKDIR = "mkdir"
+
+
+class OperationStatus(str, PyEnum):
+    """Operation execution status."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
+
+
+class User(Base):
+    """
+    User model for authentication and authorization.
+
+    Passwords are stored as Argon2 hashes. Role-based access control
+    determines what operations users can perform.
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.VIEWER)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Relationships
+    sessions = relationship(
+        "Session",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    operations = relationship(
+        "Operation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, username='{self.username}', role={self.role.value})>"
+
+
+class Session(Base):
+    """
+    Session model for token-based authentication.
+
+    Long-lived sessions (30 days) with HS256 signed tokens.
+    """
+    __tablename__ = "sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token = Column(String(512), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="sessions")
+
+    def __repr__(self) -> str:
+        return f"<Session(id={self.id}, user_id={self.user_id}, expires_at={self.expires_at})>"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if session has expired."""
+        return datetime.now(timezone.utc) > self.expires_at
+
+
+class Worker(Base):
+    """
+    Worker model representing Windows service workers.
+
+    Each worker has path prefixes for paths A and B, and uses
+    public key authentication for secure communication.
+    """
+    __tablename__ = "workers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), unique=True, nullable=False, index=True)
+    hostname = Column(String(255), nullable=True)
+
+    # Path prefixes for dual-pane operations
+    path_a_prefix = Column(String(500), nullable=True)
+    path_b_prefix = Column(String(500), nullable=True)
+
+    # Public key for authentication (PEM format)
+    public_key = Column(Text, nullable=False)
+
+    status = Column(
+        Enum(WorkerStatus),
+        nullable=False,
+        default=WorkerStatus.PENDING,
+        index=True,
+    )
+
+    # Worker metadata
+    version = Column(String(50), nullable=True)
+    last_heartbeat = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    # Relationships
+    operations = relationship(
+        "Operation",
+        secondary="operation_workers",
+        back_populates="workers",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Worker(id={self.id}, name='{self.name}', status={self.status.value})>"
+
+
+class Operation(Base):
+    """
+    Operation model tracking all file operations.
+
+    Complete audit trail with user, workers, paths, status, and timing.
+    Supports rollback and multi-worker coordination.
+    """
+    __tablename__ = "operations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Operation details
+    type = Column(Enum(OperationType), nullable=False, index=True)
+    source_path = Column(Text, nullable=False)
+    dest_path = Column(Text, nullable=True)
+
+    # Status tracking
+    status = Column(
+        Enum(OperationStatus),
+        nullable=False,
+        default=OperationStatus.PENDING,
+        index=True,
+    )
+
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    # Error handling
+    error_msg = Column(Text, nullable=True)
+    rollback_operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Additional metadata
+    file_count = Column(Integer, nullable=True)
+    total_size_bytes = Column(Integer, nullable=True)
+    params_json = Column(JSON, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Relationships
+    user = relationship("User", back_populates="operations")
+    workers = relationship(
+        "Worker",
+        secondary="operation_workers",
+        back_populates="operations",
+    )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="operation",
+        cascade="all, delete-orphan",
+    )
+    rollback_of = relationship(
+        "Operation",
+        remote_side=[id],
+        foreign_keys=[rollback_operation_id],
+    )
+
+    # Indexes for common queries
+    __table_args__ = (
+        Index("ix_operations_user_status", "user_id", "status"),
+        Index("ix_operations_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Operation(id={self.id}, type={self.type.value}, status={self.status.value})>"
+
+
+class OperationWorker(Base):
+    """
+    Association table linking operations to workers.
+
+    Supports multi-worker operations where multiple workers must
+    coordinate to complete a single operation.
+    """
+    __tablename__ = "operation_workers"
+
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    worker_id = Column(
+        Integer,
+        ForeignKey("workers.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # Worker-specific status
+    worker_status = Column(
+        Enum(OperationStatus),
+        nullable=False,
+        default=OperationStatus.PENDING,
+    )
+    worker_started_at = Column(DateTime(timezone=True), nullable=True)
+    worker_completed_at = Column(DateTime(timezone=True), nullable=True)
+    worker_error_msg = Column(Text, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<OperationWorker(op={self.operation_id}, worker={self.worker_id}, status={self.worker_status.value})>"
+
+
+class AuditLog(Base):
+    """
+    Immutable audit log for all system actions.
+
+    Every operation, authentication event, and configuration change
+    is logged with full context for compliance and debugging.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Event details
+    action = Column(String(100), nullable=False, index=True)
+    details_json = Column(JSON, nullable=True)
+
+    # External API logging
+    remote_api_sent = Column(Boolean, nullable=False, default=False)
+    remote_api_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Context
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+
+    timestamp = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )
+
+    # Relationships
+    user = relationship("User", back_populates="audit_logs")
+    operation = relationship("Operation", back_populates="audit_logs")
+
+    # Indexes for queries
+    __table_args__ = (
+        Index("ix_audit_logs_user_timestamp", "user_id", "timestamp"),
+        Index("ix_audit_logs_action_timestamp", "action", "timestamp"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AuditLog(id={self.id}, action='{self.action}', timestamp={self.timestamp})>"
+
+
+class ConfigType(str, PyEnum):
+    """Configuration value type enumeration."""
+    STRING = "string"
+    INTEGER = "int"
+    JSON = "json"
+    BOOLEAN = "boolean"
+
+
+class Config(Base):
+    """
+    Configuration table for runtime parameters.
+
+    All magic strings and tuneable parameters are stored here.
+    Supports different value types with proper type casting.
+    """
+    __tablename__ = "config"
+
+    key = Column(String(200), primary_key=True)
+    value = Column(Text, nullable=False)
+    type = Column(
+        Enum(ConfigType),
+        nullable=False,
+        default=ConfigType.STRING,
+    )
+    description = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Config(key='{self.key}', value='{self.value}', type={self.type.value})>"
+
+    def get_typed_value(self):
+        """Return value cast to the appropriate type."""
+        if self.type == ConfigType.INTEGER:
+            return int(self.value)
+        elif self.type == ConfigType.BOOLEAN:
+            return self.value.lower() in ("true", "1", "yes")
+        elif self.type == ConfigType.JSON:
+            import json
+            return json.loads(self.value)
+        else:
+            return self.value

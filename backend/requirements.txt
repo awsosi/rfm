@@ -1,0 +1,157 @@
+# ==============================================================================
+# Modular File Manager - Python Dependencies
+# ==============================================================================
+# Database layer requirements for async PostgreSQL operations
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Database - PostgreSQL with async support
+# ------------------------------------------------------------------------------
+# SQLAlchemy 2.x with async support
+sqlalchemy[asyncio]==2.0.25
+
+# Async PostgreSQL driver
+asyncpg==0.29.0
+
+# Database migrations
+alembic==1.13.1
+
+# PostgreSQL adapter (fallback/sync operations if needed)
+psycopg2-binary==2.9.9
+
+# ------------------------------------------------------------------------------
+# Password Hashing
+# ------------------------------------------------------------------------------
+# Argon2 for secure password hashing (OWASP recommended)
+argon2-cffi==23.1.0
+
+# ------------------------------------------------------------------------------
+# Environment & Configuration
+# ------------------------------------------------------------------------------
+# Load environment variables from .env files
+python-dotenv==1.0.0
+
+# Configuration management
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# ------------------------------------------------------------------------------
+# API Framework
+# ------------------------------------------------------------------------------
+# FastAPI for async REST API
+fastapi==0.109.0
+
+# ASGI server for production
+uvicorn[standard]==0.27.0
+
+# WebSocket support
+websockets==12.0
+
+# ------------------------------------------------------------------------------
+# Security & Authentication
+# ------------------------------------------------------------------------------
+# JWT token handling
+pyjwt==2.8.0
+
+# Cryptography for public key operations
+cryptography==42.0.0
+
+# Python-JOSE for JWT (alternative)
+python-jose[cryptography]==3.3.0
+
+# Passlib for additional password utilities
+passlib[argon2]==1.7.4
+
+# ------------------------------------------------------------------------------
+# Redis (Session Storage & Caching)
+# ------------------------------------------------------------------------------
+# Async Redis client
+redis[hiredis]==5.0.1
+
+# ------------------------------------------------------------------------------
+# HTTP Client (for external API calls)
+# ------------------------------------------------------------------------------
+# Async HTTP client
+httpx==0.26.0
+
+# Requests for sync operations (fallback)
+requests==2.31.0
+
+# ------------------------------------------------------------------------------
+# Data Validation & Serialization
+# ------------------------------------------------------------------------------
+# Python data validation
+pydantic==2.5.3
+
+# JSON handling
+orjson==3.9.12
+
+# ------------------------------------------------------------------------------
+# Logging & Monitoring
+# ------------------------------------------------------------------------------
+# Structured logging
+loguru==0.7.2
+
+# Syslog client
+python-syslog==2.0.1
+
+# ------------------------------------------------------------------------------
+# Task Queue (Optional - for background jobs)
+# ------------------------------------------------------------------------------
+# Celery for distributed task queue
+celery==5.3.6
+
+# ------------------------------------------------------------------------------
+# Testing
+# ------------------------------------------------------------------------------
+# Testing framework
+pytest==7.4.4
+pytest-asyncio==0.23.3
+
+# FastAPI test client
+httpx==0.26.0
+
+# Mock/fixtures
+pytest-mock==3.12.0
+
+# Coverage reporting
+pytest-cov==4.1.0
+
+# ------------------------------------------------------------------------------
+# Development Tools
+# ------------------------------------------------------------------------------
+# Code formatting
+black==24.1.1
+
+# Import sorting
+isort==5.13.2
+
+# Linting
+ruff==0.1.14
+
+# Type checking
+mypy==1.8.0
+
+# SQL type stubs
+sqlalchemy[mypy]==2.0.25
+
+# ------------------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------------------
+# Date/time utilities
+python-dateutil==2.8.2
+
+# Timezone handling
+pytz==2024.1
+
+# UUID utilities
+uuid==1.30
+
+# File handling
+aiofiles==23.2.1
+
+# ------------------------------------------------------------------------------
+# CORS & Middleware
+# ------------------------------------------------------------------------------
+# Already included in FastAPI, but explicit for clarity
+python-multipart==0.0.6
