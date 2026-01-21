@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+*.exe
+*.pdb
+*.dll
+*.zip
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
