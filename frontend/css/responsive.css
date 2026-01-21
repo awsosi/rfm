@@ -1,0 +1,524 @@
+/* ==========================================
+   Responsive Styles - Mobile Friendly
+   ========================================== */
+
+/* Tablets and below (max-width: 1024px) */
+@media (max-width: 1024px) {
+    .dual-pane-container {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+    }
+
+    .operations-buttons {
+        flex-direction: column;
+    }
+
+    .operations-buttons .btn {
+        width: 100%;
+    }
+
+    .log-controls {
+        flex-wrap: wrap;
+    }
+
+    .log-controls select,
+    .log-controls input,
+    .log-controls button {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+}
+
+/* Mobile devices (max-width: 768px) */
+@media (max-width: 768px) {
+    /* Header adjustments */
+    .app-header {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+    }
+
+    .header-left,
+    .header-right {
+        width: 100%;
+    }
+
+    .header-right {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .header-right .btn {
+        width: 100%;
+    }
+
+    .user-info {
+        align-items: flex-start;
+        margin-bottom: var(--spacing-sm);
+        margin-right: 0;
+    }
+
+    /* Main content padding */
+    .main-content {
+        padding: var(--spacing-md);
+    }
+
+    /* Pane adjustments */
+    .pane {
+        min-height: 400px;
+    }
+
+    .pane-header h2 {
+        font-size: 14px;
+    }
+
+    /* Breadcrumb container */
+    .breadcrumb-container {
+        flex-direction: column;
+    }
+
+    .breadcrumb-input {
+        width: 100%;
+    }
+
+    .breadcrumb-container .btn {
+        width: 100%;
+    }
+
+    /* Search container */
+    .search-container {
+        flex-direction: column;
+    }
+
+    .search-input {
+        width: 100%;
+    }
+
+    .search-container .btn {
+        width: 100%;
+    }
+
+    /* File list table */
+    .file-list {
+        font-size: 12px;
+    }
+
+    .file-list th,
+    .file-list td {
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+
+    /* Hide size and modified columns on mobile */
+    .col-size,
+    .col-modified {
+        display: none;
+    }
+
+    /* Operations panel */
+    .operations-panel {
+        padding: var(--spacing-md);
+    }
+
+    .operations-buttons {
+        gap: var(--spacing-sm);
+    }
+
+    /* Modal adjustments */
+    .modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: var(--spacing-md);
+    }
+
+    .modal-footer {
+        flex-direction: column-reverse;
+    }
+
+    .modal-footer .btn {
+        width: 100%;
+    }
+
+    /* Admin panel */
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+
+    .tab-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    /* Data table */
+    .data-table {
+        font-size: 12px;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: var(--spacing-sm);
+    }
+
+    /* Make tables scrollable horizontally */
+    .panel-body {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Configuration form */
+    .config-section {
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-lg);
+    }
+
+    /* Login page */
+    .login-container {
+        padding: var(--spacing-md);
+    }
+
+    .login-box {
+        padding: var(--spacing-lg);
+    }
+}
+
+/* Small mobile devices (max-width: 480px) */
+@media (max-width: 480px) {
+    /* Typography adjustments */
+    body {
+        font-size: 13px;
+    }
+
+    h1 { font-size: 20px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 16px; }
+
+    /* Button adjustments */
+    .btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 13px;
+    }
+
+    .btn-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+
+    /* Header */
+    .app-header {
+        padding: var(--spacing-sm);
+    }
+
+    .header-left h1 {
+        font-size: 18px;
+    }
+
+    /* Main content */
+    .main-content {
+        padding: var(--spacing-sm);
+    }
+
+    /* Panes */
+    .pane {
+        border-radius: var(--radius-md);
+    }
+
+    .pane-header {
+        padding: var(--spacing-sm);
+    }
+
+    .breadcrumb-container,
+    .search-container {
+        padding: var(--spacing-sm);
+    }
+
+    /* File list */
+    .file-list {
+        font-size: 11px;
+    }
+
+    .file-icon {
+        width: 16px;
+        height: 16px;
+        margin-right: var(--spacing-xs);
+    }
+
+    /* Operations panel */
+    .operations-panel {
+        padding: var(--spacing-sm);
+    }
+
+    .operations-buttons {
+        gap: var(--spacing-xs);
+    }
+
+    /* Status message */
+    .status-message {
+        font-size: 12px;
+        padding: var(--spacing-sm);
+    }
+
+    /* Progress bar */
+    .progress-bar {
+        height: 20px;
+    }
+
+    /* Operation queue */
+    .operation-queue h3 {
+        font-size: 14px;
+    }
+
+    .queue-item {
+        padding: var(--spacing-sm);
+    }
+
+    .queue-item-title {
+        font-size: 12px;
+    }
+
+    .queue-item-details {
+        font-size: 11px;
+    }
+
+    /* Context menu */
+    .context-menu {
+        min-width: 140px;
+    }
+
+    .context-menu li {
+        font-size: 12px;
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+
+    /* Modal */
+    .modal-content {
+        width: 98%;
+        max-height: 98vh;
+    }
+
+    .modal-header h3 {
+        font-size: 16px;
+    }
+
+    /* Admin panel */
+    .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+
+    .panel-header .btn {
+        width: 100%;
+    }
+
+    .panel-body {
+        padding: var(--spacing-sm);
+    }
+
+    /* Tabs */
+    .tab-btn {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 12px;
+    }
+
+    /* Data table - stack on very small screens */
+    .data-table thead {
+        display: none;
+    }
+
+    .data-table tbody,
+    .data-table tr,
+    .data-table td {
+        display: block;
+    }
+
+    .data-table tr {
+        margin-bottom: var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-sm);
+    }
+
+    .data-table td {
+        text-align: right;
+        padding: var(--spacing-xs) 0;
+        border-bottom: none;
+        position: relative;
+        padding-left: 50%;
+    }
+
+    .data-table td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        width: 45%;
+        padding-right: var(--spacing-sm);
+        font-weight: 600;
+        text-align: left;
+        text-transform: uppercase;
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    /* Login page */
+    .login-box {
+        padding: var(--spacing-md);
+    }
+
+    .login-box h1 {
+        font-size: 20px;
+    }
+
+    .login-box h2 {
+        font-size: 16px;
+    }
+
+    /* Form controls */
+    .form-control {
+        font-size: 13px;
+    }
+
+    /* Logs viewer */
+    .logs-container {
+        font-size: 11px;
+        max-height: 400px;
+    }
+
+    .log-level {
+        min-width: 50px;
+        font-size: 10px;
+    }
+}
+
+/* Landscape orientation for mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .pane {
+        min-height: 300px;
+    }
+
+    .login-page {
+        padding: var(--spacing-md) 0;
+    }
+
+    .modal-content {
+        max-height: 85vh;
+    }
+
+    .logs-container {
+        max-height: 300px;
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2),
+       (min-resolution: 192dpi) {
+    .file-icon {
+        /* Sharper icons on retina displays */
+        image-rendering: -webkit-optimize-contrast;
+    }
+}
+
+/* Print styles */
+@media print {
+    .app-header,
+    .operations-panel,
+    .pane-controls,
+    .search-container,
+    .breadcrumb-container,
+    .btn,
+    .context-menu,
+    .modal {
+        display: none !important;
+    }
+
+    body {
+        background-color: white;
+    }
+
+    .dual-pane-container {
+        grid-template-columns: 1fr;
+    }
+
+    .pane {
+        border: 1px solid #000;
+        page-break-inside: avoid;
+    }
+
+    .file-list {
+        font-size: 10pt;
+    }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+    /* Can add dark mode styles here if needed */
+    /* Currently not implemented as per KISS principle */
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Increase touch targets */
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .btn-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .file-list tbody tr {
+        min-height: 44px;
+    }
+
+    .context-menu li {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Disable hover effects */
+    .file-list tbody tr:hover,
+    .data-table tbody tr:hover {
+        background-color: transparent;
+    }
+
+    /* Add active state for touch feedback */
+    .btn:active {
+        transform: scale(0.98);
+    }
+
+    .file-list tbody tr:active {
+        background-color: var(--bg-secondary);
+    }
+}
+
+/* Container queries for responsive tables (future-proof) */
+@supports (container-type: inline-size) {
+    .panel-body {
+        container-type: inline-size;
+    }
+
+    @container (max-width: 600px) {
+        .data-table {
+            font-size: 12px;
+        }
+    }
+}

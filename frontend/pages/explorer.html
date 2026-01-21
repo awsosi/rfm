@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Explorer - File Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body class="explorer-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-left">
+            <h1>File Manager</h1>
+        </div>
+        <div class="header-right">
+            <span class="user-info" id="user-info">
+                <span class="user-name" id="user-name"></span>
+                <span class="user-role" id="user-role"></span>
+            </span>
+            <button class="btn btn-secondary" id="admin-btn" style="display: none;">Admin Panel</button>
+            <button class="btn btn-secondary" id="settings-btn">Settings</button>
+            <button class="btn btn-secondary" id="logout-btn">Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dual Pane Explorer -->
+        <div class="dual-pane-container">
+            <!-- Left Pane (Path A) -->
+            <div class="pane pane-left" id="pane-a">
+                <div class="pane-header">
+                    <h2>Path A</h2>
+                    <div class="pane-controls">
+                        <button class="btn-icon" id="refresh-a" title="Refresh">&#x21bb;</button>
+                    </div>
+                </div>
+
+                <div class="breadcrumb-container">
+                    <input type="text" class="breadcrumb-input" id="path-input-a" placeholder="/path/to/directory">
+                    <button class="btn btn-sm" id="path-go-a">Go</button>
+                </div>
+
+                <div class="search-container">
+                    <input type="text" class="search-input" id="search-a" placeholder="Search files...">
+                    <button class="btn btn-sm" id="search-btn-a">Search</button>
+                </div>
+
+                <div class="file-list-container">
+                    <table class="file-list" id="file-list-a">
+                        <thead>
+                            <tr>
+                                <th class="col-select"><input type="checkbox" id="select-all-a"></th>
+                                <th class="col-name">Name</th>
+                                <th class="col-size">Size</th>
+                                <th class="col-modified">Modified</th>
+                            </tr>
+                        </thead>
+                        <tbody id="file-list-body-a">
+                            <!-- Files will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="loading-indicator hidden" id="loading-a">Loading...</div>
+                    <div class="no-files hidden" id="no-files-a">No files found</div>
+                    <button class="btn btn-secondary load-more hidden" id="load-more-a">Load More</button>
+                </div>
+            </div>
+
+            <!-- Right Pane (Path B) -->
+            <div class="pane pane-right" id="pane-b">
+                <div class="pane-header">
+                    <h2>Path B</h2>
+                    <div class="pane-controls">
+                        <button class="btn-icon" id="refresh-b" title="Refresh">&#x21bb;</button>
+                    </div>
+                </div>
+
+                <div class="breadcrumb-container">
+                    <input type="text" class="breadcrumb-input" id="path-input-b" placeholder="/path/to/directory">
+                    <button class="btn btn-sm" id="path-go-b">Go</button>
+                </div>
+
+                <div class="search-container">
+                    <input type="text" class="search-input" id="search-b" placeholder="Search files...">
+                    <button class="btn btn-sm" id="search-btn-b">Search</button>
+                </div>
+
+                <div class="file-list-container">
+                    <table class="file-list" id="file-list-b">
+                        <thead>
+                            <tr>
+                                <th class="col-select"><input type="checkbox" id="select-all-b"></th>
+                                <th class="col-name">Name</th>
+                                <th class="col-size">Size</th>
+                                <th class="col-modified">Modified</th>
+                            </tr>
+                        </thead>
+                        <tbody id="file-list-body-b">
+                            <!-- Files will be loaded here -->
+                        </tbody>
+                    </table>
+                    <div class="loading-indicator hidden" id="loading-b">Loading...</div>
+                    <div class="no-files hidden" id="no-files-b">No files found</div>
+                    <button class="btn btn-secondary load-more hidden" id="load-more-b">Load More</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations Panel -->
+        <div class="operations-panel">
+            <div class="operations-buttons">
+                <button class="btn btn-primary" id="copy-a-to-b" title="Copy selected files from A to B">
+                    Copy A &rarr; B
+                </button>
+                <button class="btn btn-primary" id="move-a-to-b" title="Move selected files from A to B">
+                    Move A &rarr; B
+                </button>
+                <button class="btn btn-primary" id="copy-b-to-a" title="Copy selected files from B to A">
+                    Copy B &rarr; A
+                </button>
+                <button class="btn btn-primary" id="move-b-to-a" title="Move selected files from B to A">
+                    Move B &rarr; A
+                </button>
+                <button class="btn btn-secondary" id="new-folder-btn">New Folder</button>
+                <button class="btn btn-danger" id="delete-btn">Delete</button>
+            </div>
+
+            <div class="operation-status" id="operation-status">
+                <div class="status-message" id="status-message"></div>
+                <div class="progress-container hidden" id="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text" id="progress-text">0%</div>
+                </div>
+            </div>
+
+            <div class="operation-queue" id="operation-queue">
+                <h3>Operation Queue</h3>
+                <div class="queue-list" id="queue-list">
+                    <p class="queue-empty">No operations in queue</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Context Menu -->
+    <div class="context-menu hidden" id="context-menu">
+        <ul>
+            <li data-action="open">Open</li>
+            <li data-action="rename">Rename</li>
+            <li data-action="copy">Copy</li>
+            <li data-action="move">Move</li>
+            <li class="separator"></li>
+            <li data-action="delete" class="danger">Delete</li>
+        </ul>
+    </div>
+
+    <!-- Modal for confirmations and inputs -->
+    <div class="modal hidden" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Confirm Action</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <p id="modal-message"></p>
+                <div id="modal-input-container" class="hidden">
+                    <input type="text" id="modal-input" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="../js/app.js"></script>
+</body>
+</html>
