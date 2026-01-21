@@ -214,7 +214,7 @@ namespace FileManagerWorker
                     cred.Username = "FileManagerWorker";
                     cred.Password = apiUrl;
                     cred.Type = CredentialType.Generic;
-                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.PersistanceType = PersistanceType.LocalComputer;
                     cred.Save();
                 }
 
@@ -225,7 +225,7 @@ namespace FileManagerWorker
                     cred.Username = "FileManagerWorker";
                     cred.Password = serviceUser ?? "";
                     cred.Type = CredentialType.Generic;
-                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.PersistanceType = PersistanceType.LocalComputer;
                     cred.Save();
                 }
 
@@ -236,7 +236,7 @@ namespace FileManagerWorker
                     cred.Username = "FileManagerWorker";
                     cred.Password = servicePassword ?? "";
                     cred.Type = CredentialType.Generic;
-                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.PersistanceType = PersistanceType.LocalComputer;
                     cred.Save();
                 }
 
