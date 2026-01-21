@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - File Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <h1>File Manager</h1>
+            <h2>Sign In</h2>
+
+            <div id="error-message" class="error-message hidden"></div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="remember-me" name="remember">
+                        Remember me
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="login-btn">
+                    Sign In
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>Remote File Manager v1.0</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../js/auth.js"></script>
+    <script type="module">
+        import { login, checkAuth } from '../js/auth.js';
+
+        // Redirect if already logged in
+        if (checkAuth()) {
+            window.location.href = 'explorer.html';
+        }
+
+        const loginForm = document.getElementById('login-form');
+        const errorMessage = document.getElementById('error-message');
+        const loginBtn = document.getElementById('login-btn');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Clear previous errors
+            errorMessage.classList.add('hidden');
+            errorMessage.textContent = '';
+
+            // Disable button during login
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+
+            try {
+                const result = await login(username, password);
+
+                if (result.success) {
+                    // Redirect to explorer
+                    window.location.href = 'explorer.html';
+                } else {
+                    // Show error
+                    errorMessage.textContent = result.error || 'Login failed. Please check your credentials.';
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Connection error. Please try again.';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>

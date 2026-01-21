@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - File Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body class="admin-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-left">
+            <h1>Admin Panel</h1>
+        </div>
+        <div class="header-right">
+            <span class="user-info" id="user-info">
+                <span class="user-name" id="user-name"></span>
+            </span>
+            <button class="btn btn-secondary" id="explorer-btn">File Explorer</button>
+            <button class="btn btn-secondary" id="logout-btn">Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content admin-content">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="users">Users</button>
+            <button class="tab-btn" data-tab="workers">Workers</button>
+            <button class="tab-btn" data-tab="config">Configuration</button>
+            <button class="tab-btn" data-tab="logs">Logs</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Users Tab -->
+            <div class="tab-pane active" id="tab-users">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>User Management</h2>
+                        <button class="btn btn-primary" id="add-user-btn">Add User</button>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Active</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- Users will be loaded here -->
+                            </tbody>
+                        </table>
+                        <div class="loading-indicator hidden" id="users-loading">Loading users...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workers Tab -->
+            <div class="tab-pane" id="tab-workers">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Worker Management</h2>
+                        <button class="btn btn-secondary" id="refresh-workers-btn">Refresh</button>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="workers-table">
+                            <thead>
+                                <tr>
+                                    <th>Worker ID</th>
+                                    <th>Hostname</th>
+                                    <th>Status</th>
+                                    <th>Last Heartbeat</th>
+                                    <th>Capabilities</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workers-table-body">
+                                <!-- Workers will be loaded here -->
+                            </tbody>
+                        </table>
+                        <div class="loading-indicator hidden" id="workers-loading">Loading workers...</div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 20px;">
+                    <div class="panel-header">
+                        <h2>Pending Worker Approvals</h2>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="pending-workers-table">
+                            <thead>
+                                <tr>
+                                    <th>Worker ID</th>
+                                    <th>Hostname</th>
+                                    <th>Requested</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pending-workers-table-body">
+                                <!-- Pending workers will be loaded here -->
+                            </tbody>
+                        </table>
+                        <div class="no-data" id="no-pending-workers">No pending approvals</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Tab -->
+            <div class="tab-pane" id="tab-config">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>System Configuration</h2>
+                        <button class="btn btn-primary" id="save-config-btn">Save Configuration</button>
+                    </div>
+                    <div class="panel-body">
+                        <form id="config-form">
+                            <div class="config-section">
+                                <h3>Authentication</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-sybase-enabled" name="sybase_enabled">
+                                        Enable Sybase Authentication
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-sybase-host">Sybase Host</label>
+                                    <input type="text" id="config-sybase-host" name="sybase_host" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-sybase-port">Sybase Port</label>
+                                    <input type="number" id="config-sybase-port" name="sybase_port" class="form-control">
+                                </div>
+                            </div>
+
+                            <div class="config-section">
+                                <h3>Logging</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-syslog-enabled" name="syslog_enabled">
+                                        Enable Syslog
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-syslog-host">Syslog Host</label>
+                                    <input type="text" id="config-syslog-host" name="syslog_host" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-log-retention">Log Retention (days)</label>
+                                    <input type="number" id="config-log-retention" name="log_retention" class="form-control">
+                                </div>
+                            </div>
+
+                            <div class="config-section">
+                                <h3>Path Prefixes</h3>
+                                <div class="form-group">
+                                    <label for="config-path-a-prefix">Path A Prefix</label>
+                                    <input type="text" id="config-path-a-prefix" name="path_a_prefix" class="form-control" placeholder="/default/path/a">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-path-b-prefix">Path B Prefix</label>
+                                    <input type="text" id="config-path-b-prefix" name="path_b_prefix" class="form-control" placeholder="/default/path/b">
+                                </div>
+                            </div>
+
+                            <div class="config-section">
+                                <h3>Timeouts</h3>
+                                <div class="form-group">
+                                    <label for="config-operation-timeout">Operation Timeout (seconds)</label>
+                                    <input type="number" id="config-operation-timeout" name="operation_timeout" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-worker-timeout">Worker Heartbeat Timeout (seconds)</label>
+                                    <input type="number" id="config-worker-timeout" name="worker_timeout" class="form-control">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div class="tab-pane" id="tab-logs">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>System Logs</h2>
+                        <div class="log-controls">
+                            <select id="log-level-filter" class="form-control">
+                                <option value="">All Levels</option>
+                                <option value="DEBUG">Debug</option>
+                                <option value="INFO">Info</option>
+                                <option value="WARNING">Warning</option>
+                                <option value="ERROR">Error</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                            <input type="text" id="log-search" class="form-control" placeholder="Search logs...">
+                            <button class="btn btn-secondary" id="refresh-logs-btn">Refresh</button>
+                            <button class="btn btn-secondary" id="export-logs-btn">Export</button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="logs-container" id="logs-container">
+                            <div class="log-entries" id="log-entries">
+                                <!-- Log entries will be loaded here -->
+                            </div>
+                        </div>
+                        <div class="loading-indicator hidden" id="logs-loading">Loading logs...</div>
+                        <button class="btn btn-secondary load-more" id="load-more-logs">Load More</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- User Add/Edit Modal -->
+    <div class="modal hidden" id="user-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="user-modal-title">Add User</h3>
+                <button class="modal-close" id="user-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <input type="hidden" id="user-id">
+                    <div class="form-group">
+                        <label for="user-username">Username</label>
+                        <input type="text" id="user-username" name="username" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="user-password">Password</label>
+                        <input type="password" id="user-password" name="password" class="form-control">
+                        <small>Leave empty to keep current password</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="user-role">Role</label>
+                        <select id="user-role" name="role" class="form-control" required>
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="user-active" name="active">
+                            Active
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="user-modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="user-modal-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal hidden" id="confirm-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="confirm-modal-title">Confirm Action</h3>
+                <button class="modal-close" id="confirm-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="confirm-modal-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module">
+        import { checkAuth, logout, getCurrentUser } from '../js/auth.js';
+        import { getUsers, createUser, updateUser, deleteUser, getWorkers, approveWorker, rejectWorker, getConfig, updateConfig, getLogs } from '../js/api.js';
+        import { showModal, hideModal, showConfirm, formatDate } from '../js/utils.js';
+
+        // Check authentication
+        if (!checkAuth()) {
+            window.location.href = 'login.html';
+        }
+
+        // Check admin role
+        const currentUser = getCurrentUser();
+        if (!currentUser || currentUser.role !== 'admin') {
+            alert('Access denied. Admin role required.');
+            window.location.href = 'explorer.html';
+        }
+
+        // Set user info
+        document.getElementById('user-name').textContent = currentUser.username;
+
+        // Navigation buttons
+        document.getElementById('explorer-btn').addEventListener('click', () => {
+            window.location.href = 'explorer.html';
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            logout();
+            window.location.href = 'login.html';
+        });
+
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.dataset.tab;
+
+                // Update active tab button
+                tabButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Update active tab pane
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+
+                // Load tab data
+                loadTabData(tabName);
+            });
+        });
+
+        // Load initial tab data
+        loadTabData('users');
+
+        async function loadTabData(tabName) {
+            switch (tabName) {
+                case 'users':
+                    await loadUsers();
+                    break;
+                case 'workers':
+                    await loadWorkers();
+                    break;
+                case 'config':
+                    await loadConfig();
+                    break;
+                case 'logs':
+                    await loadLogs();
+                    break;
+            }
+        }
+
+        // Users Management
+        async function loadUsers() {
+            const tbody = document.getElementById('users-table-body');
+            const loading = document.getElementById('users-loading');
+
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+
+            try {
+                const users = await getUsers();
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${user.id}</td>
+                        <td>${user.username}</td>
+                        <td><span class="badge badge-${user.role === 'admin' ? 'primary' : 'secondary'}">${user.role}</span></td>
+                        <td><span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary edit-user-btn" data-id="${user.id}">Edit</button>
+                            <button class="btn btn-sm btn-danger delete-user-btn" data-id="${user.id}">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Attach event listeners
+                document.querySelectorAll('.edit-user-btn').forEach(btn => {
+                    btn.addEventListener('click', () => editUser(btn.dataset.id));
+                });
+
+                document.querySelectorAll('.delete-user-btn').forEach(btn => {
+                    btn.addEventListener('click', () => confirmDeleteUser(btn.dataset.id));
+                });
+
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6">Error loading users</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('add-user-btn').addEventListener('click', () => {
+            openUserModal();
+        });
+
+        function openUserModal(userId = null) {
+            const modal = document.getElementById('user-modal');
+            const form = document.getElementById('user-form');
+
+            form.reset();
+
+            if (userId) {
+                document.getElementById('user-modal-title').textContent = 'Edit User';
+                // Load user data (would fetch from API in real implementation)
+            } else {
+                document.getElementById('user-modal-title').textContent = 'Add User';
+                document.getElementById('user-active').checked = true;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        document.getElementById('user-modal-close').addEventListener('click', () => {
+            document.getElementById('user-modal').classList.add('hidden');
+        });
+
+        document.getElementById('user-modal-cancel').addEventListener('click', () => {
+            document.getElementById('user-modal').classList.add('hidden');
+        });
+
+        document.getElementById('user-modal-save').addEventListener('click', async () => {
+            const form = document.getElementById('user-form');
+            const formData = new FormData(form);
+
+            const userData = {
+                username: formData.get('username'),
+                password: formData.get('password'),
+                role: formData.get('role'),
+                is_active: document.getElementById('user-active').checked
+            };
+
+            try {
+                const userId = document.getElementById('user-id').value;
+                if (userId) {
+                    await updateUser(userId, userData);
+                } else {
+                    await createUser(userData);
+                }
+
+                document.getElementById('user-modal').classList.add('hidden');
+                await loadUsers();
+            } catch (error) {
+                alert('Error saving user: ' + error.message);
+            }
+        });
+
+        async function editUser(userId) {
+            openUserModal(userId);
+        }
+
+        async function confirmDeleteUser(userId) {
+            const confirmed = await showConfirm('Are you sure you want to delete this user?');
+            if (confirmed) {
+                try {
+                    await deleteUser(userId);
+                    await loadUsers();
+                } catch (error) {
+                    alert('Error deleting user: ' + error.message);
+                }
+            }
+        }
+
+        // Workers Management
+        async function loadWorkers() {
+            const tbody = document.getElementById('workers-table-body');
+            const pendingTbody = document.getElementById('pending-workers-table-body');
+            const loading = document.getElementById('workers-loading');
+
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+            pendingTbody.innerHTML = '';
+
+            try {
+                const workers = await getWorkers();
+
+                const activeWorkers = workers.filter(w => w.status !== 'pending');
+                const pendingWorkers = workers.filter(w => w.status === 'pending');
+
+                activeWorkers.forEach(worker => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${worker.worker_id}</td>
+                        <td>${worker.hostname}</td>
+                        <td><span class="status-badge status-${worker.status}">${worker.status}</span></td>
+                        <td>${formatDate(worker.last_heartbeat)}</td>
+                        <td>${worker.capabilities ? worker.capabilities.join(', ') : 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.worker_id}">Remove</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                if (pendingWorkers.length === 0) {
+                    document.getElementById('no-pending-workers').style.display = 'block';
+                } else {
+                    document.getElementById('no-pending-workers').style.display = 'none';
+
+                    pendingWorkers.forEach(worker => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${worker.worker_id}</td>
+                            <td>${worker.hostname}</td>
+                            <td>${formatDate(worker.created_at)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary approve-worker-btn" data-id="${worker.worker_id}">Approve</button>
+                                <button class="btn btn-sm btn-danger reject-worker-btn" data-id="${worker.worker_id}">Reject</button>
+                            </td>
+                        `;
+                        pendingTbody.appendChild(row);
+                    });
+
+                    document.querySelectorAll('.approve-worker-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            try {
+                                await approveWorker(btn.dataset.id);
+                                await loadWorkers();
+                            } catch (error) {
+                                alert('Error approving worker: ' + error.message);
+                            }
+                        });
+                    });
+
+                    document.querySelectorAll('.reject-worker-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            try {
+                                await rejectWorker(btn.dataset.id);
+                                await loadWorkers();
+                            } catch (error) {
+                                alert('Error rejecting worker: ' + error.message);
+                            }
+                        });
+                    });
+                }
+
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6">Error loading workers</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('refresh-workers-btn').addEventListener('click', loadWorkers);
+
+        // Configuration Management
+        async function loadConfig() {
+            try {
+                const config = await getConfig();
+
+                // Populate form fields
+                document.getElementById('config-sybase-enabled').checked = config.sybase_enabled || false;
+                document.getElementById('config-sybase-host').value = config.sybase_host || '';
+                document.getElementById('config-sybase-port').value = config.sybase_port || '';
+                document.getElementById('config-syslog-enabled').checked = config.syslog_enabled || false;
+                document.getElementById('config-syslog-host').value = config.syslog_host || '';
+                document.getElementById('config-log-retention').value = config.log_retention_days || 30;
+                document.getElementById('config-path-a-prefix').value = config.path_a_prefix || '';
+                document.getElementById('config-path-b-prefix').value = config.path_b_prefix || '';
+                document.getElementById('config-operation-timeout').value = config.operation_timeout || 300;
+                document.getElementById('config-worker-timeout').value = config.worker_timeout || 60;
+
+            } catch (error) {
+                alert('Error loading configuration: ' + error.message);
+            }
+        }
+
+        document.getElementById('save-config-btn').addEventListener('click', async () => {
+            const configData = {
+                sybase_enabled: document.getElementById('config-sybase-enabled').checked,
+                sybase_host: document.getElementById('config-sybase-host').value,
+                sybase_port: parseInt(document.getElementById('config-sybase-port').value) || null,
+                syslog_enabled: document.getElementById('config-syslog-enabled').checked,
+                syslog_host: document.getElementById('config-syslog-host').value,
+                log_retention_days: parseInt(document.getElementById('config-log-retention').value) || 30,
+                path_a_prefix: document.getElementById('config-path-a-prefix').value,
+                path_b_prefix: document.getElementById('config-path-b-prefix').value,
+                operation_timeout: parseInt(document.getElementById('config-operation-timeout').value) || 300,
+                worker_timeout: parseInt(document.getElementById('config-worker-timeout').value) || 60
+            };
+
+            try {
+                await updateConfig(configData);
+                alert('Configuration saved successfully');
+            } catch (error) {
+                alert('Error saving configuration: ' + error.message);
+            }
+        });
+
+        // Logs Management
+        let logsOffset = 0;
+        const logsLimit = 100;
+
+        async function loadLogs(append = false) {
+            const container = document.getElementById('log-entries');
+            const loading = document.getElementById('logs-loading');
+
+            if (!append) {
+                logsOffset = 0;
+                container.innerHTML = '';
+            }
+
+            loading.classList.remove('hidden');
+
+            try {
+                const level = document.getElementById('log-level-filter').value;
+                const search = document.getElementById('log-search').value;
+
+                const logs = await getLogs({ level, search, offset: logsOffset, limit: logsLimit });
+
+                logs.forEach(log => {
+                    const entry = document.createElement('div');
+                    entry.className = `log-entry log-${log.level.toLowerCase()}`;
+                    entry.innerHTML = `
+                        <span class="log-timestamp">${formatDate(log.timestamp)}</span>
+                        <span class="log-level">${log.level}</span>
+                        <span class="log-message">${log.message}</span>
+                    `;
+                    container.appendChild(entry);
+                });
+
+                logsOffset += logs.length;
+
+                if (logs.length < logsLimit) {
+                    document.getElementById('load-more-logs').style.display = 'none';
+                } else {
+                    document.getElementById('load-more-logs').style.display = 'block';
+                }
+
+            } catch (error) {
+                container.innerHTML = '<div class="error">Error loading logs</div>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('refresh-logs-btn').addEventListener('click', () => loadLogs(false));
+        document.getElementById('load-more-logs').addEventListener('click', () => loadLogs(true));
+
+        document.getElementById('log-level-filter').addEventListener('change', () => loadLogs(false));
+
+        let searchTimeout;
+        document.getElementById('log-search').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => loadLogs(false), 500);
+        });
+
+        document.getElementById('export-logs-btn').addEventListener('click', async () => {
+            try {
+                const logs = await getLogs({ offset: 0, limit: 10000 });
+                const logText = logs.map(log =>
+                    `[${log.timestamp}] ${log.level}: ${log.message}`
+                ).join('\n');
+
+                const blob = new Blob([logText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logs-${new Date().toISOString()}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('Error exporting logs: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
