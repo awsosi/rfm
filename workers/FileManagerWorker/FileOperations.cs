@@ -27,6 +27,18 @@ namespace FileManagerWorker
         /// </summary>
         private string ResolvePath(string path)
         {
+            // Check for path traversal attempts before processing
+            if (path.Contains("..") || path.Contains("//") || path.Contains("\\\\"))
+            {
+                throw new ArgumentException($"Path contains invalid characters (path traversal attempt): {path}");
+            }
+
+            // Check for absolute paths or network paths
+            if (Path.IsPathRooted(path.Substring(2)) || path.Contains(":") && !path.StartsWith("A:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("B:", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"Absolute paths and network paths are not allowed: {path}");
+            }
+
             if (path.StartsWith("A:", StringComparison.OrdinalIgnoreCase))
             {
                 return Path.Combine(_pathAPrefix, path.Substring(2).TrimStart('\\', '/'));
@@ -42,16 +54,28 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Validates that path is within allowed boundaries
+        /// Validates that path is within allowed boundaries and no path traversal
         /// </summary>
         private void ValidatePath(string resolvedPath)
         {
             var fullPath = Path.GetFullPath(resolvedPath);
 
+            // Ensure resolved path is within allowed prefixes
             if (!fullPath.StartsWith(_pathAPrefix, StringComparison.OrdinalIgnoreCase) &&
                 !fullPath.StartsWith(_pathBPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 throw new UnauthorizedAccessException($"Path is outside allowed boundaries: {fullPath}");
+            }
+
+            // Additional check: ensure no system directories are accessed
+            var systemDirs = new[] { "Windows", "System32", "Program Files", "ProgramData" };
+            foreach (var sysDir in systemDirs)
+            {
+                if (fullPath.Contains(sysDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Warn("Attempted access to system directory: {0}", fullPath);
+                    throw new UnauthorizedAccessException($"Access to system directories is forbidden: {fullPath}");
+                }
             }
         }
 
