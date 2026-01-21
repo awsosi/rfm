@@ -222,7 +222,7 @@ Key settings:
 ## 📖 Documentation
 
 - [Database Layer Documentation](backend/README_DATABASE.md)
-- API Documentation (coming soon)
+- [Central API Documentation](backend/api/README_API.md)
 - WebUI Guide (coming soon)
 - Worker Deployment Guide (coming soon)
 
@@ -278,4 +278,4 @@ For issues or questions, contact the development team.
 
 ---
 
-**Status:** 🟢 Database Layer Complete | 🟡 API In Progress | 🔴 WebUI Pending | 🔴 Worker Pending
+**Status:** 🟢 Database Layer Complete | 🟢 Central API Complete | 🔴 WebUI Pending | 🔴 Worker Pending
