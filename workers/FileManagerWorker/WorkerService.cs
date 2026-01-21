@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CredentialManagement;
 using FileManagerWorker.Models;
 using NLog;
 
@@ -212,29 +213,85 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Loads configuration from App.config
+        /// Loads configuration from Windows Credential Manager (secure) and App.config (non-sensitive settings)
         /// </summary>
         private ServiceConfiguration LoadConfiguration()
         {
             try
             {
+                // Load sensitive data from Windows Credential Manager
+                string apiUrl = null;
+                string serviceUser = null;
+                string servicePassword = null;
+
+                try
+                {
+                    // Load API URL from Credential Manager
+                    using (var cred = new Credential { Target = "FileManagerWorker_ApiUrl" })
+                    {
+                        if (cred.Load())
+                        {
+                            apiUrl = cred.Password;
+                            Logger.Info("API URL loaded from Windows Credential Manager");
+                        }
+                    }
+
+                    // Load Service User from Credential Manager
+                    using (var cred = new Credential { Target = "FileManagerWorker_ServiceUser" })
+                    {
+                        if (cred.Load())
+                        {
+                            serviceUser = cred.Password;
+                        }
+                    }
+
+                    // Load Service Password from Credential Manager
+                    using (var cred = new Credential { Target = "FileManagerWorker_ServicePassword" })
+                    {
+                        if (cred.Load())
+                        {
+                            servicePassword = cred.Password;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to load credentials from Windows Credential Manager, falling back to App.config");
+                }
+
+                // Fallback to App.config if Credential Manager is not available (backward compatibility)
+                if (string.IsNullOrEmpty(apiUrl))
+                {
+                    apiUrl = ConfigurationManager.AppSettings["ApiUrl"];
+                    Logger.Warn("Using API URL from App.config (DEPRECATED - please use /config to save securely)");
+                }
+
+                // Load non-sensitive settings from App.config
                 var config = new ServiceConfiguration
                 {
-                    ApiUrl = ConfigurationManager.AppSettings["ApiUrl"] ?? "https://localhost:5001",
-                    ServiceUser = ConfigurationManager.AppSettings["ServiceUser"],
-                    ServicePassword = ConfigurationManager.AppSettings["ServicePassword"],
+                    ApiUrl = apiUrl ?? "https://localhost:5001",
+                    ServiceUser = serviceUser,
+                    ServicePassword = servicePassword,
                     PathAPrefix = ConfigurationManager.AppSettings["PathAPrefix"] ?? @"C:\PathA",
                     PathBPrefix = ConfigurationManager.AppSettings["PathBPrefix"] ?? @"C:\PathB",
                     PollingIntervalSeconds = int.Parse(ConfigurationManager.AppSettings["PollingIntervalSeconds"] ?? "5"),
                     UseMtls = bool.Parse(ConfigurationManager.AppSettings["UseMtls"] ?? "true")
                 };
 
-                Logger.Info("Configuration loaded:");
+                Logger.Info("Configuration loaded successfully:");
                 Logger.Info("  API URL: {0}", config.ApiUrl);
+                Logger.Info("  Service User: {0}", string.IsNullOrWhiteSpace(config.ServiceUser) ? "Network Service" : config.ServiceUser);
                 Logger.Info("  Path A Prefix: {0}", config.PathAPrefix);
                 Logger.Info("  Path B Prefix: {0}", config.PathBPrefix);
                 Logger.Info("  Polling Interval: {0}s", config.PollingIntervalSeconds);
                 Logger.Info("  Use mTLS: {0}", config.UseMtls);
+                Logger.Info("  Credential Source: {0}", string.IsNullOrEmpty(apiUrl) ? "App.config (INSECURE)" : "Windows Credential Manager (SECURE)");
+
+                if (string.IsNullOrEmpty(config.ApiUrl))
+                {
+                    Logger.Error("API URL not configured. Please run: FileManagerWorker.exe /config");
+                    return null;
+                }
 
                 return config;
             }
