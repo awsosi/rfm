@@ -1,6 +1,7 @@
 using System;
 using System.Configuration;
 using System.Linq;
+using CredentialManagement;
 using NLog;
 using Topshelf;
 using FileManagerWorker.Models;
@@ -22,13 +23,19 @@ namespace FileManagerWorker
                     return 0;
                 }
 
+                // Handle configuration setup
+                if (args.Contains("/config"))
+                {
+                    return HandleConfig();
+                }
+
                 // Handle custom installation with parameters
-                if (args.Contains("/install"))
+                if (args.Contains("/install") || args.Contains("install"))
                 {
                     return HandleInstall(args);
                 }
 
-                if (args.Contains("/uninstall"))
+                if (args.Contains("/uninstall") || args.Contains("uninstall"))
                 {
                     return HandleUninstall();
                 }
@@ -53,50 +60,268 @@ namespace FileManagerWorker
         {
             Console.WriteLine("FileManagerWorker - Remote File Management Worker Service");
             Console.WriteLine();
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("2-STAGE DEPLOYMENT PROCESS:");
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine();
+            Console.WriteLine("STEP 1: Configure service settings (saves to Windows Credential Manager)");
+            Console.WriteLine("  FileManagerWorker.exe /config");
+            Console.WriteLine();
+            Console.WriteLine("STEP 2: Install and start the Windows service");
+            Console.WriteLine("  FileManagerWorker.exe install --interactive");
+            Console.WriteLine();
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine();
             Console.WriteLine("USAGE:");
-            Console.WriteLine("  FileManagerWorker.exe /install /url <api-url> /user <service-user> /pass <service-pass>");
-            Console.WriteLine("  FileManagerWorker.exe /uninstall");
-            Console.WriteLine("  FileManagerWorker.exe /debug");
-            Console.WriteLine("  FileManagerWorker.exe /? or /help");
+            Console.WriteLine("  FileManagerWorker.exe /config            Configure API URL and credentials");
+            Console.WriteLine("  FileManagerWorker.exe install            Install service (requires /config first)");
+            Console.WriteLine("  FileManagerWorker.exe uninstall          Uninstall the service");
+            Console.WriteLine("  FileManagerWorker.exe /debug             Run in console mode for testing");
+            Console.WriteLine("  FileManagerWorker.exe /? or /help        Show this usage information");
             Console.WriteLine();
-            Console.WriteLine("PARAMETERS:");
-            Console.WriteLine("  /install              Install the service with specified parameters");
-            Console.WriteLine("  /url <api-url>        Central API URL (required for install)");
-            Console.WriteLine("  /user <username>      Windows user account for service (required for install)");
-            Console.WriteLine("  /pass <password>      Password for service account (required for install)");
-            Console.WriteLine("  /uninstall            Uninstall the service");
-            Console.WriteLine("  /debug                Run in console mode for testing");
-            Console.WriteLine("  /? or /help           Show this usage information");
+            Console.WriteLine("COMMANDS:");
+            Console.WriteLine("  /config               Interactive configuration wizard");
+            Console.WriteLine("                        - Prompts for API URL");
+            Console.WriteLine("                        - Prompts for service credentials (secure input)");
+            Console.WriteLine("                        - Saves to Windows Credential Manager (ENCRYPTED)");
             Console.WriteLine();
-            Console.WriteLine("EXAMPLES:");
-            Console.WriteLine("  FileManagerWorker.exe /install /url https://api.example.com /user DOMAIN\\ServiceUser /pass P@ssw0rd");
-            Console.WriteLine("  FileManagerWorker.exe /debug");
+            Console.WriteLine("  install               Standard Topshelf service installation");
+            Console.WriteLine("    --interactive       Launch GUI for service account selection");
+            Console.WriteLine("                        OR use default Network Service account");
+            Console.WriteLine();
+            Console.WriteLine("  uninstall             Remove the Windows service");
+            Console.WriteLine();
+            Console.WriteLine("  /debug                Run in console mode for development/testing");
+            Console.WriteLine("                        - Loads config from Windows Credential Manager");
+            Console.WriteLine("                        - Uses CurrentUser certificate store");
+            Console.WriteLine("                        - Press any key to stop");
+            Console.WriteLine();
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("SECURITY FEATURES:");
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("  - NO plaintext passwords in config files");
+            Console.WriteLine("  - Windows Credential Manager storage (encrypted by OS)");
+            Console.WriteLine("  - mTLS certificate-based authentication");
+            Console.WriteLine("  - Secure password input (masked during /config)");
+            Console.WriteLine();
+            Console.WriteLine("EXAMPLE DEPLOYMENT:");
+            Console.WriteLine("  1. FileManagerWorker.exe /config");
+            Console.WriteLine("     Enter API URL: https://api.example.com");
+            Console.WriteLine("     Enter service username: DOMAIN\\ServiceUser");
+            Console.WriteLine("     Enter password: ********** (hidden)");
+            Console.WriteLine("     Configuration saved to Windows Credential Manager!");
+            Console.WriteLine();
+            Console.WriteLine("  2. FileManagerWorker.exe install --interactive");
+            Console.WriteLine("     [Topshelf GUI opens for service account selection]");
+            Console.WriteLine("     Service installed successfully!");
+            Console.WriteLine();
+            Console.WriteLine("==============================================================================");
+        }
+
+        static int HandleConfig()
+        {
+            try
+            {
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine("FileManagerWorker Configuration Wizard");
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine();
+                Console.WriteLine("This wizard will securely store your service configuration in");
+                Console.WriteLine("Windows Credential Manager (encrypted by the operating system).");
+                Console.WriteLine();
+
+                // Prompt for API URL
+                Console.Write("Enter Central API URL: ");
+                string apiUrl = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(apiUrl))
+                {
+                    Console.WriteLine("ERROR: API URL cannot be empty");
+                    return 1;
+                }
+
+                // Prompt for Service User
+                Console.Write("Enter service username (e.g., DOMAIN\\User or leave empty for Network Service): ");
+                string serviceUser = Console.ReadLine();
+
+                // Prompt for Service Password (secure input)
+                string servicePassword = "";
+                if (!string.IsNullOrWhiteSpace(serviceUser))
+                {
+                    Console.Write("Enter password (input hidden): ");
+                    servicePassword = ReadPasswordSecurely();
+                    Console.WriteLine();
+                }
+
+                // Save to Windows Credential Manager
+                if (!SaveToCredentialManager(apiUrl, serviceUser, servicePassword))
+                {
+                    Console.WriteLine("ERROR: Failed to save configuration to Windows Credential Manager");
+                    return 1;
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine("Configuration saved successfully to Windows Credential Manager!");
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine();
+                Console.WriteLine("NEXT STEP:");
+                Console.WriteLine("  Run: FileManagerWorker.exe install --interactive");
+                Console.WriteLine("  This will install the Windows service using the saved configuration.");
+                Console.WriteLine();
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR: Configuration failed: {ex.Message}");
+                Logger.Error(ex, "Configuration wizard failed");
+                return 1;
+            }
+        }
+
+        static string ReadPasswordSecurely()
+        {
+            var password = "";
+            ConsoleKeyInfo key;
+
+            do
+            {
+                key = Console.ReadKey(true);
+
+                if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+                {
+                    password = password.Substring(0, password.Length - 1);
+                    Console.Write("\b \b");
+                }
+                else if (key.Key != ConsoleKey.Enter && key.Key != ConsoleKey.Backspace)
+                {
+                    password += key.KeyChar;
+                    Console.Write("*");
+                }
+            } while (key.Key != ConsoleKey.Enter);
+
+            return password;
+        }
+
+        static bool SaveToCredentialManager(string apiUrl, string serviceUser, string servicePassword)
+        {
+            try
+            {
+                // Save API URL
+                using (var cred = new Credential())
+                {
+                    cred.Target = "FileManagerWorker_ApiUrl";
+                    cred.Username = "FileManagerWorker";
+                    cred.Password = apiUrl;
+                    cred.Type = CredentialType.Generic;
+                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.Save();
+                }
+
+                // Save Service User
+                using (var cred = new Credential())
+                {
+                    cred.Target = "FileManagerWorker_ServiceUser";
+                    cred.Username = "FileManagerWorker";
+                    cred.Password = serviceUser ?? "";
+                    cred.Type = CredentialType.Generic;
+                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.Save();
+                }
+
+                // Save Service Password
+                using (var cred = new Credential())
+                {
+                    cred.Target = "FileManagerWorker_ServicePassword";
+                    cred.Username = "FileManagerWorker";
+                    cred.Password = servicePassword ?? "";
+                    cred.Type = CredentialType.Generic;
+                    cred.PersistanceType = PersistanceType.LocalMachine;
+                    cred.Save();
+                }
+
+                Logger.Info("Configuration saved to Windows Credential Manager");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Failed to save credentials to Windows Credential Manager");
+                return false;
+            }
+        }
+
+        static bool LoadFromCredentialManager(out string apiUrl, out string serviceUser, out string servicePassword)
+        {
+            apiUrl = null;
+            serviceUser = null;
+            servicePassword = null;
+
+            try
+            {
+                // Load API URL
+                using (var cred = new Credential { Target = "FileManagerWorker_ApiUrl" })
+                {
+                    if (cred.Load())
+                    {
+                        apiUrl = cred.Password;
+                    }
+                }
+
+                // Load Service User
+                using (var cred = new Credential { Target = "FileManagerWorker_ServiceUser" })
+                {
+                    if (cred.Load())
+                    {
+                        serviceUser = cred.Password;
+                    }
+                }
+
+                // Load Service Password
+                using (var cred = new Credential { Target = "FileManagerWorker_ServicePassword" })
+                {
+                    if (cred.Load())
+                    {
+                        servicePassword = cred.Password;
+                    }
+                }
+
+                return !string.IsNullOrEmpty(apiUrl);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Failed to load credentials from Windows Credential Manager");
+                return false;
+            }
         }
 
         static int HandleInstall(string[] args)
         {
             try
             {
-                // Parse installation parameters
-                string apiUrl = GetArgValue(args, "/url");
-                string serviceUser = GetArgValue(args, "/user");
-                string servicePass = GetArgValue(args, "/pass");
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine("FileManagerWorker Service Installation");
+                Console.WriteLine("==============================================================================");
+                Console.WriteLine();
 
-                if (string.IsNullOrEmpty(apiUrl) || string.IsNullOrEmpty(serviceUser) || string.IsNullOrEmpty(servicePass))
+                // Verify configuration exists in Credential Manager
+                if (!LoadFromCredentialManager(out string apiUrl, out string serviceUser, out string servicePassword))
                 {
-                    Console.WriteLine("ERROR: /install requires /url, /user, and /pass parameters");
-                    ShowUsage();
+                    Console.WriteLine("ERROR: Configuration not found in Windows Credential Manager");
+                    Console.WriteLine();
+                    Console.WriteLine("Please run the configuration wizard first:");
+                    Console.WriteLine("  FileManagerWorker.exe /config");
+                    Console.WriteLine();
                     return 1;
                 }
 
-                // Save configuration to App.config before installation
-                SaveConfiguration(apiUrl, serviceUser, servicePass);
+                Console.WriteLine("Configuration loaded from Windows Credential Manager:");
+                Console.WriteLine($"  API URL: {apiUrl}");
+                Console.WriteLine($"  Service User: {(string.IsNullOrWhiteSpace(serviceUser) ? "Network Service (default)" : serviceUser)}");
+                Console.WriteLine();
+                Console.WriteLine("Installing service...");
+                Console.WriteLine();
 
-                Console.WriteLine("Installing FileManagerWorker service...");
-                Console.WriteLine($"API URL: {apiUrl}");
-                Console.WriteLine($"Service User: {serviceUser}");
-
-                // Install using TopShelf with custom credentials
+                // Install using standard Topshelf - NO custom args passed to HostFactory
                 var exitCode = (int)HostFactory.Run(x =>
                 {
                     x.Service<WorkerService>(s =>
@@ -106,8 +331,9 @@ namespace FileManagerWorker
                         s.WhenStopped(tc => tc.Stop());
                     });
 
+                    // Use Network Service by default (secure and recommended)
+                    // User can change via --interactive flag to launch Topshelf GUI
                     x.RunAsNetworkService();
-                    // For custom user: x.RunAs(serviceUser, servicePass);
 
                     x.SetDescription("Remote File Management Worker Service");
                     x.SetDisplayName("FileManager Worker");
@@ -123,20 +349,30 @@ namespace FileManagerWorker
                     x.UseNLog();
                 });
 
+                Console.WriteLine();
                 if ((int)exitCode == (int)TopshelfExitCode.Ok)
                 {
-                    Console.WriteLine("Service installed successfully.");
+                    Console.WriteLine("==============================================================================");
+                    Console.WriteLine("Service installed successfully!");
+                    Console.WriteLine("==============================================================================");
+                    Console.WriteLine();
+                    Console.WriteLine("The service is now installed and will start automatically.");
+                    Console.WriteLine("You can manage it using Windows Services (services.msc).");
+                    Console.WriteLine();
                     return 0;
                 }
                 else
                 {
+                    Console.WriteLine("==============================================================================");
                     Console.WriteLine($"Service installation failed with code: {exitCode}");
+                    Console.WriteLine("==============================================================================");
+                    Console.WriteLine();
                     return 1;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Installation failed: {ex.Message}");
+                Console.WriteLine($"ERROR: Installation failed: {ex.Message}");
                 Logger.Error(ex, "Service installation failed");
                 return 1;
             }
@@ -222,43 +458,5 @@ namespace FileManagerWorker
             return (int)exitCode;
         }
 
-        static string GetArgValue(string[] args, string parameter)
-        {
-            for (int i = 0; i < args.Length - 1; i++)
-            {
-                if (args[i].Equals(parameter, StringComparison.OrdinalIgnoreCase))
-                {
-                    return args[i + 1];
-                }
-            }
-            return null;
-        }
-
-        static void SaveConfiguration(string apiUrl, string serviceUser, string servicePass)
-        {
-            try
-            {
-                var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-
-                config.AppSettings.Settings.Remove("ApiUrl");
-                config.AppSettings.Settings.Add("ApiUrl", apiUrl);
-
-                config.AppSettings.Settings.Remove("ServiceUser");
-                config.AppSettings.Settings.Add("ServiceUser", serviceUser);
-
-                config.AppSettings.Settings.Remove("ServicePassword");
-                config.AppSettings.Settings.Add("ServicePassword", servicePass);
-
-                config.Save(ConfigurationSaveMode.Modified);
-                ConfigurationManager.RefreshSection("appSettings");
-
-                Console.WriteLine("Configuration saved successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Could not save configuration: {ex.Message}");
-                Logger.Warn(ex, "Could not save configuration");
-            }
-        }
     }
 }

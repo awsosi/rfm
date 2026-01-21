@@ -82,6 +82,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="CredentialManagement" Version="1.0.2" />
     <PackageReference Include="Topshelf" Version="4.3.0" />
     <PackageReference Include="Topshelf.NLog" Version="4.3.0" />
     <PackageReference Include="NLog" Version="5.2.8" />
