@@ -5,6 +5,7 @@ Complete REST API with authentication, file operations, worker management,
 and admin functionality.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Annotated, List
 

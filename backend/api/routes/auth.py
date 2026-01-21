@@ -126,11 +126,26 @@ async def login(
             settings,
         )
 
-        if sybase_valid:
-            password_valid = True
+        if not sybase_valid:
+            # External auth failed - DENY (no fallback to local)
+            await AuditLogger.log_authentication(
+                user_id=user.id,
+                action="login_failed_external_auth",
+                success=False,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                details={"username": login_data.username, "reason": "external_auth_failed"},
+            )
 
-    # Fallback to local password verification
-    if not password_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="External authentication failed",
+            )
+
+        password_valid = True
+
+    # Local password verification (only if external auth not enabled)
+    if not settings.enable_sybase_auth and not password_valid:
         try:
             ph.verify(user.password_hash, login_data.password)
             password_valid = True

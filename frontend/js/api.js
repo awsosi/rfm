@@ -122,7 +122,7 @@ export async function deleteFiles(paths) {
  * @returns {Promise<Object>}
  */
 export async function copyFiles(sourcePaths, destPath) {
-    return await apiRequest('/api/operations/copy', {
+    return await apiRequest('/api/files/copy', {
         method: 'POST',
         body: JSON.stringify({
             source_paths: sourcePaths,
@@ -138,7 +138,7 @@ export async function copyFiles(sourcePaths, destPath) {
  * @returns {Promise<Object>}
  */
 export async function moveFiles(sourcePaths, destPath) {
-    return await apiRequest('/api/operations/move', {
+    return await apiRequest('/api/files/move', {
         method: 'POST',
         body: JSON.stringify({
             source_paths: sourcePaths,
