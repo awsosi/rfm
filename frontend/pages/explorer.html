@@ -177,6 +177,88 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal hidden" id="settings-modal">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="settings-modal-title">User Settings</h3>
+                <button class="modal-close" id="settings-modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="settings-modal-body">
+                <form id="settings-form">
+                    <div class="settings-section">
+                        <h4>Display Preferences</h4>
+
+                        <div class="form-group">
+                            <label for="ui-theme">Theme:</label>
+                            <select id="ui-theme" name="ui_theme" class="form-control">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="pane-layout">Pane Layout:</label>
+                            <select id="pane-layout" name="pane_layout" class="form-control">
+                                <option value="horizontal">Horizontal (Side by Side)</option>
+                                <option value="vertical">Vertical (Top and Bottom)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="show-hidden-files">
+                                <input type="checkbox" id="show-hidden-files" name="show_hidden_files">
+                                Show hidden files
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h4>File Listing</h4>
+
+                        <div class="form-group">
+                            <label for="default-sort-by">Default Sort By:</label>
+                            <select id="default-sort-by" name="default_sort_by" class="form-control">
+                                <option value="name">Name</option>
+                                <option value="size">Size</option>
+                                <option value="date">Date</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="default-sort-order">Sort Order:</label>
+                            <select id="default-sort-order" name="default_sort_order" class="form-control">
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="items-per-page">Items Per Page:</label>
+                            <input type="number" id="items-per-page" name="items_per_page" class="form-control" min="10" max="500" value="100">
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h4>Session Preferences</h4>
+
+                        <div class="form-group">
+                            <label for="remember-last-paths">
+                                <input type="checkbox" id="remember-last-paths" name="remember_last_paths">
+                                Remember last visited paths
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="settings-reset">Reset to Defaults</button>
+                <button class="btn btn-secondary" id="settings-cancel">Cancel</button>
+                <button class="btn btn-primary" id="settings-save">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script type="module" src="../js/app.js"></script>
 </body>

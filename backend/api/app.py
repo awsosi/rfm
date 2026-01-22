@@ -7,7 +7,7 @@ and admin functionality.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -450,6 +450,38 @@ async def list_audit_logs(
     result = await db.execute(stmt)
     logs = result.scalars().all()
     return [AuditLogResponse.model_validate(log) for log in logs]
+
+
+@app.get("/api/operations/list", response_model=List[OperationResponse])
+async def list_operations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    status: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 100,
+):
+    """List operations with optional status filter."""
+    from models import OperationStatus
+
+    stmt = select(Operation).where(Operation.user_id == current_user.id)
+
+    # Apply status filter if provided
+    if status:
+        try:
+            status_enum = OperationStatus(status.upper())
+            stmt = stmt.where(Operation.status == status_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {status}. Valid values: pending, in_progress, completed, failed, rolled_back"
+            )
+
+    # Order by most recent first
+    stmt = stmt.order_by(desc(Operation.created_at)).offset(offset).limit(limit)
+
+    result = await db.execute(stmt)
+    operations = result.scalars().all()
+    return [OperationResponse.model_validate(op) for op in operations]
 
 
 # =============================================================================

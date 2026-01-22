@@ -448,3 +448,37 @@ export function stopPolling() {
         pollingInterval = null;
     }
 }
+
+// =============================================================================
+// User Preferences API
+// =============================================================================
+
+/**
+ * Get current user's preferences
+ * @returns {Promise<Object>}
+ */
+export async function getPreferences() {
+    return await apiRequest('/api/preferences/me');
+}
+
+/**
+ * Update current user's preferences
+ * @param {Object} preferences - Preferences to update
+ * @returns {Promise<Object>}
+ */
+export async function updatePreferences(preferences) {
+    return await apiRequest('/api/preferences/me', {
+        method: 'PUT',
+        body: JSON.stringify(preferences)
+    });
+}
+
+/**
+ * Reset preferences to defaults
+ * @returns {Promise<Object>}
+ */
+export async function resetPreferences() {
+    return await apiRequest('/api/preferences/me', {
+        method: 'DELETE'
+    });
+}
