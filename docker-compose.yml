@@ -123,7 +123,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: backend/Dockerfile
       args:
         PYTHON_VERSION: 3.11
         BUILDKIT_INLINE_CACHE: 1
@@ -234,7 +234,7 @@ services:
   webui:
     build:
       context: .
-      dockerfile: Dockerfile.webui
+      dockerfile: frontend/Dockerfile
       args:
         PYTHON_VERSION: 3.11
 

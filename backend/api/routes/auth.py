@@ -11,6 +11,7 @@ import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
 import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,34 +70,15 @@ async def verify_sybase_credentials(
         return False
 
 
-@router.post("/login", response_model=LoginResponse)
-async def login(
+async def _perform_login(
     request: Request,
     login_data: LoginRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    settings: Annotated[Settings, Depends(get_settings)],
-):
+    db: AsyncSession,
+    settings: Settings,
+) -> LoginResponse:
     """
-    Authenticate user and return access token.
-
-    Flow:
-    1. Check if Sybase auth is enabled
-    2. If enabled, verify with Sybase API (non-blocking)
-    3. If Sybase succeeds OR disabled, verify local password
-    4. Create session and generate JWT token
-    5. Log authentication attempt
-
-    Args:
-        request: FastAPI request
-        login_data: Login credentials
-        db: Database session
-        settings: Application settings
-
-    Returns:
-        LoginResponse with access token
-
-    Raises:
-        HTTPException: If authentication fails
+    Internal function to perform login logic.
+    Used by both /token and /login endpoints.
     """
     # Get user from database
     stmt = select(User).where(User.username == login_data.username)
@@ -229,6 +211,66 @@ async def login(
         username=user.username,
         role=user.role,
     )
+
+
+@router.post("/token", response_model=LoginResponse)
+async def token(
+    request: Request,
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    OAuth2-compatible token endpoint for authentication.
+
+    This endpoint follows the OAuth2 password flow specification.
+    Accepts form data (application/x-www-form-urlencoded) with username and password.
+
+    Args:
+        request: FastAPI request
+        form_data: OAuth2 password form data
+        db: Database session
+        settings: Application settings
+
+    Returns:
+        LoginResponse with access token
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    # Convert OAuth2 form to LoginRequest
+    login_data = LoginRequest(username=form_data.username, password=form_data.password)
+
+    # Use the existing login logic
+    return await _perform_login(request, login_data, db, settings)
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    request: Request,
+    login_data: LoginRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Authenticate user and return access token (JSON version).
+
+    This endpoint accepts JSON login data.
+    For OAuth2-compatible form-based login, use /token endpoint.
+
+    Args:
+        request: FastAPI request
+        login_data: Login credentials
+        db: Database session
+        settings: Application settings
+
+    Returns:
+        LoginResponse with access token
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    return await _perform_login(request, login_data, db, settings)
 
 
 @router.post("/logout")
