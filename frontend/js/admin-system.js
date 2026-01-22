@@ -574,3 +574,5 @@ class AdminSystem {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = AdminSystem;
 }
+
+export default AdminSystem;

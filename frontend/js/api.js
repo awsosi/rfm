@@ -19,7 +19,7 @@ let wsEventHandlers = [];
  * @param {Object} options - Fetch options
  * @returns {Promise<any>}
  */
-async function apiRequest(endpoint, options = {}) {
+export async function apiRequest(endpoint, options = {}) {
     const token = getToken();
     if (!token) {
         throw new Error('Not authenticated');

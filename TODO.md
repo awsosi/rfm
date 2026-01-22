@@ -209,8 +209,8 @@
   - ✅ Log entry streaming
 - ✅ **JavaScript Module**
   - ✅ admin-system.js module
-  - Integracja z istniejącym admin.html
-  - Toast notifications (TODO - używa alert())
+  - ✅ Integracja z istniejącym admin.html
+  - 📝 Toast notifications (TODO - używa alert())
 - 📝 **Dashboard Enhancement**
   - Charts (operacje, użytkownicy, workery)
   - Export reports (PDF, CSV)
@@ -655,7 +655,7 @@
 2. ⚠️ **Prawdziwe SSL/TLS certificates**
 3. 🚧 **Uruchomić migrację 002 (UserPreferences)**
 4. 🚧 **Uruchomić migrację 003 (Admin models)**
-5. 🚧 **Zintegrować admin-system.js z admin.html**
+5. ✅ **Zintegrować admin-system.js z admin.html** - ZAKOŃCZONE
 6. 📝 **Zewnętrzna autentykacja Sybase** (jeśli wymagana od razu)
 7. 📝 **Rate limiting & IP whitelisting** (basic security)
 
