@@ -51,6 +51,12 @@ if [ "${TLS_ENABLED}" = "true" ]; then
 fi
 echo "========================================"
 
+# Build SSL parameters only if TLS is enabled
+SSL_PARAMS=""
+if [ "${TLS_ENABLED}" = "true" ]; then
+    SSL_PARAMS="--ssl-keyfile /etc/ssl/private/filemanager.key --ssl-certfile /etc/ssl/certs/filemanager.crt"
+fi
+
 exec python -m uvicorn api.app:app \
     --host "${API_HOST:-0.0.0.0}" \
     --port "${API_PORT:-8000}" \
@@ -58,5 +64,4 @@ exec python -m uvicorn api.app:app \
     --log-level "${LOG_LEVEL:-info}" \
     --access-log \
     --use-colors \
-    ${TLS_ENABLED:+--ssl-keyfile /etc/ssl/private/filemanager.key} \
-    ${TLS_ENABLED:+--ssl-certfile /etc/ssl/certs/filemanager.crt}
+    $SSL_PARAMS
