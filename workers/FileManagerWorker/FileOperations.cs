@@ -13,8 +13,34 @@ namespace FileManagerWorker
     public class FileOperations
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        private readonly string _pathAPrefix;
-        private readonly string _pathBPrefix;
+        private string _pathAPrefix;
+        private string _pathBPrefix;
+
+        /// <summary>
+        /// Path A prefix - can be updated by admin
+        /// </summary>
+        public string PathAPrefix
+        {
+            get => _pathAPrefix;
+            set
+            {
+                Logger.Info("PathAPrefix changed from '{0}' to '{1}'", _pathAPrefix, value);
+                _pathAPrefix = value;
+            }
+        }
+
+        /// <summary>
+        /// Path B prefix - can be updated by admin
+        /// </summary>
+        public string PathBPrefix
+        {
+            get => _pathBPrefix;
+            set
+            {
+                Logger.Info("PathBPrefix changed from '{0}' to '{1}'", _pathBPrefix, value);
+                _pathBPrefix = value;
+            }
+        }
 
         public FileOperations(string pathAPrefix, string pathBPrefix)
         {
