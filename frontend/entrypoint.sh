@@ -30,7 +30,7 @@ echo "API Backend: ${API_URL}"
 echo "========================================"
 
 # Use gunicorn for production
-exec gunicorn webui_server:app \
+exec gunicorn server:app \
     --bind "${WEBUI_HOST:-0.0.0.0}:${WEBUI_PORT:-3000}" \
     --workers 2 \
     --threads 4 \

@@ -77,15 +77,20 @@ RUN mkdir -p /app/frontend \
 # Set working directory
 WORKDIR /app
 
-# Copy frontend static files
-COPY --chown=filemanager:filemanager frontend/ /app/frontend/
+# Copy Flask proxy server to /app/
+COPY --chown=filemanager:filemanager frontend/server.py /app/server.py
+RUN chmod +x /app/server.py
 
-# Copy Flask proxy server
-COPY --chown=filemanager:filemanager webui_server.py /app/webui_server.py
-RUN chmod +x /app/webui_server.py
+# Copy frontend static files (excluding server.py which was already copied)
+COPY --chown=filemanager:filemanager frontend/assets/ /app/frontend/assets/
+COPY --chown=filemanager:filemanager frontend/css/ /app/frontend/css/
+COPY --chown=filemanager:filemanager frontend/js/ /app/frontend/js/
+COPY --chown=filemanager:filemanager frontend/pages/ /app/frontend/pages/
+COPY --chown=filemanager:filemanager frontend/index.html /app/frontend/index.html
+COPY --chown=filemanager:filemanager frontend/README.md /app/frontend/README.md
 
 # Copy entrypoint script
-COPY --chown=filemanager:filemanager webui_entrypoint.sh /app/entrypoint.sh
+COPY --chown=filemanager:filemanager frontend/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Switch to non-root user

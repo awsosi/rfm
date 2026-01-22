@@ -92,7 +92,7 @@ WORKDIR /app
 COPY --chown=filemanager:filemanager backend/ /app/backend/
 
 # Copy entrypoint script
-COPY --chown=filemanager:filemanager entrypoint.sh /app/entrypoint.sh
+COPY --chown=filemanager:filemanager backend/entrypoint.sh /app/entrypoint.sh
 
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
