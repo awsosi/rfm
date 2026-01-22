@@ -275,8 +275,8 @@ def upgrade() -> None:
         CREATE OR REPLACE VIEW system_stats AS
         SELECT
             (SELECT COUNT(*) FROM users WHERE is_active = true) as active_users,
-            (SELECT COUNT(*) FROM workers WHERE status = 'active') as active_workers,
-            (SELECT COUNT(*) FROM operations WHERE status = 'in_progress') as operations_in_progress,
+            (SELECT COUNT(*) FROM workers WHERE status = 'ACTIVE') as active_workers,
+            (SELECT COUNT(*) FROM operations WHERE status = 'IN_PROGRESS') as operations_in_progress,
             (SELECT COUNT(*) FROM operations WHERE created_at > NOW() - INTERVAL '24 hours') as operations_today,
             (SELECT COUNT(*) FROM sessions WHERE expires_at > NOW()) as active_sessions,
             (SELECT pg_size_pretty(pg_database_size(current_database()))) as database_size;
