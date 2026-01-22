@@ -425,3 +425,55 @@ class Config(Base):
             return json.loads(self.value)
         else:
             return self.value
+
+
+class UserPreferences(Base):
+    """
+    User preferences for UI customization and behavior.
+
+    Stores individual user settings like last visited paths,
+    UI layout preferences, filters, etc.
+    """
+    __tablename__ = "user_preferences"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # UI Preferences
+    remember_last_paths = Column(Boolean, nullable=False, default=True)
+    last_path_a = Column(String(1000), nullable=True)
+    last_path_b = Column(String(1000), nullable=True)
+
+    # Layout preferences
+    ui_theme = Column(String(50), nullable=False, default="light")  # light, dark
+    pane_layout = Column(String(50), nullable=False, default="horizontal")  # horizontal, vertical
+    show_hidden_files = Column(Boolean, nullable=False, default=False)
+    default_sort_by = Column(String(50), nullable=False, default="name")  # name, size, date
+    default_sort_order = Column(String(50), nullable=False, default="asc")  # asc, desc
+
+    # Pagination preferences
+    items_per_page = Column(Integer, nullable=False, default=100)
+
+    # Additional settings (JSON for flexibility)
+    custom_settings = Column(JSON, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    # Relationships
+    user = relationship("User", backref="preferences")
+
+    def __repr__(self) -> str:
+        return f"<UserPreferences(user_id={self.user_id}, theme='{self.ui_theme}')>"
