@@ -63,9 +63,9 @@ class Settings(BaseSettings):
     tls_min_version: str = "1.3"
 
     # CORS
-    cors_origins: list[str] = Field(
+    cors_origins: str | list[str] = Field(
         default=["http://localhost:3000", "http://localhost:8080"],
-        description="Allowed CORS origins",
+        description="Allowed CORS origins (comma-separated string or JSON array)",
     )
 
     # Redis (Session Storage & Caching)
@@ -131,8 +131,14 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v) -> list[str]:
         """Parse CORS origins from comma-separated string or list."""
         if isinstance(v, str):
+            # Handle empty string or whitespace-only string
+            if not v.strip():
+                return ["http://localhost:3000", "http://localhost:8080"]
             return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+        if isinstance(v, list):
+            return v
+        # Fallback to default
+        return ["http://localhost:3000", "http://localhost:8080"]
 
     @field_validator("log_level")
     @classmethod
