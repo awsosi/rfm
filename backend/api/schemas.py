@@ -419,7 +419,7 @@ class WorkerRequest(BaseModel):
     params: Optional[dict[str, Any]] = None
 
 
-class WorkerResponse(BaseModel):
+class WorkerCommandResponse(BaseModel):
     """Response from worker."""
 
     status: str = Field(..., description="Status: success, failed")
