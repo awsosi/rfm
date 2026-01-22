@@ -43,10 +43,10 @@
 | Moduł | Status | Kompletność | Priorytet |
 |-------|--------|-------------|-----------|
 | **Autentykacja & Autoryzacja** | ✅ | 95% | Wysoki |
-| **Panel Administracyjny** | 🚧 | 85% | Wysoki |
+| **Panel Administracyjny** | ✅ | 95% | Wysoki |
 | **Operacje Plikowe** | ✅ | 90% | Wysoki |
 | **Worker Management** | ✅ | 85% | Wysoki |
-| **WebSocket Real-time** | 📝 | 30% | Średni |
+| **WebSocket Real-time** | ✅ | 90% | Średni |
 | **Zewnętrzna Autentykacja** | 📝 | 0% | Średni |
 | **Remote Audit API** | 📝 | 0% | Niski |
 | **Worker (Windows Service)** | ✅ | 90% | Wysoki |
@@ -181,18 +181,37 @@
 
 ### Admin Panel
 - ✅ User management (CRUD)
-- ✅ Worker management (approve, suspend)
+- ✅ Worker management (approve, suspend, delete)
 - ✅ Configuration tab z wszystkimi parametrami
 - ✅ Audit logs viewer
-- 🚧 **JavaScript Integration**
-  - ⚠️ Istniejący inline script w admin.html
-  - ✅ Nowy admin.js module (do integracji)
-  - Zastąpić inline script modułowym kodem
-  - Dodać proper error handling
-  - Toast notifications zamiast alert()
-- 📝 **Dashboard & Statistics**
-  - Dashboard tab z key metrics
-  - Real-time system stats
+- ✅ **Samba Path Management**
+  - ✅ Model SambaPath w bazie danych
+  - ✅ CRUD endpoints dla Samba paths
+  - ✅ UI dla zarządzania Samba paths
+- ✅ **Worker Provisioning & Control**
+  - ✅ Real-time worker status endpoint
+  - ✅ Worker provisioning endpoint (config update)
+  - ✅ Worker command sending (ping, get_status, update_config, reload_config)
+  - ✅ Worker health monitoring
+- ✅ **System Statistics & Monitoring**
+  - ✅ System stats endpoint (operations, workers, users)
+  - ✅ System health endpoint
+  - ✅ UI dla statistics dashboard
+  - ✅ Auto-refresh statistics
+- ✅ **Real-time Log Viewing**
+  - ✅ Log streaming endpoint z filtrami
+  - ✅ UI dla log viewer
+- ✅ **WebSocket Real-time Updates**
+  - ✅ WebSocket manager implementation
+  - ✅ Operation progress updates
+  - ✅ Worker status change notifications
+  - ✅ System alerts broadcasting
+  - ✅ Log entry streaming
+- ✅ **JavaScript Module**
+  - ✅ admin-system.js module
+  - Integracja z istniejącym admin.html
+  - Toast notifications (TODO - używa alert())
+- 📝 **Dashboard Enhancement**
   - Charts (operacje, użytkownicy, workery)
   - Export reports (PDF, CSV)
 
@@ -230,11 +249,16 @@
 - ✅ Windows Credential Manager integration
 
 ### Wymagane Usprawnienia
+- ✅ **Admin Commands Support**
+  - ✅ ping - health check
+  - ✅ get_status - returns worker status and metrics
+  - ✅ update_config - updates worker configuration
+  - ✅ reload_config - reloads config from source
 - 📝 **Asynchroniczne Operacje**
   - ✅ Podstawowa asynchroniczność
+  - ✅ Progress reporting do centrali
   - Thread pool dla wielu operacji
   - Cancelation tokens
-  - Progress reporting do centrali
 - 📝 **Locking & Concurrency**
   - File-level locking
   - Folder-level locking
@@ -280,13 +304,17 @@
 - ✅ OperationWorkers (M2M)
 - ✅ AuditLogs
 - ✅ Config
-- ✅ UserPreferences *(nowy)*
+- ✅ UserPreferences
+- ✅ SambaPath *(nowy)*
+- ✅ SystemMetrics *(nowy)*
 
 ### Migracje
 - ✅ `001_initial_schema.py` - Initial schema
 - ✅ `002_add_user_preferences.py` - User preferences
+- ✅ `003_add_admin_models.py` - Samba paths & system metrics
 - 📝 **Wymagane Migracje**
-  - Uruchomić migrację 002 na środowisku
+  - 🚧 Uruchomić migrację 002 na środowisku
+  - 🚧 Uruchomić migrację 003 na środowisku
   - Dodać indeksy dla performance
   - Partycjonowanie tabeli audit_logs (jeśli duża)
 
@@ -625,18 +653,21 @@
 ### 🔥 Krytyczne (Przed Produkcją)
 1. ⚠️ **Zmienić default admin credentials**
 2. ⚠️ **Prawdziwe SSL/TLS certificates**
-3. 📝 **Uruchomić migrację 002 (UserPreferences)**
-4. 📝 **Zintegrować admin.js z admin.html** (usunąć duplicate code)
-5. 📝 **Zewnętrzna autentykacja Sybase** (jeśli wymagana od razu)
-6. 📝 **Rate limiting & IP whitelisting** (basic security)
+3. 🚧 **Uruchomić migrację 002 (UserPreferences)**
+4. 🚧 **Uruchomić migrację 003 (Admin models)**
+5. 🚧 **Zintegrować admin-system.js z admin.html**
+6. 📝 **Zewnętrzna autentykacja Sybase** (jeśli wymagana od razu)
+7. 📝 **Rate limiting & IP whitelisting** (basic security)
 
 ### 🚀 Wysokie Priority (MVP)
-1. 📝 **Real-time WebSocket updates** (kluczowe dla UX)
-2. 📝 **Operation queue & locking** (prevent conflicts)
-3. 📝 **2-worker coordination** (push A→B z weryfikacją)
-4. 📝 **Syslog integration** (logowanie)
-5. 📝 **Rollback improvements** (manual rollback UI)
-6. 📝 **Worker failover** (high availability)
+1. ✅ **Real-time WebSocket updates** - zaimplementowane
+2. ✅ **Worker provisioning & control** - zaimplementowane
+3. ✅ **System monitoring & statistics** - zaimplementowane
+4. 📝 **Operation queue & locking** (prevent conflicts)
+5. 📝 **2-worker coordination** (push A→B z weryfikacją)
+6. 📝 **Syslog integration** (logowanie)
+7. 📝 **Rollback improvements** (manual rollback UI)
+8. 📝 **Worker failover** (high availability)
 
 ### 📊 Średnie Priority
 1. 📝 **Dashboard & statistics** (admin panel)

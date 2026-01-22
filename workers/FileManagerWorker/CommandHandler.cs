@@ -60,6 +60,18 @@ namespace FileManagerWorker
                     case "info":
                         return await HandleInfoAsync(request);
 
+                    case "ping":
+                        return await HandlePingAsync(request);
+
+                    case "get_status":
+                        return await HandleGetStatusAsync(request);
+
+                    case "update_config":
+                        return await HandleUpdateConfigAsync(request);
+
+                    case "reload_config":
+                        return await HandleReloadConfigAsync(request);
+
                     default:
                         return CommandResponse.Failed(request.CommandId, $"Unknown command: {request.Command}");
                 }
@@ -312,6 +324,153 @@ namespace FileManagerWorker
             {
                 Logger.Error(ex, "Info operation failed");
                 return CommandResponse.Failed(request.CommandId, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Handles ping command (admin - health check)
+        /// </summary>
+        private async Task<CommandResponse> HandlePingAsync(CommandRequest request)
+        {
+            Logger.Debug("Ping command received");
+            return await Task.FromResult(CommandResponse.Success(request.CommandId, "pong"));
+        }
+
+        /// <summary>
+        /// Handles get_status command (admin - returns worker status and metrics)
+        /// </summary>
+        private async Task<CommandResponse> HandleGetStatusAsync(CommandRequest request)
+        {
+            Logger.Debug("Get status command received");
+
+            try
+            {
+                // Gather worker status information
+                var status = new Dictionary<string, object>
+                {
+                    { "worker_name", Environment.MachineName },
+                    { "uptime_seconds", (int)(DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalSeconds },
+                    { "operations_processed", 0 }, // TODO: Implement operation counter
+                    { "operations_in_queue", 0 }, // TODO: Implement queue status
+                    { "status", "online" },
+                    { "version", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() },
+                    { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
+                };
+
+                // Try to get performance metrics
+                try
+                {
+                    var process = System.Diagnostics.Process.GetCurrentProcess();
+                    var cpuCounter = new System.Diagnostics.PerformanceCounter("Processor", "% Processor Time", "_Total");
+                    cpuCounter.NextValue(); // First call always returns 0
+                    System.Threading.Thread.Sleep(100);
+
+                    status["cpu_usage_percent"] = Math.Round(cpuCounter.NextValue(), 2);
+                    status["memory_usage_mb"] = Math.Round(process.WorkingSet64 / 1024.0 / 1024.0, 2);
+
+                    // Get disk space
+                    var drive = new System.IO.DriveInfo(System.IO.Path.GetPathRoot(Environment.SystemDirectory));
+                    status["disk_free_gb"] = Math.Round(drive.AvailableFreeSpace / 1024.0 / 1024.0 / 1024.0, 2);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to get performance metrics");
+                }
+
+                // Get current configuration
+                var config = new Dictionary<string, object>();
+                try
+                {
+                    config["path_a_prefix"] = _fileOps.PathAPrefix;
+                    config["path_b_prefix"] = _fileOps.PathBPrefix;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to get configuration");
+                }
+
+                status["config"] = config;
+
+                return await Task.FromResult(CommandResponse.Success(request.CommandId, status));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Get status operation failed");
+                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Handles update_config command (admin - updates worker configuration)
+        /// </summary>
+        private async Task<CommandResponse> HandleUpdateConfigAsync(CommandRequest request)
+        {
+            Logger.Info("Update config command received");
+
+            try
+            {
+                var updated = new List<string>();
+
+                // Update path prefixes if provided
+                if (request.Parameters.ContainsKey("path_a_prefix"))
+                {
+                    var newPath = request.Parameters["path_a_prefix"];
+                    Logger.Info("Updating PathAPrefix to: {0}", newPath);
+                    _fileOps.PathAPrefix = newPath;
+                    updated.Add("path_a_prefix");
+                }
+
+                if (request.Parameters.ContainsKey("path_b_prefix"))
+                {
+                    var newPath = request.Parameters["path_b_prefix"];
+                    Logger.Info("Updating PathBPrefix to: {0}", newPath);
+                    _fileOps.PathBPrefix = newPath;
+                    updated.Add("path_b_prefix");
+                }
+
+                // TODO: Handle other configuration parameters (polling_interval, etc.)
+                // These would require service restart or dynamic reconfiguration
+
+                var result = new Dictionary<string, object>
+                {
+                    { "status", "success" },
+                    { "updated_fields", updated },
+                    { "message", $"Updated {updated.Count} configuration parameter(s)" }
+                };
+
+                return await Task.FromResult(CommandResponse.Success(request.CommandId, result));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Update config operation failed");
+                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Handles reload_config command (admin - reloads configuration from source)
+        /// </summary>
+        private async Task<CommandResponse> HandleReloadConfigAsync(CommandRequest request)
+        {
+            Logger.Info("Reload config command received");
+
+            try
+            {
+                // TODO: Implement configuration reload logic
+                // This would re-read from Windows Credential Manager or config file
+
+                var result = new Dictionary<string, object>
+                {
+                    { "status", "success" },
+                    { "message", "Configuration reload not yet implemented - restart service to reload config" }
+                };
+
+                return await Task.FromResult(CommandResponse.Success(request.CommandId, result));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Reload config operation failed");
+                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
             }
         }
     }

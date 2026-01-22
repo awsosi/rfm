@@ -31,6 +31,7 @@ from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, Oper
 # Import routes
 from api.routes.auth import router as auth_router
 from api.routes.admin import router as admin_router
+from api.routes.admin_system import router as admin_system_router
 from api.routes.preferences import router as preferences_router
 
 
@@ -50,9 +51,15 @@ async def lifespan(app: FastAPI):
         echo=settings.db_echo,
     )
 
+    # Start WebSocket manager
+    from api.websocket_manager import ws_manager
+    await ws_manager.start()
+
     yield
 
     # Shutdown
+    from api.websocket_manager import ws_manager
+    await ws_manager.stop()
     await close_database()
 
 
@@ -78,6 +85,7 @@ app.add_middleware(RequestLoggingMiddleware)
 # Include routers
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(admin_system_router)
 app.include_router(preferences_router)
 
 
@@ -488,21 +496,77 @@ async def list_operations(
 # WebSocket
 # =============================================================================
 
-@app.websocket("/ws/operations")
-async def websocket_operations(websocket: WebSocket):
-    """WebSocket endpoint for real-time operation updates."""
-    await websocket.accept()
+@app.websocket("/ws/realtime")
+async def websocket_realtime(
+    websocket: WebSocket,
+    token: Optional[str] = None,
+):
+    """
+    WebSocket endpoint for real-time updates.
+
+    Supports:
+    - Operation progress updates
+    - Worker status changes
+    - System alerts
+    - Log streaming
+
+    Usage:
+        ws://localhost:8000/ws/realtime?token=<jwt_token>
+    """
+    from api.websocket_manager import ws_manager
+    from api.middleware.auth import decode_token
+    from fastapi import WebSocketDisconnect
+    from loguru import logger
+    from datetime import datetime, timezone
+    import uuid
+
+    connection_id = str(uuid.uuid4())
+    user_id = None
+
+    # Authenticate if token provided
+    if token:
+        try:
+            token_data = decode_token(token)
+            user_id = token_data.user_id
+        except Exception:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+
+    # Connect to WebSocket manager
+    await ws_manager.connect(
+        websocket,
+        connection_id,
+        user_id=user_id,
+        topics=["operations", "workers", "alerts", "logs"],
+    )
 
     try:
+        # Listen for messages from client
         while True:
-            # In production, this would stream real operation updates
-            # For now, send periodic pings
-            await websocket.send_json({"type": "ping", "data": {}})
-            await asyncio.sleep(30)
-    except Exception:
-        pass
-    finally:
-        await websocket.close()
+            message = await websocket.receive_json()
+
+            # Handle client messages
+            if message.get("type") == "subscribe":
+                topic = message.get("topic")
+                if topic:
+                    await ws_manager.subscribe(connection_id, topic)
+
+            elif message.get("type") == "unsubscribe":
+                topic = message.get("topic")
+                if topic:
+                    await ws_manager.unsubscribe(connection_id, topic)
+
+            elif message.get("type") == "ping":
+                await ws_manager.send_to_connection(
+                    connection_id,
+                    {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()},
+                )
+
+    except WebSocketDisconnect:
+        await ws_manager.disconnect(connection_id)
+    except Exception as exc:
+        logger.error(f"WebSocket error for {connection_id}: {exc}")
+        await ws_manager.disconnect(connection_id)
 
 
 # =============================================================================
