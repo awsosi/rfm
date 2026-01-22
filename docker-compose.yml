@@ -165,7 +165,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://webui:3000}
 
       # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       ENABLE_JSON_LOGS: ${ENABLE_JSON_LOGS:-true}
       LOG_FILE_PATH: /var/log/file-manager/api.log
@@ -255,7 +255,7 @@ services:
       FLASK_DEBUG: ${FLASK_DEBUG:-false}
 
       # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FILE_PATH: /var/log/file-manager/webui.log
 
     volumes:
