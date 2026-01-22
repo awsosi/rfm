@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
-from api.schemas import WorkerRequest, WorkerResponse
+from api.schemas import WorkerRequest, WorkerCommandResponse
 from api.services.worker_service import (
     WorkerService,
     WorkerCommunicationError,
@@ -188,7 +188,7 @@ class OperationService:
         operation: Operation,
         worker: Worker,
         db: AsyncSession,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Execute operation on single worker.
 
@@ -198,7 +198,7 @@ class OperationService:
             db: Database session
 
         Returns:
-            WorkerResponse from worker
+            WorkerCommandResponse from worker
         """
         logger.info(f"Executing operation {operation.id} on worker {worker.name}")
 

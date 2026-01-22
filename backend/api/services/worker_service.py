@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
-from api.schemas import WorkerRequest, WorkerResponse
+from api.schemas import WorkerRequest, WorkerCommandResponse
 from models import Worker, WorkerStatus
 
 
@@ -73,7 +73,7 @@ class WorkerService:
         worker: Worker,
         command: WorkerRequest,
         db: AsyncSession,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Send command to worker with retry logic.
 
@@ -83,7 +83,7 @@ class WorkerService:
             db: Database session for updating worker status
 
         Returns:
-            WorkerResponse from worker
+            WorkerCommandResponse from worker
 
         Raises:
             WorkerOfflineError: If worker is unreachable
@@ -159,7 +159,7 @@ class WorkerService:
         url: str,
         request_data: dict,
         public_key_pem: str,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Make HTTPS request to worker.
 
@@ -169,7 +169,7 @@ class WorkerService:
             public_key_pem: Worker's public key for verification
 
         Returns:
-            WorkerResponse
+            WorkerCommandResponse
 
         Raises:
             WorkerAuthenticationError: If response signature is invalid
@@ -196,7 +196,7 @@ class WorkerService:
             await self._verify_response(response_json, public_key_pem)
 
             # Parse response
-            worker_response = WorkerResponse(**response_json.get("data", {}))
+            worker_response = WorkerCommandResponse(**response_json.get("data", {}))
 
             if worker_response.status == "failed":
                 raise WorkerCommunicationError(
@@ -334,7 +334,7 @@ class WorkerService:
         db: AsyncSession,
         offset: int = 0,
         limit: int = 1000,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         List directory contents on worker.
 
@@ -346,7 +346,7 @@ class WorkerService:
             limit: Max items to return
 
         Returns:
-            WorkerResponse with directory listing
+            WorkerCommandResponse with directory listing
         """
         command = WorkerRequest(
             command="list",
@@ -363,7 +363,7 @@ class WorkerService:
         query: str,
         db: AsyncSession,
         recursive: bool = True,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Search for files on worker.
 
@@ -375,7 +375,7 @@ class WorkerService:
             recursive: Whether to search recursively
 
         Returns:
-            WorkerResponse with search results
+            WorkerCommandResponse with search results
         """
         command = WorkerRequest(
             command="search",
@@ -391,7 +391,7 @@ class WorkerService:
         source_path: str,
         dest_path: str,
         db: AsyncSession,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Copy file on worker.
 
@@ -402,7 +402,7 @@ class WorkerService:
             db: Database session
 
         Returns:
-            WorkerResponse with operation result
+            WorkerCommandResponse with operation result
         """
         command = WorkerRequest(
             command="copy",
@@ -418,7 +418,7 @@ class WorkerService:
         source_path: str,
         dest_path: str,
         db: AsyncSession,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Move file on worker.
 
@@ -429,7 +429,7 @@ class WorkerService:
             db: Database session
 
         Returns:
-            WorkerResponse with operation result
+            WorkerCommandResponse with operation result
         """
         command = WorkerRequest(
             command="move",
@@ -445,7 +445,7 @@ class WorkerService:
         path: str,
         db: AsyncSession,
         recursive: bool = False,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Delete file on worker.
 
@@ -456,7 +456,7 @@ class WorkerService:
             recursive: Whether to delete recursively
 
         Returns:
-            WorkerResponse with operation result
+            WorkerCommandResponse with operation result
         """
         command = WorkerRequest(
             command="delete",
@@ -472,7 +472,7 @@ class WorkerService:
         path: str,
         db: AsyncSession,
         parents: bool = True,
-    ) -> WorkerResponse:
+    ) -> WorkerCommandResponse:
         """
         Create directory on worker.
 
@@ -483,7 +483,7 @@ class WorkerService:
             parents: Whether to create parent directories
 
         Returns:
-            WorkerResponse with operation result
+            WorkerCommandResponse with operation result
         """
         command = WorkerRequest(
             command="mkdir",
