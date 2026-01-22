@@ -102,11 +102,11 @@ async def health_check_endpoint():
 async def list_directory(
     worker_id: int,
     path: str,
-    offset: int = 0,
-    limit: int = 1000,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    offset: int = 0,
+    limit: int = 1000,
 ):
     """List directory contents on worker."""
     worker = await get_worker_by_id(worker_id, db)
@@ -144,12 +144,12 @@ async def search_files(
     worker_id: int,
     path: str,
     query: str,
-    recursive: bool = True,
-    offset: int = 0,
-    limit: int = 100,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    recursive: bool = True,
+    offset: int = 0,
+    limit: int = 100,
 ):
     """Search for files on worker."""
     worker = await get_worker_by_id(worker_id, db)
@@ -431,10 +431,10 @@ async def list_config(
 
 @app.get("/api/admin/logs", response_model=List[AuditLogResponse])
 async def list_audit_logs(
-    offset: int = 0,
-    limit: int = 100,
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    offset: int = 0,
+    limit: int = 100,
 ):
     """List audit logs."""
     stmt = (
