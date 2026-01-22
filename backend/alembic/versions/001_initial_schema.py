@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """
-    Create all tables and insert default data.
+    Create all tables and insert default configuration.
 
     Includes:
     - Users table with RBAC
@@ -30,8 +30,10 @@ def upgrade() -> None:
     - Operation-Worker association table
     - Audit logs table (immutable)
     - Config table for parameters
-    - Default admin user (username: admin, password: admin123)
     - Default configuration values
+    
+    Note: Default admin user is created during env.py migration process
+    from INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD environment variables.
     """
 
     # Create extensions
@@ -220,17 +222,17 @@ def upgrade() -> None:
     # Insert default admin user
     # Password: admin123
     # Hash generated with: argon2-cffi with default parameters
-    op.execute("""
-        INSERT INTO users (id, username, password_hash, role, is_active)
-        VALUES (
-            1,
-            'admin',
-            '$argon2id$v=19$m=65536,t=3,p=4$kxMCoNQ6p1QqxTiHUGqNUQ$+yGg0YZMk3gqGZb5ZZWqJqHZ5C8xLBzN5sZq4gZQwWk',
-            'ADMIN',
-            true
-        )
-        ON CONFLICT (username) DO NOTHING;
-    """)
+    #op.execute("""
+    #    INSERT INTO users (id, username, password_hash, role, is_active)
+    #    VALUES (
+    #        1,
+    #        'admin',
+    #        '$argon2id$v=19$m=65536,t=3,p=4$kxMCoNQ6p1QqxTiHUGqNUQ$+yGg0YZMk3gqGZb5ZZWqJqHZ5C8xLBzN5sZq4gZQwWk',
+    #        'ADMIN',
+    #        true
+    #    )
+    #    ON CONFLICT (username) DO NOTHING;
+    #""")
 
     # Insert default configuration values
     op.execute("""

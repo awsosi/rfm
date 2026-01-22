@@ -10,9 +10,9 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import async_engine_from_config, create_async_engine
 
 # Load environment variables from .env file if present
 from dotenv import load_dotenv
@@ -79,6 +79,39 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
+async def create_default_admin() -> None:
+    """Create default admin user from .env if it doesn't exist"""
+    try:
+        from argon2 import PasswordHasher
+        
+        username = os.getenv("INITIAL_ADMIN_USERNAME", "admin")
+        password = os.getenv("INITIAL_ADMIN_PASSWORD", "admin123")
+        
+        ph = PasswordHasher()
+        password_hash = ph.hash(password)
+        
+        # Użyj DATABASE_URL, zamiast config
+        db_url = os.getenv("DATABASE_URL")
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        # Utwórz nowy async engine
+        engine = create_async_engine(db_url)
+        
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                INSERT INTO users (username, password_hash, role, is_active)
+                VALUES (:username, :password_hash, 'ADMIN', true)
+                ON CONFLICT (username) DO NOTHING;
+            """), {"username": username, "password_hash": password_hash})
+        
+        await engine.dispose()
+        print(f"✓ Default admin user '{username}' created/verified")
+        
+    except Exception as e:
+        print(f"✗ Admin creation failed: {e}")
+
+
 async def run_async_migrations() -> None:
     """
     Run migrations in 'online' mode with async engine.
@@ -98,6 +131,9 @@ async def run_async_migrations() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+    
+    # Po migracji, stwórz domyślnego admina
+    await create_default_admin()
 
 
 def run_migrations_online() -> None:
