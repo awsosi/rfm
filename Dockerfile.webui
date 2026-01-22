@@ -81,11 +81,11 @@ WORKDIR /app
 COPY --chown=filemanager:filemanager frontend/ /app/frontend/
 
 # Copy Flask proxy server
-COPY --chown=filemanager:filemanager webui_server.py /app/webui_server.py
+COPY --chown=filemanager:filemanager webui/webui_server.py /app/webui_server.py
 RUN chmod +x /app/webui_server.py
 
 # Copy entrypoint script
-COPY --chown=filemanager:filemanager webui_entrypoint.sh /app/entrypoint.sh
+COPY --chown=filemanager:filemanager webui/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Switch to non-root user

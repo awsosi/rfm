@@ -115,6 +115,33 @@ def api_proxy(path):
         logger.error(f"API proxy error: {e}")
         return jsonify({'error': 'Backend API unavailable'}), 503
 
+@app.route('/auth/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def auth_proxy(path):
+    """
+    Proxy authentication requests to backend
+    """
+    try:
+        # Build target URL
+        target_url = f"{API_URL}/auth/{path}"
+
+        # Forward request
+        response = requests.request(
+            method=request.method,
+            url=target_url,
+            headers={key: value for key, value in request.headers if key.lower() != 'host'},
+            data=request.get_data(),
+            params=request.args,
+            allow_redirects=False,
+            timeout=30
+        )
+
+        # Return response
+        return (response.content, response.status_code, response.headers.items())
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Auth proxy error: {e}")
+        return jsonify({'error': 'Authentication service unavailable'}), 503
+
 # ------------------------------------------------------------------------------
 # Error Handlers
 # ------------------------------------------------------------------------------

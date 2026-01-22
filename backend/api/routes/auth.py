@@ -10,7 +10,7 @@ from typing import Annotated
 import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,8 @@ from models import Session as SessionModel, User
 
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+# OAuth2 compatible router (without /api prefix)
+oauth_router = APIRouter(prefix="/auth", tags=["OAuth2"])
 ph = PasswordHasher()
 
 
@@ -365,3 +367,42 @@ async def refresh_token(
         username=current_user.username,
         role=current_user.role,
     )
+
+
+# ------------------------------------------------------------------------------
+# OAuth2 Compatible Endpoints
+# ------------------------------------------------------------------------------
+
+@oauth_router.post("/token", response_model=LoginResponse)
+async def oauth_token(
+    request: Request,
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    OAuth2 compatible token endpoint.
+
+    This endpoint follows OAuth2 Password Grant flow specification:
+    - Accepts form data (application/x-www-form-urlencoded)
+    - Returns access token in OAuth2 format
+
+    Args:
+        request: FastAPI request
+        username: Username from form data
+        password: Password from form data
+        db: Database session
+        settings: Application settings
+
+    Returns:
+        LoginResponse with access token
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    # Create LoginRequest from form data
+    login_data = LoginRequest(username=username, password=password)
+
+    # Use existing login logic
+    return await login(request, login_data, db, settings)

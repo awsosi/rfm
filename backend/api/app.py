@@ -29,7 +29,7 @@ from database import init_database, close_database, get_db, health_check
 from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType
 
 # Import auth routes
-from api.routes.auth import router as auth_router
+from api.routes.auth import router as auth_router, oauth_router
 
 
 @asynccontextmanager
@@ -75,6 +75,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(oauth_router)  # OAuth2 compatible endpoints
 
 
 # =============================================================================
