@@ -339,6 +339,46 @@ class ConfigBulkUpdate(BaseModel):
 
 
 # =============================================================================
+# User Preferences Schemas
+# =============================================================================
+
+
+class UserPreferencesResponse(BaseModel):
+    """User preferences response schema."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    remember_last_paths: bool
+    last_path_a: Optional[str]
+    last_path_b: Optional[str]
+    ui_theme: str
+    pane_layout: str
+    show_hidden_files: bool
+    default_sort_by: str
+    default_sort_order: str
+    items_per_page: int
+    custom_settings: Optional[dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserPreferencesUpdate(BaseModel):
+    """User preferences update request."""
+
+    remember_last_paths: Optional[bool] = None
+    last_path_a: Optional[str] = Field(None, max_length=1000)
+    last_path_b: Optional[str] = Field(None, max_length=1000)
+    ui_theme: Optional[str] = Field(None, pattern="^(light|dark)$")
+    pane_layout: Optional[str] = Field(None, pattern="^(horizontal|vertical)$")
+    show_hidden_files: Optional[bool] = None
+    default_sort_by: Optional[str] = Field(None, pattern="^(name|size|date)$")
+    default_sort_order: Optional[str] = Field(None, pattern="^(asc|desc)$")
+    items_per_page: Optional[int] = Field(None, ge=10, le=1000)
+    custom_settings: Optional[dict[str, Any]] = None
+
+
+# =============================================================================
 # WebSocket Schemas
 # =============================================================================
 

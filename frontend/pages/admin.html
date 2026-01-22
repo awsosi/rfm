@@ -121,63 +121,213 @@
                     </div>
                     <div class="panel-body">
                         <form id="config-form">
+                            <!-- Session & User Settings -->
+                            <div class="config-section">
+                                <h3>Session & User Management</h3>
+                                <div class="form-group">
+                                    <label for="config-max-concurrent-users">Max Concurrent Users</label>
+                                    <input type="number" id="config-max-concurrent-users" name="max_concurrent_users" class="form-control" min="1" max="100">
+                                    <small>Maximum number of concurrent authenticated users</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-session-lifetime">Session Lifetime (days)</label>
+                                    <input type="number" id="config-session-lifetime" name="session_lifetime_days" class="form-control" min="1" max="365">
+                                    <small>How long user sessions remain valid</small>
+                                </div>
+                            </div>
+
+                            <!-- Authentication Settings -->
                             <div class="config-section">
                                 <h3>Authentication</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" id="config-sybase-enabled" name="sybase_enabled">
-                                        Enable Sybase Authentication
+                                        <input type="checkbox" id="config-sybase-enabled" name="enable_sybase_auth">
+                                        Enable Sybase External Authentication
                                     </label>
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-sybase-host">Sybase Host</label>
-                                    <input type="text" id="config-sybase-host" name="sybase_host" class="form-control">
+                                    <label for="config-sybase-url">Sybase API URL</label>
+                                    <input type="text" id="config-sybase-url" name="sybase_auth_url" class="form-control" placeholder="https://sybase.example.com/api/auth">
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-sybase-port">Sybase Port</label>
-                                    <input type="number" id="config-sybase-port" name="sybase_port" class="form-control">
+                                    <label for="config-sybase-timeout">Sybase Timeout (seconds)</label>
+                                    <input type="number" id="config-sybase-timeout" name="sybase_auth_timeout" class="form-control" min="1" max="30">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-sybase-proc">Sybase Stored Procedure</label>
+                                    <input type="text" id="config-sybase-proc" name="sybase_auth_stored_proc" class="form-control" placeholder="sp_authenticate_user">
                                 </div>
                             </div>
 
+                            <!-- Logging Settings -->
                             <div class="config-section">
-                                <h3>Logging</h3>
+                                <h3>Logging & Audit</h3>
+                                <div class="form-group">
+                                    <label for="config-log-retention">Log Retention (days)</label>
+                                    <input type="number" id="config-log-retention" name="log_retention_days" class="form-control" min="1" max="365">
+                                    <small>Number of days to retain compressed logs</small>
+                                </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" id="config-syslog-enabled" name="syslog_enabled">
+                                        <input type="checkbox" id="config-log-compression" name="enable_log_compression">
+                                        Enable Automatic Log Compression
+                                    </label>
+                                </div>
+
+                                <h4 style="margin-top: 20px;">Syslog Integration</h4>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-syslog-enabled" name="enable_syslog">
                                         Enable Syslog
                                     </label>
                                 </div>
                                 <div class="form-group">
                                     <label for="config-syslog-host">Syslog Host</label>
-                                    <input type="text" id="config-syslog-host" name="syslog_host" class="form-control">
+                                    <input type="text" id="config-syslog-host" name="syslog_host" class="form-control" placeholder="syslog.example.com">
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-log-retention">Log Retention (days)</label>
-                                    <input type="number" id="config-log-retention" name="log_retention" class="form-control">
+                                    <label for="config-syslog-port">Syslog Port</label>
+                                    <input type="number" id="config-syslog-port" name="syslog_port" class="form-control" min="1" max="65535">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-syslog-protocol">Syslog Protocol</label>
+                                    <select id="config-syslog-protocol" name="syslog_protocol" class="form-control">
+                                        <option value="UDP">UDP</option>
+                                        <option value="TCP">TCP</option>
+                                    </select>
+                                </div>
+
+                                <h4 style="margin-top: 20px;">Remote Audit API</h4>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-remote-audit-enabled" name="enable_remote_audit_api">
+                                        Enable Remote Audit API Push
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-remote-audit-url">Remote Audit API URL</label>
+                                    <input type="text" id="config-remote-audit-url" name="remote_audit_api_url" class="form-control" placeholder="https://audit.example.com/api/logs">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-remote-audit-token">Remote Audit API Token</label>
+                                    <input type="password" id="config-remote-audit-token" name="remote_audit_api_token" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-remote-audit-timeout">Remote Audit Timeout (seconds)</label>
+                                    <input type="number" id="config-remote-audit-timeout" name="remote_audit_api_timeout" class="form-control" min="1" max="60">
                                 </div>
                             </div>
 
+                            <!-- Path Prefixes -->
                             <div class="config-section">
-                                <h3>Path Prefixes</h3>
+                                <h3>Global Path Prefixes</h3>
+                                <p><small>Default path prefixes for all workers (can be overridden per worker)</small></p>
                                 <div class="form-group">
-                                    <label for="config-path-a-prefix">Path A Prefix</label>
-                                    <input type="text" id="config-path-a-prefix" name="path_a_prefix" class="form-control" placeholder="/default/path/a">
+                                    <label for="config-path-a-prefix">Global Path A Prefix</label>
+                                    <input type="text" id="config-path-a-prefix" name="global_path_a_prefix" class="form-control" placeholder="\\server\share\pathA">
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-path-b-prefix">Path B Prefix</label>
-                                    <input type="text" id="config-path-b-prefix" name="path_b_prefix" class="form-control" placeholder="/default/path/b">
+                                    <label for="config-path-b-prefix">Global Path B Prefix</label>
+                                    <input type="text" id="config-path-b-prefix" name="global_path_b_prefix" class="form-control" placeholder="\\server\share\pathB">
                                 </div>
                             </div>
 
+                            <!-- Worker Settings -->
                             <div class="config-section">
-                                <h3>Timeouts</h3>
+                                <h3>Worker Configuration</h3>
+                                <div class="form-group">
+                                    <label for="config-worker-heartbeat-interval">Worker Heartbeat Interval (seconds)</label>
+                                    <input type="number" id="config-worker-heartbeat-interval" name="worker_heartbeat_interval" class="form-control" min="5" max="300">
+                                    <small>How often workers send heartbeat signals</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-worker-heartbeat-timeout">Worker Heartbeat Timeout (seconds)</label>
+                                    <input type="number" id="config-worker-heartbeat-timeout" name="worker_heartbeat_timeout" class="form-control" min="10" max="600">
+                                    <small>Worker considered offline after this many seconds</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-worker-timeout">Worker Command Timeout (seconds)</label>
+                                    <input type="number" id="config-worker-timeout" name="worker_timeout" class="form-control" min="10" max="7200">
+                                    <small>Maximum time for worker command execution</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-worker-retry">Worker Retry Attempts</label>
+                                    <input type="number" id="config-worker-retry" name="worker_retry_attempts" class="form-control" min="0" max="10">
+                                    <small>Number of retry attempts for failed operations</small>
+                                </div>
+                            </div>
+
+                            <!-- Operation Settings -->
+                            <div class="config-section">
+                                <h3>Operation Settings</h3>
                                 <div class="form-group">
                                     <label for="config-operation-timeout">Operation Timeout (seconds)</label>
-                                    <input type="number" id="config-operation-timeout" name="operation_timeout" class="form-control">
+                                    <input type="number" id="config-operation-timeout" name="operation_timeout" class="form-control" min="60" max="86400">
+                                    <small>Maximum operation execution time (1 min - 24 hours)</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-worker-timeout">Worker Heartbeat Timeout (seconds)</label>
-                                    <input type="number" id="config-worker-timeout" name="worker_timeout" class="form-control">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-auto-rollback" name="enable_auto_rollback">
+                                        Enable Automatic Rollback on Failure
+                                    </label>
+                                    <small>Automatically rollback failed operations to preserve data</small>
+                                </div>
+                            </div>
+
+                            <!-- UI Settings -->
+                            <div class="config-section">
+                                <h3>User Interface Settings</h3>
+                                <div class="form-group">
+                                    <label for="config-max-listing-items">Max File Listing Items</label>
+                                    <input type="number" id="config-max-listing-items" name="max_file_listing_items" class="form-control" min="100" max="10000">
+                                    <small>Maximum items to return in directory listing</small>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-lazy-loading" name="enable_lazy_loading">
+                                        Enable Lazy Loading
+                                    </label>
+                                    <small>Load large directory listings incrementally</small>
+                                </div>
+                            </div>
+
+                            <!-- Security Settings -->
+                            <div class="config-section">
+                                <h3>Security Settings</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-ip-whitelist" name="enable_ip_whitelist">
+                                        Enable IP Address Whitelisting
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-ip-whitelist-list">IP Whitelist (JSON array)</label>
+                                    <textarea id="config-ip-whitelist-list" name="ip_whitelist" class="form-control" rows="3" placeholder='["192.168.1.0/24", "10.0.0.0/8"]'></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-rate-limiting" name="enable_rate_limiting">
+                                        Enable API Rate Limiting
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-rate-limit">Rate Limit (requests/minute)</label>
+                                    <input type="number" id="config-rate-limit" name="rate_limit_requests_per_minute" class="form-control" min="10" max="1000">
+                                </div>
+                            </div>
+
+                            <!-- Maintenance Mode -->
+                            <div class="config-section">
+                                <h3>Maintenance Mode</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-maintenance-mode" name="maintenance_mode">
+                                        Enable Maintenance Mode (API read-only)
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-maintenance-message">Maintenance Message</label>
+                                    <input type="text" id="config-maintenance-message" name="maintenance_message" class="form-control" placeholder="System is under maintenance">
                                 </div>
                             </div>
                         </form>

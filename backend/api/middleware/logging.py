@@ -326,6 +326,28 @@ class AuditLogger:
             user_agent=user_agent,
         )
 
+    @staticmethod
+    async def log_user_action(
+        user_id: int,
+        action: str,
+        details: dict,
+        ip_address: str = None,
+        user_agent: str = None,
+    ) -> AuditLog:
+        """Log user action (preferences, settings, etc)."""
+        audit_details = {
+            "action_type": "user_action",
+            **details,
+        }
+
+        return await create_audit_log(
+            user_id=user_id,
+            action=action,
+            details=audit_details,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
 
 def mask_sensitive_data(data: dict) -> dict:
     """
