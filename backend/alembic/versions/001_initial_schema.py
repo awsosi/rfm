@@ -43,7 +43,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
-                CREATE TYPE userrole AS ENUM ('admin', 'operator', 'viewer');
+                CREATE TYPE userrole AS ENUM ('ADMIN', 'OPERATOR', 'VIEWER');
             END IF;
         END $$;
     """)
@@ -51,7 +51,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workerstatus') THEN
-                CREATE TYPE workerstatus AS ENUM ('active', 'suspended', 'pending');
+                CREATE TYPE workerstatus AS ENUM ('ACTIVE', 'SUSPENDED', 'PENDING');
             END IF;
         END $$;
     """)
@@ -59,7 +59,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operationtype') THEN
-                CREATE TYPE operationtype AS ENUM ('copy', 'move', 'delete', 'mkdir');
+                CREATE TYPE operationtype AS ENUM ('COPY', 'MOVE', 'DELETE', 'MKDIR');
             END IF;
         END $$;
     """)
@@ -67,7 +67,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operationstatus') THEN
-                CREATE TYPE operationstatus AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'rolled_back');
+                CREATE TYPE operationstatus AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK');
             END IF;
         END $$;
     """)
@@ -75,7 +75,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'configtype') THEN
-                CREATE TYPE configtype AS ENUM ('string', 'int', 'json', 'boolean');
+                CREATE TYPE configtype AS ENUM ('STRING', 'INT', 'JSON', 'BOOLEAN');
             END IF;
         END $$;
     """)
@@ -86,7 +86,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('username', sa.String(length=100), nullable=False),
         sa.Column('password_hash', sa.String(length=255), nullable=False),
-        sa.Column('role', postgresql.ENUM('admin', 'operator', 'viewer', name='userrole', create_type=False), nullable=False),
+        sa.Column('role', postgresql.ENUM('ADMIN', 'OPERATOR', 'VIEWER', name='userrole', create_type=False), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
@@ -124,7 +124,7 @@ def upgrade() -> None:
         sa.Column('path_a_prefix', sa.String(length=500), nullable=True),
         sa.Column('path_b_prefix', sa.String(length=500), nullable=True),
         sa.Column('public_key', sa.Text(), nullable=False),
-        sa.Column('status', postgresql.ENUM('active', 'suspended', 'pending', name='workerstatus', create_type=False), nullable=False),
+        sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'PENDING', name='workerstatus', create_type=False), nullable=False),
         sa.Column('version', sa.String(length=50), nullable=True),
         sa.Column('last_heartbeat', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -141,10 +141,10 @@ def upgrade() -> None:
         'operations',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('type', postgresql.ENUM('copy', 'move', 'delete', 'mkdir', name='operationtype', create_type=False), nullable=False),
+        sa.Column('type', postgresql.ENUM('COPY', 'MOVE', 'DELETE', 'MKDIR', name='operationtype', create_type=False), nullable=False),
         sa.Column('source_path', sa.Text(), nullable=False),
         sa.Column('dest_path', sa.Text(), nullable=True),
-        sa.Column('status', postgresql.ENUM('pending', 'in_progress', 'completed', 'failed', 'rolled_back', name='operationstatus', create_type=False), nullable=False),
+        sa.Column('status', postgresql.ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK', name='operationstatus', create_type=False), nullable=False),
         sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('error_msg', sa.Text(), nullable=True),
@@ -171,7 +171,7 @@ def upgrade() -> None:
         'operation_workers',
         sa.Column('operation_id', sa.Integer(), nullable=False),
         sa.Column('worker_id', sa.Integer(), nullable=False),
-        sa.Column('worker_status', postgresql.ENUM('pending', 'in_progress', 'completed', 'failed', 'rolled_back', name='operationstatus', create_type=False), nullable=False),
+        sa.Column('worker_status', postgresql.ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK', name='operationstatus', create_type=False), nullable=False),
         sa.Column('worker_started_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('worker_completed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('worker_error_msg', sa.Text(), nullable=True),
@@ -210,7 +210,7 @@ def upgrade() -> None:
         'config',
         sa.Column('key', sa.String(length=200), nullable=False),
         sa.Column('value', sa.Text(), nullable=False),
-        sa.Column('type', postgresql.ENUM('string', 'int', 'json', 'boolean', name='configtype', create_type=False), nullable=False),
+        sa.Column('type', postgresql.ENUM('STRING', 'INT', 'JSON', 'BOOLEAN', name='configtype', create_type=False), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -226,7 +226,7 @@ def upgrade() -> None:
             1,
             'admin',
             '$argon2id$v=19$m=65536,t=3,p=4$kxMCoNQ6p1QqxTiHUGqNUQ$+yGg0YZMk3gqGZb5ZZWqJqHZ5C8xLBzN5sZq4gZQwWk',
-            'admin',
+            'ADMIN',
             true
         )
         ON CONFLICT (username) DO NOTHING;
@@ -235,38 +235,38 @@ def upgrade() -> None:
     # Insert default configuration values
     op.execute("""
         INSERT INTO config (key, value, type, description) VALUES
-        ('max_concurrent_users', '4', 'int', 'Maximum number of concurrent authenticated users'),
-        ('session_lifetime_days', '30', 'int', 'Session token lifetime in days'),
-        ('global_path_a_prefix', '', 'string', 'Global prefix for path A (can be overridden per worker)'),
-        ('global_path_b_prefix', '', 'string', 'Global prefix for path B (can be overridden per worker)'),
-        ('enable_sybase_auth', 'false', 'boolean', 'Enable external Sybase authentication'),
-        ('sybase_auth_url', '', 'string', 'Sybase API URL for authentication'),
-        ('sybase_auth_timeout', '2', 'int', 'Sybase authentication timeout in seconds'),
-        ('sybase_auth_stored_proc', '', 'string', 'Sybase stored procedure name for auth'),
-        ('enable_syslog', 'false', 'boolean', 'Enable syslog integration'),
-        ('syslog_host', '', 'string', 'Syslog server hostname'),
-        ('syslog_port', '514', 'int', 'Syslog server port'),
-        ('syslog_protocol', 'UDP', 'string', 'Syslog protocol (UDP/TCP)'),
-        ('enable_remote_audit_api', 'false', 'boolean', 'Enable remote audit log API push'),
-        ('remote_audit_api_url', '', 'string', 'Remote audit API endpoint URL'),
-        ('remote_audit_api_token', '', 'string', 'Authentication token for remote audit API'),
-        ('remote_audit_api_timeout', '5', 'int', 'Remote audit API timeout in seconds'),
-        ('log_retention_days', '14', 'int', 'Number of days to retain compressed logs'),
-        ('enable_log_compression', 'true', 'boolean', 'Enable automatic log compression'),
-        ('worker_heartbeat_interval', '30', 'int', 'Worker heartbeat interval in seconds'),
-        ('worker_heartbeat_timeout', '90', 'int', 'Worker considered offline after this many seconds'),
-        ('worker_timeout', '300', 'int', 'Worker command timeout in seconds'),
-        ('worker_retry_attempts', '3', 'int', 'Number of retry attempts for failed worker operations'),
-        ('operation_timeout', '3600', 'int', 'Maximum operation execution time in seconds'),
-        ('enable_auto_rollback', 'true', 'boolean', 'Automatically rollback failed operations'),
-        ('max_file_listing_items', '1000', 'int', 'Maximum items to return in directory listing'),
-        ('enable_lazy_loading', 'true', 'boolean', 'Enable lazy loading for large directory listings'),
-        ('enable_ip_whitelist', 'false', 'boolean', 'Enable IP address whitelisting'),
-        ('ip_whitelist', '[]', 'json', 'JSON array of allowed IP addresses/ranges'),
-        ('enable_rate_limiting', 'true', 'boolean', 'Enable API rate limiting'),
-        ('rate_limit_requests_per_minute', '60', 'int', 'Maximum API requests per minute per user'),
-        ('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode (API read-only)'),
-        ('maintenance_message', 'System is under maintenance', 'string', 'Message displayed during maintenance')
+        ('max_concurrent_users', '4', 'INT','Maximum number of concurrent authenticated users'),
+        ('session_lifetime_days', '30', 'INT','Session token lifetime in days'),
+        ('global_path_a_prefix', '', 'STRING','Global prefix for path A (can be overridden per worker)'),
+        ('global_path_b_prefix', '', 'STRING','Global prefix for path B (can be overridden per worker)'),
+        ('enable_sybase_auth', 'false', 'BOOLEAN','Enable external Sybase authentication'),
+        ('sybase_auth_url', '', 'STRING','Sybase API URL for authentication'),
+        ('sybase_auth_timeout', '2', 'INT','Sybase authentication timeout in seconds'),
+        ('sybase_auth_stored_proc', '', 'STRING','Sybase stored procedure name for auth'),
+        ('enable_syslog', 'false', 'BOOLEAN','Enable syslog integration'),
+        ('syslog_host', '', 'STRING','Syslog server hostname'),
+        ('syslog_port', '514', 'INT','Syslog server port'),
+        ('syslog_protocol', 'UDP', 'STRING','Syslog protocol (UDP/TCP)'),
+        ('enable_remote_audit_api', 'false', 'BOOLEAN','Enable remote audit log API push'),
+        ('remote_audit_api_url', '', 'STRING','Remote audit API endpoint URL'),
+        ('remote_audit_api_token', '', 'STRING','Authentication token for remote audit API'),
+        ('remote_audit_api_timeout', '5', 'INT','Remote audit API timeout in seconds'),
+        ('log_retention_days', '14', 'INT','Number of days to retain compressed logs'),
+        ('enable_log_compression', 'true', 'BOOLEAN','Enable automatic log compression'),
+        ('worker_heartbeat_interval', '30', 'INT','Worker heartbeat interval in seconds'),
+        ('worker_heartbeat_timeout', '90', 'INT','Worker considered offline after this many seconds'),
+        ('worker_timeout', '300', 'INT','Worker command timeout in seconds'),
+        ('worker_retry_attempts', '3', 'INT','Number of retry attempts for failed worker operations'),
+        ('operation_timeout', '3600', 'INT','Maximum operation execution time in seconds'),
+        ('enable_auto_rollback', 'true', 'BOOLEAN','Automatically rollback failed operations'),
+        ('max_file_listing_items', '1000', 'INT','Maximum items to return in directory listing'),
+        ('enable_lazy_loading', 'true', 'BOOLEAN','Enable lazy loading for large directory listings'),
+        ('enable_ip_whitelist', 'false', 'BOOLEAN','Enable IP address whitelisting'),
+        ('ip_whitelist', '[]', 'JSON','JSON array of allowed IP addresses/ranges'),
+        ('enable_rate_limiting', 'true', 'BOOLEAN','Enable API rate limiting'),
+        ('rate_limit_requests_per_minute', '60', 'INT','Maximum API requests per minute per user'),
+        ('maintenance_mode', 'false', 'BOOLEAN','Enable maintenance mode (API read-only)'),
+        ('maintenance_message', 'System is under maintenance', 'STRING','Message displayed during maintenance')
         ON CONFLICT (key) DO NOTHING;
     """)
 
