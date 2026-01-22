@@ -138,8 +138,8 @@ function setupEventListeners() {
     });
 
     // Settings button
-    document.getElementById('settings-btn').addEventListener('click', () => {
-        showInfo('Settings feature coming soon');
+    document.getElementById('settings-btn').addEventListener('click', async () => {
+        await openSettingsModal();
     });
 
     // Setup pane controls
@@ -686,6 +686,107 @@ function handlePollingUpdate(operations) {
 function isWebSocketConnected() {
     // Import from api.js if needed, or implement check here
     return false; // Placeholder
+}
+
+/**
+ * Open settings modal and load current preferences
+ */
+async function openSettingsModal() {
+    try {
+        const { getPreferences, updatePreferences, resetPreferences } = await import('./api.js');
+
+        // Get settings modal elements
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsForm = document.getElementById('settings-form');
+        const settingsSave = document.getElementById('settings-save');
+        const settingsCancel = document.getElementById('settings-cancel');
+        const settingsReset = document.getElementById('settings-reset');
+        const settingsClose = document.getElementById('settings-modal-close');
+
+        // Load current preferences
+        const preferences = await getPreferences();
+
+        // Populate form with current preferences
+        document.getElementById('ui-theme').value = preferences.ui_theme || 'light';
+        document.getElementById('pane-layout').value = preferences.pane_layout || 'horizontal';
+        document.getElementById('show-hidden-files').checked = preferences.show_hidden_files || false;
+        document.getElementById('default-sort-by').value = preferences.default_sort_by || 'name';
+        document.getElementById('default-sort-order').value = preferences.default_sort_order || 'asc';
+        document.getElementById('items-per-page').value = preferences.items_per_page || 100;
+        document.getElementById('remember-last-paths').checked = preferences.remember_last_paths !== false;
+
+        // Show modal
+        settingsModal.classList.remove('hidden');
+
+        // Save button handler
+        const saveHandler = async () => {
+            try {
+                const updatedPreferences = {
+                    ui_theme: document.getElementById('ui-theme').value,
+                    pane_layout: document.getElementById('pane-layout').value,
+                    show_hidden_files: document.getElementById('show-hidden-files').checked,
+                    default_sort_by: document.getElementById('default-sort-by').value,
+                    default_sort_order: document.getElementById('default-sort-order').value,
+                    items_per_page: parseInt(document.getElementById('items-per-page').value),
+                    remember_last_paths: document.getElementById('remember-last-paths').checked
+                };
+
+                await updatePreferences(updatedPreferences);
+                showSuccess('Settings saved successfully');
+                closeSettingsModal();
+
+                // Apply theme immediately if changed
+                if (updatedPreferences.ui_theme !== preferences.ui_theme) {
+                    document.body.setAttribute('data-theme', updatedPreferences.ui_theme);
+                }
+            } catch (error) {
+                showError('Failed to save settings: ' + error.message);
+            }
+        };
+
+        // Reset button handler
+        const resetHandler = async () => {
+            if (confirm('Reset all settings to defaults?')) {
+                try {
+                    const defaultPrefs = await resetPreferences();
+                    showSuccess('Settings reset to defaults');
+
+                    // Re-populate form with defaults
+                    document.getElementById('ui-theme').value = defaultPrefs.ui_theme;
+                    document.getElementById('pane-layout').value = defaultPrefs.pane_layout;
+                    document.getElementById('show-hidden-files').checked = defaultPrefs.show_hidden_files;
+                    document.getElementById('default-sort-by').value = defaultPrefs.default_sort_by;
+                    document.getElementById('default-sort-order').value = defaultPrefs.default_sort_order;
+                    document.getElementById('items-per-page').value = defaultPrefs.items_per_page;
+                    document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths;
+
+                    // Apply theme
+                    document.body.setAttribute('data-theme', defaultPrefs.ui_theme);
+                } catch (error) {
+                    showError('Failed to reset settings: ' + error.message);
+                }
+            }
+        };
+
+        // Close handlers
+        const closeSettingsModal = () => {
+            settingsModal.classList.add('hidden');
+            settingsSave.removeEventListener('click', saveHandler);
+            settingsCancel.removeEventListener('click', closeSettingsModal);
+            settingsReset.removeEventListener('click', resetHandler);
+            settingsClose.removeEventListener('click', closeSettingsModal);
+        };
+
+        // Attach event listeners
+        settingsSave.addEventListener('click', saveHandler);
+        settingsCancel.addEventListener('click', closeSettingsModal);
+        settingsReset.addEventListener('click', resetHandler);
+        settingsClose.addEventListener('click', closeSettingsModal);
+
+    } catch (error) {
+        showError('Failed to load settings: ' + error.message);
+        console.error('Settings error:', error);
+    }
 }
 
 // Initialize app when DOM is ready
