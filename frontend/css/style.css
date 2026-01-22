@@ -287,7 +287,7 @@ select {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
 }
 
 .login-container {
@@ -315,6 +315,11 @@ select {
     font-weight: 500;
     color: var(--text-secondary);
     margin-bottom: var(--spacing-lg);
+}
+
+.login-box .btn {
+    width: 100%;
+    margin-top: var(--spacing-sm);
 }
 
 .login-footer {

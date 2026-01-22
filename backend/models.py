@@ -35,33 +35,33 @@ class Base(DeclarativeBase):
 
 class UserRole(str, PyEnum):
     """User role enumeration for RBAC."""
-    ADMIN = "admin"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
 
 
 class WorkerStatus(str, PyEnum):
     """Worker status enumeration."""
-    ACTIVE = "active"
-    SUSPENDED = "suspended"
-    PENDING = "pending"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+    PENDING = "PENDING"
 
 
 class OperationType(str, PyEnum):
     """File operation types."""
-    COPY = "copy"
-    MOVE = "move"
-    DELETE = "delete"
-    MKDIR = "mkdir"
+    COPY = "COPY"
+    MOVE = "MOVE"
+    DELETE = "DELETE"
+    MKDIR = "MKDIR"
 
 
 class OperationStatus(str, PyEnum):
     """Operation execution status."""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    ROLLED_BACK = "ROLLED_BACK"
 
 
 class User(Base):
@@ -375,10 +375,10 @@ class AuditLog(Base):
 
 class ConfigType(str, PyEnum):
     """Configuration value type enumeration."""
-    STRING = "string"
-    INTEGER = "int"
-    JSON = "json"
-    BOOLEAN = "boolean"
+    STRING = "STRING"
+    INTEGER = "INT"
+    JSON = "JSON"
+    BOOLEAN = "BOOLEAN"
 
 
 class Config(Base):
