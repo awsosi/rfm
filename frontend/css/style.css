@@ -1146,3 +1146,152 @@ select {
     margin-bottom: var(--spacing-md);
     font-size: 13px;
 }
+
+/* ==========================================
+   Worker Control Cards (System Tab)
+   ========================================== */
+
+#worker-control-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.worker-control-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+}
+
+.worker-control-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.worker-control-header h4 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.worker-control-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.worker-control-info div {
+    margin-bottom: var(--spacing-xs);
+}
+
+.worker-control-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.worker-cmd-result {
+    margin-top: var(--spacing-sm);
+    font-size: 12px;
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.worker-cmd-result:empty {
+    display: none;
+}
+
+.worker-cmd-result .success {
+    color: #166534;
+}
+
+.worker-cmd-result .error {
+    color: #991b1b;
+}
+
+.worker-cmd-result .loading {
+    color: var(--text-muted);
+}
+
+.worker-cmd-result pre {
+    background-color: var(--bg-dark);
+    color: var(--text-white);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    overflow-x: auto;
+    margin-top: var(--spacing-xs);
+}
+
+/* ==========================================
+   System Stats Grid
+   ========================================== */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.stat-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    text-align: center;
+}
+
+.stat-card h3 {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-xs);
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.stat-details {
+    margin-top: var(--spacing-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ==========================================
+   Badge Additional Styles
+   ========================================== */
+
+.badge-success {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+}

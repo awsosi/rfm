@@ -4,7 +4,7 @@
 >
 > **Status:** MVP w trakcie rozwoju
 >
-> **Ostatnia aktualizacja:** 2026-01-22
+> **Ostatnia aktualizacja:** 2026-01-26
 
 ---
 
@@ -210,6 +210,10 @@
 - ✅ **JavaScript Module**
   - ✅ admin-system.js module
   - ✅ Integracja z istniejącym admin.html
+  - ✅ Configuration tab - loads and saves all 30+ config parameters
+  - ✅ Worker Control panel - ping, status, provision, reload config
+  - ✅ System Stats dashboard with real-time metrics
+  - ✅ Samba Paths management (CRUD)
   - 📝 Toast notifications (TODO - używa alert())
 - 📝 **Dashboard Enhancement**
   - Charts (operacje, użytkownicy, workery)
@@ -655,7 +659,12 @@
 2. ⚠️ **Prawdziwe SSL/TLS certificates**
 3. 🚧 **Uruchomić migrację 002 (UserPreferences)**
 4. 🚧 **Uruchomić migrację 003 (Admin models)**
-5. ✅ **Zintegrować admin-system.js z admin.html** - ZAKOŃCZONE
+5. ✅ **Admin Settings WebUI** - ZAKOŃCZONE (2026-01-26)
+   - ✅ Configuration tab z 30+ parametrami
+   - ✅ Worker Control (ping, status, provision, reload)
+   - ✅ System Stats dashboard
+   - ✅ Samba Paths management
+   - ✅ Real-time log viewing
 6. 📝 **Zewnętrzna autentykacja Sybase** (jeśli wymagana od razu)
 7. 📝 **Rate limiting & IP whitelisting** (basic security)
 
