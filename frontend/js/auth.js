@@ -144,7 +144,8 @@ export function getCurrentUser() {
  */
 export function isAdmin() {
     const user = getCurrentUser();
-    return user && user.role === 'admin';
+    // Backend returns uppercase role (ADMIN, OPERATOR, VIEWER)
+    return user && user.role?.toUpperCase() === 'ADMIN';
 }
 
 /**
