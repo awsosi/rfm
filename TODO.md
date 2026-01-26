@@ -314,14 +314,11 @@
 - ✅ SystemMetrics *(nowy)*
 
 ### Migracje
-- ✅ `001_initial_schema.py` - Initial schema (updated: ADMIN/USER roles, max_file_listing_items=20)
+- ✅ `001_initial_schema.py` - Initial schema (ADMIN/USER roles, max_file_listing_items=20)
 - ✅ `002_add_user_preferences.py` - User preferences
 - ✅ `003_add_admin_models.py` - Samba paths & system metrics
-- ✅ `004_update_roles_and_defaults.py` - Simplify roles (ADMIN/USER), update defaults
 - 📝 **Wymagane Migracje**
-  - 🚧 Uruchomić migrację 002 na środowisku
-  - 🚧 Uruchomić migrację 003 na środowisku
-  - 🚧 Uruchomić migrację 004 na środowisku
+  - 🚧 Uruchomić migracje na środowisku (`alembic upgrade head`)
   - Dodać indeksy dla performance
   - Partycjonowanie tabeli audit_logs (jeśli duża)
 
