@@ -29,6 +29,7 @@
             <button class="tab-btn active" data-tab="users">Users</button>
             <button class="tab-btn" data-tab="workers">Workers</button>
             <button class="tab-btn" data-tab="config">Configuration</button>
+            <button class="tab-btn" data-tab="system">System</button>
             <button class="tab-btn" data-tab="logs">Logs</button>
         </div>
 
@@ -335,6 +336,60 @@
                 </div>
             </div>
 
+            <!-- System Tab -->
+            <div class="tab-pane" id="tab-system">
+                <!-- Samba Paths Section -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Samba Paths Management</h2>
+                        <button class="btn btn-primary" id="add-samba-path-btn">Add Samba Path</button>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Path Prefix</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="samba-paths-table-body">
+                                <!-- Samba paths will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- System Statistics Section -->
+                <div class="panel" style="margin-top: 20px;">
+                    <div class="panel-header">
+                        <h2>System Statistics</h2>
+                        <button class="btn btn-secondary" id="refresh-stats-btn">Refresh</button>
+                    </div>
+                    <div class="panel-body">
+                        <div id="system-stats-container">
+                            <!-- System stats will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Worker Control Section -->
+                <div class="panel" style="margin-top: 20px;">
+                    <div class="panel-header">
+                        <h2>Worker Control</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div id="worker-status-detail">
+                            <!-- Worker status details will be loaded here -->
+                            <p class="no-data">Select a worker from the Workers tab to view details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Logs Tab -->
             <div class="tab-pane" id="tab-logs">
                 <div class="panel">
@@ -429,8 +484,9 @@
     <!-- Scripts -->
     <script type="module">
         import { checkAuth, logout, getCurrentUser } from '../js/auth.js';
-        import { getUsers, createUser, updateUser, deleteUser, getWorkers, approveWorker, rejectWorker, getConfig, updateConfig, getLogs } from '../js/api.js';
+        import { getUsers, createUser, updateUser, deleteUser, getWorkers, approveWorker, rejectWorker, getConfig, updateConfig, getLogs, apiRequest } from '../js/api.js';
         import { showModal, hideModal, showConfirm, formatDate } from '../js/utils.js';
+        import AdminSystem from '../js/admin-system.js';
 
         // Check authentication
         if (!checkAuth()) {
@@ -446,6 +502,15 @@
 
         // Set user info
         document.getElementById('user-name').textContent = currentUser.username;
+
+        // Initialize AdminSystem with API client wrapper
+        const apiClient = {
+            get: (endpoint) => apiRequest(endpoint, { method: 'GET' }),
+            post: (endpoint, data) => apiRequest(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+            put: (endpoint, data) => apiRequest(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
+            delete: (endpoint) => apiRequest(endpoint, { method: 'DELETE' })
+        };
+        const adminSystem = new AdminSystem(apiClient);
 
         // Navigation buttons
         document.getElementById('explorer-btn').addEventListener('click', () => {
@@ -492,11 +557,33 @@
                 case 'config':
                     await loadConfig();
                     break;
+                case 'system':
+                    await loadSystemTab();
+                    break;
                 case 'logs':
                     await loadLogs();
                     break;
             }
         }
+
+        // System Tab Management
+        async function loadSystemTab() {
+            await adminSystem.loadSambaPaths();
+            await adminSystem.loadSystemStats();
+        }
+
+        // Event handler for Add Samba Path button
+        document.getElementById('add-samba-path-btn')?.addEventListener('click', () => {
+            adminSystem.createSambaPath();
+        });
+
+        // Event handler for Refresh Stats button
+        document.getElementById('refresh-stats-btn')?.addEventListener('click', () => {
+            adminSystem.loadSystemStats();
+        });
+
+        // Make adminSystem globally accessible for inline onclick handlers
+        window.adminSystem = adminSystem;
 
         // Users Management
         async function loadUsers() {
