@@ -380,11 +380,11 @@
                 <div class="panel" style="margin-top: 20px;">
                     <div class="panel-header">
                         <h2>Worker Control</h2>
+                        <button class="btn btn-secondary" id="refresh-worker-control-btn">Refresh</button>
                     </div>
                     <div class="panel-body">
-                        <div id="worker-status-detail">
-                            <!-- Worker status details will be loaded here -->
-                            <p class="no-data">Select a worker from the Workers tab to view details</p>
+                        <div id="worker-control-list">
+                            <!-- Worker control cards will be loaded here -->
                         </div>
                     </div>
                 </div>
@@ -568,9 +568,105 @@
 
         // System Tab Management
         async function loadSystemTab() {
-            await adminSystem.loadSambaPaths();
-            await adminSystem.loadSystemStats();
+            await Promise.all([
+                adminSystem.loadSambaPaths(),
+                adminSystem.loadSystemStats(),
+                loadWorkerControlList()
+            ]);
         }
+
+        // Load worker control list for System tab
+        async function loadWorkerControlList() {
+            const container = document.getElementById('worker-control-list');
+            if (!container) return;
+
+            try {
+                const workers = await getWorkers();
+                const activeWorkers = workers.filter(w => w.status === 'ACTIVE' || w.status === 'active');
+
+                if (activeWorkers.length === 0) {
+                    container.innerHTML = '<p class="no-data">No active workers available</p>';
+                    return;
+                }
+
+                container.innerHTML = activeWorkers.map(worker => `
+                    <div class="worker-control-card" data-worker-id="${worker.id}">
+                        <div class="worker-control-header">
+                            <h4>${worker.name || worker.hostname || 'Worker ' + worker.id}</h4>
+                            <span class="badge badge-${worker.status?.toLowerCase() === 'active' ? 'success' : 'warning'}">${worker.status}</span>
+                        </div>
+                        <div class="worker-control-info">
+                            <div><strong>Hostname:</strong> ${worker.hostname || 'N/A'}</div>
+                            <div><strong>Path A:</strong> ${worker.path_a_prefix || 'Not set'}</div>
+                            <div><strong>Path B:</strong> ${worker.path_b_prefix || 'Not set'}</div>
+                            <div><strong>Last Heartbeat:</strong> ${worker.last_heartbeat ? formatDate(worker.last_heartbeat) : 'Never'}</div>
+                        </div>
+                        <div class="worker-control-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'ping')">Ping</button>
+                            <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'get_status')">Status</button>
+                            <button class="btn btn-sm btn-primary" onclick="provisionWorkerDialog(${worker.id})">Provision</button>
+                            <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'reload_config')">Reload Config</button>
+                        </div>
+                        <div class="worker-cmd-result" id="worker-cmd-result-${worker.id}"></div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                container.innerHTML = `<p class="error">Error loading workers: ${error.message}</p>`;
+            }
+        }
+
+        // Send command to worker
+        window.sendWorkerCmd = async function(workerId, command) {
+            const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+            resultDiv.innerHTML = '<span class="loading">Sending command...</span>';
+
+            try {
+                const response = await apiRequest(`/api/admin/workers/${workerId}/command`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command, params: {}, timeout_seconds: 30 })
+                });
+
+                if (response.status === 'success') {
+                    resultDiv.innerHTML = `<span class="success">${command}: ${response.message || 'OK'} (${response.duration_ms}ms)</span>`;
+                    if (response.data) {
+                        resultDiv.innerHTML += `<pre>${JSON.stringify(response.data, null, 2)}</pre>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<span class="error">${command} failed: ${response.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        };
+
+        // Provision worker dialog
+        window.provisionWorkerDialog = async function(workerId) {
+            const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
+            const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
+
+            if (!pathA && !pathB) {
+                alert('No changes specified');
+                return;
+            }
+
+            const config = {};
+            if (pathA) config.path_a_prefix = pathA;
+            if (pathB) config.path_b_prefix = pathB;
+
+            const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+            resultDiv.innerHTML = '<span class="loading">Provisioning worker...</span>';
+
+            try {
+                await apiRequest(`/api/admin/workers/${workerId}/provision`, {
+                    method: 'POST',
+                    body: JSON.stringify({ config, restart_required: false })
+                });
+                resultDiv.innerHTML = '<span class="success">Worker provisioned successfully</span>';
+                await loadWorkerControlList();
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        };
 
         // Event handler for Add Samba Path button
         document.getElementById('add-samba-path-btn')?.addEventListener('click', () => {
@@ -580,6 +676,11 @@
         // Event handler for Refresh Stats button
         document.getElementById('refresh-stats-btn')?.addEventListener('click', () => {
             adminSystem.loadSystemStats();
+        });
+
+        // Event handler for Refresh Worker Control button
+        document.getElementById('refresh-worker-control-btn')?.addEventListener('click', () => {
+            loadWorkerControlList();
         });
 
         // Make adminSystem globally accessible for inline onclick handlers
@@ -782,21 +883,76 @@
         document.getElementById('refresh-workers-btn').addEventListener('click', loadWorkers);
 
         // Configuration Management
+        let configMap = {}; // Store config as {key: {key, value, type, description}}
+
         async function loadConfig() {
             try {
-                const config = await getConfig();
+                const configs = await getConfig(); // Returns array of {key, value, type, description}
 
-                // Populate form fields
-                document.getElementById('config-sybase-enabled').checked = config.sybase_enabled || false;
-                document.getElementById('config-sybase-host').value = config.sybase_host || '';
-                document.getElementById('config-sybase-port').value = config.sybase_port || '';
-                document.getElementById('config-syslog-enabled').checked = config.syslog_enabled || false;
-                document.getElementById('config-syslog-host').value = config.syslog_host || '';
-                document.getElementById('config-log-retention').value = config.log_retention_days || 30;
-                document.getElementById('config-path-a-prefix').value = config.path_a_prefix || '';
-                document.getElementById('config-path-b-prefix').value = config.path_b_prefix || '';
-                document.getElementById('config-operation-timeout').value = config.operation_timeout || 300;
-                document.getElementById('config-worker-timeout').value = config.worker_timeout || 60;
+                // Convert array to map for easy access
+                configMap = {};
+                configs.forEach(cfg => {
+                    configMap[cfg.key] = cfg;
+                });
+
+                // Helper to get config value
+                const getVal = (key, defaultVal = '') => {
+                    const cfg = configMap[key];
+                    if (!cfg) return defaultVal;
+                    if (cfg.type === 'BOOLEAN') return cfg.value?.toLowerCase() === 'true';
+                    if (cfg.type === 'INTEGER') return parseInt(cfg.value) || defaultVal;
+                    return cfg.value || defaultVal;
+                };
+
+                // Populate form fields - map form element names to config keys
+                const fieldMappings = {
+                    'config-max-concurrent-users': 'max_concurrent_users',
+                    'config-session-lifetime': 'session_lifetime_days',
+                    'config-sybase-enabled': 'enable_sybase_auth',
+                    'config-sybase-url': 'sybase_auth_url',
+                    'config-sybase-timeout': 'sybase_auth_timeout',
+                    'config-sybase-proc': 'sybase_auth_stored_proc',
+                    'config-log-retention': 'log_retention_days',
+                    'config-log-compression': 'enable_log_compression',
+                    'config-syslog-enabled': 'enable_syslog',
+                    'config-syslog-host': 'syslog_host',
+                    'config-syslog-port': 'syslog_port',
+                    'config-syslog-protocol': 'syslog_protocol',
+                    'config-remote-audit-enabled': 'enable_remote_audit_api',
+                    'config-remote-audit-url': 'remote_audit_api_url',
+                    'config-remote-audit-token': 'remote_audit_api_token',
+                    'config-remote-audit-timeout': 'remote_audit_api_timeout',
+                    'config-path-a-prefix': 'global_path_a_prefix',
+                    'config-path-b-prefix': 'global_path_b_prefix',
+                    'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
+                    'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
+                    'config-worker-timeout': 'worker_timeout',
+                    'config-worker-retry': 'worker_retry_attempts',
+                    'config-operation-timeout': 'operation_timeout',
+                    'config-auto-rollback': 'enable_auto_rollback',
+                    'config-max-listing-items': 'max_file_listing_items',
+                    'config-lazy-loading': 'enable_lazy_loading',
+                    'config-ip-whitelist': 'enable_ip_whitelist',
+                    'config-ip-whitelist-list': 'ip_whitelist',
+                    'config-rate-limiting': 'enable_rate_limiting',
+                    'config-rate-limit': 'rate_limit_requests_per_minute',
+                    'config-maintenance-mode': 'maintenance_mode',
+                    'config-maintenance-message': 'maintenance_message'
+                };
+
+                for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+                    const element = document.getElementById(elementId);
+                    if (!element) continue;
+
+                    const cfg = configMap[configKey];
+                    if (!cfg) continue;
+
+                    if (element.type === 'checkbox') {
+                        element.checked = cfg.value?.toLowerCase() === 'true';
+                    } else {
+                        element.value = cfg.value || '';
+                    }
+                }
 
             } catch (error) {
                 alert('Error loading configuration: ' + error.message);
@@ -804,21 +960,59 @@
         }
 
         document.getElementById('save-config-btn').addEventListener('click', async () => {
-            const configData = {
-                sybase_enabled: document.getElementById('config-sybase-enabled').checked,
-                sybase_host: document.getElementById('config-sybase-host').value,
-                sybase_port: parseInt(document.getElementById('config-sybase-port').value) || null,
-                syslog_enabled: document.getElementById('config-syslog-enabled').checked,
-                syslog_host: document.getElementById('config-syslog-host').value,
-                log_retention_days: parseInt(document.getElementById('config-log-retention').value) || 30,
-                path_a_prefix: document.getElementById('config-path-a-prefix').value,
-                path_b_prefix: document.getElementById('config-path-b-prefix').value,
-                operation_timeout: parseInt(document.getElementById('config-operation-timeout').value) || 300,
-                worker_timeout: parseInt(document.getElementById('config-worker-timeout').value) || 60
+            // Build config updates from form
+            const fieldMappings = {
+                'config-max-concurrent-users': 'max_concurrent_users',
+                'config-session-lifetime': 'session_lifetime_days',
+                'config-sybase-enabled': 'enable_sybase_auth',
+                'config-sybase-url': 'sybase_auth_url',
+                'config-sybase-timeout': 'sybase_auth_timeout',
+                'config-sybase-proc': 'sybase_auth_stored_proc',
+                'config-log-retention': 'log_retention_days',
+                'config-log-compression': 'enable_log_compression',
+                'config-syslog-enabled': 'enable_syslog',
+                'config-syslog-host': 'syslog_host',
+                'config-syslog-port': 'syslog_port',
+                'config-syslog-protocol': 'syslog_protocol',
+                'config-remote-audit-enabled': 'enable_remote_audit_api',
+                'config-remote-audit-url': 'remote_audit_api_url',
+                'config-remote-audit-token': 'remote_audit_api_token',
+                'config-remote-audit-timeout': 'remote_audit_api_timeout',
+                'config-path-a-prefix': 'global_path_a_prefix',
+                'config-path-b-prefix': 'global_path_b_prefix',
+                'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
+                'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
+                'config-worker-timeout': 'worker_timeout',
+                'config-worker-retry': 'worker_retry_attempts',
+                'config-operation-timeout': 'operation_timeout',
+                'config-auto-rollback': 'enable_auto_rollback',
+                'config-max-listing-items': 'max_file_listing_items',
+                'config-lazy-loading': 'enable_lazy_loading',
+                'config-ip-whitelist': 'enable_ip_whitelist',
+                'config-ip-whitelist-list': 'ip_whitelist',
+                'config-rate-limiting': 'enable_rate_limiting',
+                'config-rate-limit': 'rate_limit_requests_per_minute',
+                'config-maintenance-mode': 'maintenance_mode',
+                'config-maintenance-message': 'maintenance_message'
             };
 
+            const configs = {};
+            for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+                const element = document.getElementById(elementId);
+                if (!element) continue;
+
+                if (element.type === 'checkbox') {
+                    configs[configKey] = element.checked ? 'true' : 'false';
+                } else {
+                    configs[configKey] = element.value;
+                }
+            }
+
             try {
-                await updateConfig(configData);
+                await apiRequest('/api/admin/config/bulk', {
+                    method: 'POST',
+                    body: JSON.stringify({ configs })
+                });
                 alert('Configuration saved successfully');
             } catch (error) {
                 alert('Error saving configuration: ' + error.message);
