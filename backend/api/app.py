@@ -16,7 +16,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
-from api.middleware.auth import get_current_user, require_admin, require_operator
+from api.middleware.auth import get_current_user, require_admin, require_user
 from api.middleware.logging import (
     RequestLoggingMiddleware,
     setup_logging,
@@ -194,7 +194,7 @@ async def search_files(
 async def copy_file(
     request_data: FileCopyRequest,
     request: Request,
-    current_user: Annotated[User, Depends(require_operator)],
+    current_user: Annotated[User, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
@@ -241,7 +241,7 @@ async def copy_file(
 async def move_file(
     request_data: FileMoveRequest,
     request: Request,
-    current_user: Annotated[User, Depends(require_operator)],
+    current_user: Annotated[User, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
@@ -284,7 +284,7 @@ async def move_file(
 async def delete_file(
     request_data: FileDeleteRequest,
     request: Request,
-    current_user: Annotated[User, Depends(require_operator)],
+    current_user: Annotated[User, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
@@ -326,7 +326,7 @@ async def delete_file(
 async def create_directory(
     request_data: FileMkdirRequest,
     request: Request,
-    current_user: Annotated[User, Depends(require_operator)],
+    current_user: Annotated[User, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
