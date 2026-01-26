@@ -48,7 +48,19 @@ export async function apiRequest(endpoint, options = {}) {
     // Handle errors
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Request failed' }));
-        throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+        let errorMessage = `Request failed with status ${response.status}`;
+        if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+                // Handle Pydantic validation errors (array of error objects)
+                errorMessage = errorData.detail.map(err => {
+                    const field = err.loc ? err.loc.slice(-1)[0] : 'unknown';
+                    return `${field}: ${err.msg}`;
+                }).join(', ');
+            } else {
+                errorMessage = errorData.detail;
+            }
+        }
+        throw new Error(errorMessage);
     }
 
     // Return JSON response

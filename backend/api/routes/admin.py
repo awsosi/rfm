@@ -26,7 +26,8 @@ from api.schemas import (
 )
 from auth.utils import hash_password
 from database import get_db
-from models import User, Worker, Config, WorkerStatus
+from models import User, Worker, Config, WorkerStatus, UserRole
+from sqlalchemy import func
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -113,6 +114,26 @@ async def update_user(
             detail="Cannot deactivate your own account",
         )
 
+    # Prevent demoting or deactivating the last admin
+    if user.role == UserRole.ADMIN:
+        is_role_change = user_data.role is not None and user_data.role != UserRole.ADMIN
+        is_deactivation = user_data.is_active is False
+
+        if is_role_change or is_deactivation:
+            # Count active admins
+            stmt = select(func.count()).select_from(User).where(
+                User.role == UserRole.ADMIN,
+                User.is_active == True
+            )
+            result = await db.execute(stmt)
+            admin_count = result.scalar()
+
+            if admin_count <= 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot demote or deactivate the last admin user",
+                )
+
     # Update fields
     update_data = {}
     if user_data.password is not None:
@@ -174,6 +195,21 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found",
         )
+
+    # Prevent deleting the last admin
+    if user.role == UserRole.ADMIN:
+        stmt = select(func.count()).select_from(User).where(
+            User.role == UserRole.ADMIN,
+            User.is_active == True
+        )
+        result = await db.execute(stmt)
+        admin_count = result.scalar()
+
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the last admin user",
+            )
 
     username = user.username
 

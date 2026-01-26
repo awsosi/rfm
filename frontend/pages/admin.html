@@ -280,8 +280,8 @@
                                 <h3>User Interface Settings</h3>
                                 <div class="form-group">
                                     <label for="config-max-listing-items">Max File Listing Items</label>
-                                    <input type="number" id="config-max-listing-items" name="max_file_listing_items" class="form-control" min="100" max="10000">
-                                    <small>Maximum items to return in directory listing</small>
+                                    <input type="number" id="config-max-listing-items" name="max_file_listing_items" class="form-control" min="10" max="10000">
+                                    <small>Maximum items to return in directory listing (default: 20)</small>
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -392,17 +392,70 @@
 
             <!-- Logs Tab -->
             <div class="tab-pane" id="tab-logs">
+                <!-- Logging Configuration Section -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h2>System Logs</h2>
+                        <h2>Logging Configuration</h2>
+                    </div>
+                    <div class="panel-body">
+                        <form id="log-config-form">
+                            <div class="config-section">
+                                <h3>Syslog Integration</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="log-config-syslog-enabled" name="enable_syslog">
+                                        Enable Remote Syslog
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="log-config-syslog-host">Syslog Host</label>
+                                    <input type="text" id="log-config-syslog-host" name="syslog_host" class="form-control" placeholder="syslog.example.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="log-config-syslog-port">Syslog Port</label>
+                                    <input type="number" id="log-config-syslog-port" name="syslog_port" class="form-control" min="1" max="65535" value="514">
+                                </div>
+                                <div class="form-group">
+                                    <label for="log-config-syslog-protocol">Syslog Protocol</label>
+                                    <select id="log-config-syslog-protocol" name="syslog_protocol" class="form-control">
+                                        <option value="UDP">UDP</option>
+                                        <option value="TCP">TCP</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h3>Log Retention</h3>
+                                <div class="form-group">
+                                    <label for="log-config-retention">Retention Days</label>
+                                    <input type="number" id="log-config-retention" name="log_retention_days" class="form-control" min="1" max="365" value="14">
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="log-config-compression" name="enable_log_compression" checked>
+                                        Enable Log Compression
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" id="save-log-config-btn">Save Logging Configuration</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Log Viewer Section -->
+                <div class="panel" style="margin-top: 20px;">
+                    <div class="panel-header">
+                        <h2>Log Viewer</h2>
                         <div class="log-controls">
+                            <select id="log-type-filter" class="form-control">
+                                <option value="audit">Audit Logs (Database)</option>
+                                <option value="application">Application Logs (File)</option>
+                            </select>
                             <select id="log-level-filter" class="form-control">
                                 <option value="">All Levels</option>
                                 <option value="DEBUG">Debug</option>
                                 <option value="INFO">Info</option>
                                 <option value="WARNING">Warning</option>
                                 <option value="ERROR">Error</option>
-                                <option value="CRITICAL">Critical</option>
                             </select>
                             <input type="text" id="log-search" class="form-control" placeholder="Search logs...">
                             <button class="btn btn-secondary" id="refresh-logs-btn">Refresh</button>

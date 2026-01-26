@@ -249,3 +249,39 @@ class SystemAlertEvent(BaseModel):
     title: str
     message: str
     details: Optional[Dict[str, Any]] = None
+
+
+# =============================================================================
+# Application Log Schemas
+# =============================================================================
+
+class AppLogEntry(BaseModel):
+    """Single application log entry (from stdout/file)."""
+    timestamp: datetime
+    level: str
+    message: str
+    logger: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None
+
+
+class AppLogResponse(BaseModel):
+    """Application log response with pagination."""
+    logs: List[AppLogEntry]
+    total_lines: int
+    offset: int
+    limit: int
+    has_more: bool
+    log_source: str  # "file", "memory"
+
+
+class LogConfigResponse(BaseModel):
+    """Current logging configuration."""
+    log_level: str
+    enable_file_logs: bool
+    log_file_path: Optional[str]
+    enable_syslog: bool
+    syslog_host: Optional[str]
+    syslog_port: int
+    syslog_protocol: str
+    log_retention_days: int
+    enable_log_compression: bool
