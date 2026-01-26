@@ -17,7 +17,7 @@ The Central API provides:
 
 ### Security
 - ✅ JWT tokens (HS256) with database-backed sessions
-- ✅ Role-based access control (admin, operator, viewer)
+- ✅ Role-based access control (admin, user)
 - ✅ Argon2 password hashing
 - ✅ Public key authentication for workers
 - ✅ Complete audit trail

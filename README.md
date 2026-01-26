@@ -37,7 +37,7 @@ A production-ready, modular file management system designed for enterprise envir
 - ✅ mTLS (mutual TLS) for worker authentication
 - ✅ 30-day long-lived session tokens (HS256 JWT)
 - ✅ Argon2id password hashing
-- ✅ Role-based access control (admin, operator, viewer)
+- ✅ Role-based access control (admin, user)
 - ✅ Complete immutable audit trail
 - ✅ Path traversal protection
 - ✅ External authentication support (Sybase 17)
@@ -256,7 +256,7 @@ Get-EventLog -LogName Application -Source FileManagerWorker -Newest 10
 
 | Table | Description |
 |-------|-------------|
-| **users** | Authentication, RBAC (admin/operator/viewer) |
+| **users** | Authentication, RBAC (admin/user) |
 | **sessions** | Long-lived JWT token authentication |
 | **workers** | Windows service registration, public keys, status |
 | **operations** | File operation audit trail with rollback tracking |

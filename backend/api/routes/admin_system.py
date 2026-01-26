@@ -33,6 +33,9 @@ from api.schemas_admin import (
     LogFilter,
     LogEntry,
     LogStreamResponse,
+    AppLogEntry,
+    AppLogResponse,
+    LogConfigResponse,
 )
 from api.services.worker_service import WorkerService, get_worker_by_id
 from database import get_db
@@ -490,11 +493,8 @@ async def get_system_stats(
     admin_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.ADMIN)
     admin_users = (await db.execute(admin_users_stmt)).scalar() or 0
 
-    operator_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.OPERATOR)
-    operator_users = (await db.execute(operator_users_stmt)).scalar() or 0
-
-    viewer_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.VIEWER)
-    viewer_users = (await db.execute(viewer_users_stmt)).scalar() or 0
+    user_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.USER)
+    regular_users = (await db.execute(user_users_stmt)).scalar() or 0
 
     # Count active sessions (active users)
     from models import Session
@@ -540,8 +540,8 @@ async def get_system_stats(
         workers_offline=offline_workers,
         total_users=total_users,
         admin_users=admin_users,
-        operator_users=operator_users,
-        viewer_users=viewer_users,
+        operator_users=0,  # Deprecated, kept for compatibility
+        viewer_users=regular_users,  # Regular users (renamed from viewer)
         avg_operation_duration_seconds=float(avg_duration) if avg_duration else None,
         database_healthy=True,
         redis_healthy=True,
@@ -689,4 +689,155 @@ async def stream_logs(
         offset=offset,
         limit=limit,
         has_more=(offset + len(log_entries)) < total_count,
+    )
+
+
+@router.get("/logs/application", response_model=AppLogResponse)
+async def get_application_logs(
+    current_user: Annotated[User, Depends(require_admin)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    level: Optional[str] = Query(None, description="Filter by log level (DEBUG, INFO, WARNING, ERROR)"),
+    search: Optional[str] = Query(None, description="Search in log messages"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """
+    Get application logs from log file.
+
+    Reads from the configured log file path (LOG_FILE_PATH environment variable).
+    If file logging is not enabled, returns empty result.
+    """
+    import os
+    import json
+    from pathlib import Path
+
+    log_file_path = getattr(settings, 'log_file_path', '/var/log/filemanager/api.log')
+    enable_file_logs = getattr(settings, 'enable_file_logs', False)
+
+    if not enable_file_logs or not log_file_path:
+        return AppLogResponse(
+            logs=[],
+            total_lines=0,
+            offset=offset,
+            limit=limit,
+            has_more=False,
+            log_source="file",
+        )
+
+    log_path = Path(log_file_path)
+    if not log_path.exists():
+        return AppLogResponse(
+            logs=[],
+            total_lines=0,
+            offset=offset,
+            limit=limit,
+            has_more=False,
+            log_source="file",
+        )
+
+    # Read log file (last N lines for efficiency)
+    try:
+        log_entries = []
+        total_lines = 0
+
+        with open(log_path, 'r') as f:
+            # Read all lines and reverse for newest first
+            lines = f.readlines()
+            total_lines = len(lines)
+            lines = list(reversed(lines))
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    # Try to parse as JSON log
+                    log_data = json.loads(line)
+                    log_level = log_data.get('level', 'INFO').upper()
+                    log_message = log_data.get('message', line)
+                    log_timestamp = log_data.get('timestamp', datetime.now(timezone.utc).isoformat())
+                except json.JSONDecodeError:
+                    # Plain text log
+                    log_level = 'INFO'
+                    log_message = line
+                    log_timestamp = datetime.now(timezone.utc).isoformat()
+                    log_data = {}
+
+                # Apply filters
+                if level and log_level != level.upper():
+                    continue
+                if search and search.lower() not in log_message.lower():
+                    continue
+
+                # Parse timestamp
+                try:
+                    if isinstance(log_timestamp, str):
+                        ts = datetime.fromisoformat(log_timestamp.replace('Z', '+00:00'))
+                    else:
+                        ts = log_timestamp
+                except:
+                    ts = datetime.now(timezone.utc)
+
+                log_entries.append(AppLogEntry(
+                    timestamp=ts,
+                    level=log_level,
+                    message=log_message,
+                    logger=log_data.get('logger'),
+                    extra=log_data.get('extra'),
+                ))
+
+        # Apply pagination
+        total_filtered = len(log_entries)
+        log_entries = log_entries[offset:offset + limit]
+
+        return AppLogResponse(
+            logs=log_entries,
+            total_lines=total_filtered,
+            offset=offset,
+            limit=limit,
+            has_more=(offset + len(log_entries)) < total_filtered,
+            log_source="file",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reading log file: {str(e)}",
+        )
+
+
+@router.get("/logs/config", response_model=LogConfigResponse)
+async def get_logging_config(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """Get current logging configuration from database and environment."""
+    from models import Config
+
+    # Get config values from database
+    config_keys = [
+        'enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol',
+        'log_retention_days', 'enable_log_compression'
+    ]
+
+    config_values = {}
+    for key in config_keys:
+        stmt = select(Config).where(Config.key == key)
+        result = await db.execute(stmt)
+        config = result.scalar_one_or_none()
+        if config:
+            config_values[key] = config.value
+
+    return LogConfigResponse(
+        log_level=getattr(settings, 'log_level', 'INFO'),
+        enable_file_logs=getattr(settings, 'enable_file_logs', False),
+        log_file_path=getattr(settings, 'log_file_path', None),
+        enable_syslog=config_values.get('enable_syslog', 'false').lower() == 'true',
+        syslog_host=config_values.get('syslog_host'),
+        syslog_port=int(config_values.get('syslog_port', '514')),
+        syslog_protocol=config_values.get('syslog_protocol', 'UDP'),
+        log_retention_days=int(config_values.get('log_retention_days', '14')),
+        enable_log_compression=config_values.get('enable_log_compression', 'true').lower() == 'true',
     )

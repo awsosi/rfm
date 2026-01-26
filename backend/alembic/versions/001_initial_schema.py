@@ -45,7 +45,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
-                CREATE TYPE userrole AS ENUM ('ADMIN', 'OPERATOR', 'VIEWER');
+                CREATE TYPE userrole AS ENUM ('ADMIN', 'USER');
             END IF;
         END $$;
     """)
@@ -88,7 +88,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('username', sa.String(length=100), nullable=False),
         sa.Column('password_hash', sa.String(length=255), nullable=False),
-        sa.Column('role', postgresql.ENUM('ADMIN', 'OPERATOR', 'VIEWER', name='userrole', create_type=False), nullable=False),
+        sa.Column('role', postgresql.ENUM('ADMIN', 'USER', name='userrole', create_type=False), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
@@ -261,7 +261,7 @@ def upgrade() -> None:
         ('worker_retry_attempts', '3', 'INT','Number of retry attempts for failed worker operations'),
         ('operation_timeout', '3600', 'INT','Maximum operation execution time in seconds'),
         ('enable_auto_rollback', 'true', 'BOOLEAN','Automatically rollback failed operations'),
-        ('max_file_listing_items', '1000', 'INT','Maximum items to return in directory listing'),
+        ('max_file_listing_items', '20', 'INT','Maximum items to return in directory listing'),
         ('enable_lazy_loading', 'true', 'BOOLEAN','Enable lazy loading for large directory listings'),
         ('enable_ip_whitelist', 'false', 'BOOLEAN','Enable IP address whitelisting'),
         ('ip_whitelist', '[]', 'JSON','JSON array of allowed IP addresses/ranges'),

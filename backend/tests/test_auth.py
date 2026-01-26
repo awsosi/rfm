@@ -59,7 +59,7 @@ async def test_user(db_session: AsyncSession):
     user = User(
         username="testuser",
         password_hash=password_hash,
-        role=UserRole.OPERATOR,
+        role=UserRole.USER,
         is_active=True,
     )
 
@@ -76,7 +76,7 @@ async def disabled_user(db_session: AsyncSession):
     user = User(
         username="disabled",
         password_hash=_hash_password("pass123"),
-        role=UserRole.VIEWER,
+        role=UserRole.USER,
         is_active=False,
     )
 
@@ -300,7 +300,7 @@ async def test_get_authenticated_user(
 
     assert auth_user.user_id == test_user.id
     assert auth_user.username == "testuser"
-    assert auth_user.role == "operator"
+    assert auth_user.role == "USER"
     assert auth_user.is_active is True
 
 

@@ -111,9 +111,20 @@ export class AdminPanel {
             logLevelFilter.addEventListener('change', () => this.loadLogs());
         }
 
+        const logTypeFilter = document.getElementById('log-type-filter');
+        if (logTypeFilter) {
+            logTypeFilter.addEventListener('change', () => this.loadLogs());
+        }
+
         const logSearch = document.getElementById('log-search');
         if (logSearch) {
             logSearch.addEventListener('input', debounce(() => this.loadLogs(), 500));
+        }
+
+        // Logging configuration
+        const saveLogConfigBtn = document.getElementById('save-log-config-btn');
+        if (saveLogConfigBtn) {
+            saveLogConfigBtn.addEventListener('click', () => this.saveLogConfiguration());
         }
     }
 
@@ -139,6 +150,7 @@ export class AdminPanel {
                 this.loadConfiguration();
                 break;
             case 'logs':
+                this.loadLogConfiguration();
                 this.loadLogs();
                 break;
         }
@@ -565,45 +577,171 @@ export class AdminPanel {
     // =========================================================================
 
     /**
-     * Load audit logs
+     * Load logging configuration
+     */
+    async loadLogConfiguration() {
+        try {
+            const config = await API.get('/api/admin/logs/config');
+
+            // Populate form
+            const syslogEnabled = document.getElementById('log-config-syslog-enabled');
+            if (syslogEnabled) syslogEnabled.checked = config.enable_syslog || false;
+
+            const syslogHost = document.getElementById('log-config-syslog-host');
+            if (syslogHost) syslogHost.value = config.syslog_host || '';
+
+            const syslogPort = document.getElementById('log-config-syslog-port');
+            if (syslogPort) syslogPort.value = config.syslog_port || 514;
+
+            const syslogProtocol = document.getElementById('log-config-syslog-protocol');
+            if (syslogProtocol) syslogProtocol.value = config.syslog_protocol || 'UDP';
+
+            const retention = document.getElementById('log-config-retention');
+            if (retention) retention.value = config.log_retention_days || 14;
+
+            const compression = document.getElementById('log-config-compression');
+            if (compression) compression.checked = config.enable_log_compression !== false;
+
+        } catch (error) {
+            console.error('Failed to load log configuration:', error);
+        }
+    }
+
+    /**
+     * Save logging configuration
+     */
+    async saveLogConfiguration() {
+        try {
+            const configs = [
+                {
+                    key: 'enable_syslog',
+                    value: document.getElementById('log-config-syslog-enabled')?.checked ? 'true' : 'false',
+                    type: 'BOOLEAN'
+                },
+                {
+                    key: 'syslog_host',
+                    value: document.getElementById('log-config-syslog-host')?.value || '',
+                    type: 'STRING'
+                },
+                {
+                    key: 'syslog_port',
+                    value: document.getElementById('log-config-syslog-port')?.value || '514',
+                    type: 'INT'
+                },
+                {
+                    key: 'syslog_protocol',
+                    value: document.getElementById('log-config-syslog-protocol')?.value || 'UDP',
+                    type: 'STRING'
+                },
+                {
+                    key: 'log_retention_days',
+                    value: document.getElementById('log-config-retention')?.value || '14',
+                    type: 'INT'
+                },
+                {
+                    key: 'enable_log_compression',
+                    value: document.getElementById('log-config-compression')?.checked ? 'true' : 'false',
+                    type: 'BOOLEAN'
+                }
+            ];
+
+            await API.post('/api/admin/config/bulk', { configs });
+            showNotification('Logging configuration saved successfully', 'success');
+        } catch (error) {
+            console.error('Failed to save log configuration:', error);
+            showNotification('Error saving log configuration: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Load audit logs or application logs based on selected type
      */
     async loadLogs(offset = 0, limit = 100) {
         const loadingIndicator = document.getElementById('logs-loading');
         const logEntries = document.getElementById('log-entries');
+        const logTypeFilter = document.getElementById('log-type-filter');
+        const logLevelFilter = document.getElementById('log-level-filter');
+        const logSearch = document.getElementById('log-search');
+
+        const logType = logTypeFilter?.value || 'audit';
+        const level = logLevelFilter?.value || '';
+        const search = logSearch?.value || '';
 
         try {
             if (loadingIndicator) loadingIndicator.classList.remove('hidden');
 
-            const logs = await API.get(`/api/admin/logs?offset=${offset}&limit=${limit}`);
+            let logs = [];
 
-            if (logEntries) {
-                if (offset === 0) {
-                    logEntries.innerHTML = '';
+            if (logType === 'application') {
+                // Load application logs from file
+                let url = `/api/admin/logs/application?offset=${offset}&limit=${limit}`;
+                if (level) url += `&level=${level}`;
+                if (search) url += `&search=${encodeURIComponent(search)}`;
+
+                const response = await API.get(url);
+                logs = response.logs || [];
+
+                if (logEntries) {
+                    if (offset === 0) {
+                        logEntries.innerHTML = '';
+                    }
+
+                    if (logs.length === 0 && offset === 0) {
+                        logEntries.innerHTML = '<div class="no-logs">No application logs found. Enable file logging in environment to view application logs.</div>';
+                    }
+
+                    logs.forEach(log => {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = `log-entry log-level-${log.level.toLowerCase()}`;
+                        logEntry.innerHTML = `
+                            <div class="log-header">
+                                <span class="log-timestamp">${formatDate(log.timestamp)}</span>
+                                <span class="log-level badge badge-${log.level.toLowerCase()}">${log.level}</span>
+                                ${log.logger ? `<span class="log-logger">${escapeHtml(log.logger)}</span>` : ''}
+                            </div>
+                            <div class="log-message">${escapeHtml(log.message)}</div>
+                            ${log.extra ? `<div class="log-details"><pre>${escapeHtml(JSON.stringify(log.extra, null, 2))}</pre></div>` : ''}
+                        `;
+                        logEntries.appendChild(logEntry);
+                    });
                 }
+            } else {
+                // Load audit logs from database
+                const response = await API.get(`/api/admin/logs/stream?offset=${offset}&limit=${limit}`);
+                logs = response.logs || [];
 
-                logs.forEach(log => {
-                    const logEntry = document.createElement('div');
-                    logEntry.className = 'log-entry';
-                    logEntry.innerHTML = `
-                        <div class="log-header">
-                            <span class="log-timestamp">${formatDate(log.timestamp)}</span>
-                            <span class="log-action">${escapeHtml(log.action)}</span>
-                            ${log.user_id ? `<span class="log-user">User ID: ${log.user_id}</span>` : ''}
-                        </div>
-                        <div class="log-details">
-                            ${log.details_json ? `<pre>${escapeHtml(JSON.stringify(log.details_json, null, 2))}</pre>` : ''}
-                        </div>
-                        <div class="log-meta">
-                            ${log.ip_address ? `<span>IP: ${escapeHtml(log.ip_address)}</span>` : ''}
-                            ${log.operation_id ? `<span>Operation: ${log.operation_id}</span>` : ''}
-                        </div>
-                    `;
-                    logEntries.appendChild(logEntry);
-                });
+                if (logEntries) {
+                    if (offset === 0) {
+                        logEntries.innerHTML = '';
+                    }
+
+                    if (logs.length === 0 && offset === 0) {
+                        logEntries.innerHTML = '<div class="no-logs">No audit logs found.</div>';
+                    }
+
+                    logs.forEach(log => {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = 'log-entry';
+                        logEntry.innerHTML = `
+                            <div class="log-header">
+                                <span class="log-timestamp">${formatDate(log.timestamp)}</span>
+                                <span class="log-action">${escapeHtml(log.action)}</span>
+                                ${log.username ? `<span class="log-user">${escapeHtml(log.username)}</span>` : (log.user_id ? `<span class="log-user">User ID: ${log.user_id}</span>` : '')}
+                            </div>
+                            <div class="log-details">
+                                ${log.details ? `<pre>${escapeHtml(JSON.stringify(log.details, null, 2))}</pre>` : ''}
+                            </div>
+                            <div class="log-meta">
+                                ${log.ip_address ? `<span>IP: ${escapeHtml(log.ip_address)}</span>` : ''}
+                            </div>
+                        `;
+                        logEntries.appendChild(logEntry);
+                    });
+                }
             }
         } catch (error) {
             console.error('Failed to load logs:', error);
-            showNotification('Failed to load logs', 'error');
+            showNotification('Error loading logs: ' + error.message, 'error');
         } finally {
             if (loadingIndicator) loadingIndicator.classList.add('hidden');
         }

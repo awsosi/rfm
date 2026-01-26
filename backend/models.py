@@ -36,8 +36,7 @@ class Base(DeclarativeBase):
 class UserRole(str, PyEnum):
     """User role enumeration for RBAC."""
     ADMIN = "ADMIN"
-    OPERATOR = "OPERATOR"
-    VIEWER = "VIEWER"
+    USER = "USER"
 
 
 class WorkerStatus(str, PyEnum):
@@ -76,7 +75,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.VIEWER)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -376,7 +375,7 @@ class AuditLog(Base):
 class ConfigType(str, PyEnum):
     """Configuration value type enumeration."""
     STRING = "STRING"
-    INTEGER = "INT"
+    INT = "INT"
     JSON = "JSON"
     BOOLEAN = "BOOLEAN"
 
@@ -416,7 +415,7 @@ class Config(Base):
 
     def get_typed_value(self):
         """Return value cast to the appropriate type."""
-        if self.type == ConfigType.INTEGER:
+        if self.type == ConfigType.INT:
             return int(self.value)
         elif self.type == ConfigType.BOOLEAN:
             return self.value.lower() in ("true", "1", "yes")

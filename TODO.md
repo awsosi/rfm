@@ -58,8 +58,9 @@
 ### Autentykacja & Autoryzacja
 - ✅ JWT token-based authentication (HS256)
 - ✅ Argon2id password hashing
-- ✅ RBAC (ADMIN, OPERATOR, VIEWER)
+- ✅ RBAC (ADMIN, USER) - *simplified from ADMIN/OPERATOR/VIEWER*
 - ✅ Session management z długimi tokenami (30 dni)
+- ✅ Last admin protection (cannot delete/demote/deactivate last admin)
 - ✅ IP address & user agent tracking
 - 📝 **Zewnętrzna autentykacja Sybase 17**
   - Przygotować connector do Sybase API
@@ -313,12 +314,14 @@
 - ✅ SystemMetrics *(nowy)*
 
 ### Migracje
-- ✅ `001_initial_schema.py` - Initial schema
+- ✅ `001_initial_schema.py` - Initial schema (updated: ADMIN/USER roles, max_file_listing_items=20)
 - ✅ `002_add_user_preferences.py` - User preferences
 - ✅ `003_add_admin_models.py` - Samba paths & system metrics
+- ✅ `004_update_roles_and_defaults.py` - Simplify roles (ADMIN/USER), update defaults
 - 📝 **Wymagane Migracje**
   - 🚧 Uruchomić migrację 002 na środowisku
   - 🚧 Uruchomić migrację 003 na środowisku
+  - 🚧 Uruchomić migrację 004 na środowisku
   - Dodać indeksy dla performance
   - Partycjonowanie tabeli audit_logs (jeśli duża)
 
@@ -440,11 +443,12 @@
 - ✅ Admin action tracking
 
 ### Wymagane Integracje
-- 📝 **Syslog Integration**
+- ✅ **Syslog Integration**
   - ✅ Config parametry (host, port, protocol)
-  - Implementacja syslog handler
-  - Format zgodny z RFC 5424
-  - UDP/TCP support
+  - ✅ Logging configuration UI in admin panel (Logs tab)
+  - 📝 Implementacja syslog handler (runtime)
+  - 📝 Format zgodny z RFC 5424
+  - ✅ UDP/TCP protocol selection
 - 📝 **Remote Audit API (Sybase)**
   - ✅ Config parametry (URL, token, timeout)
   - Async push do zdalnego API
@@ -457,12 +461,15 @@
   - Kompresja starszych logów (gzip)
   - Usuwanie po upływie retencji
   - Archiwizacja (opcjonalne)
-- 📝 **Log Viewing & Search**
-  - ✅ Basic log viewer w admin panel
-  - Zaawansowane filtrowanie (date range, user, action)
-  - Full-text search w logach
-  - Log export (JSON, CSV, TXT)
-  - Real-time log streaming (WebSocket)
+- ✅ **Log Viewing & Search**
+  - ✅ Audit log viewer w admin panel (database logs)
+  - ✅ Application log viewer (file-based logs)
+  - ✅ Log type selector (audit/application)
+  - ✅ Log level filtering
+  - ✅ Search in logs
+  - ✅ Log export (JSON)
+  - 📝 Full-text search w logach (advanced)
+  - 📝 Real-time log streaming (WebSocket)
 - 📝 **Metrics & Analytics**
   - Operation success/failure rates
   - Average operation duration

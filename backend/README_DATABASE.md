@@ -8,7 +8,7 @@ This database layer provides:
 
 - **6 Core Tables**: users, sessions, workers, operations, audit_logs, config
 - **Async Support**: Full async/await with asyncpg driver
-- **RBAC**: Role-based access control (admin, operator, viewer)
+- **RBAC**: Role-based access control (admin, user)
 - **Audit Trail**: Immutable logging of all operations
 - **Migration Management**: Alembic for schema versioning
 - **Security**: Argon2 password hashing, indexed queries
@@ -19,7 +19,7 @@ This database layer provides:
 ### Users Table
 - Authentication and RBAC
 - Argon2 password hashing
-- Roles: admin, operator, viewer
+- Roles: admin, user
 
 ### Sessions Table
 - Token-based authentication
@@ -145,7 +145,7 @@ The migration inserts these default configs:
 | worker_heartbeat_timeout | 90 | int | Heartbeat timeout (seconds) |
 | operation_timeout | 3600 | int | Max operation time (seconds) |
 | enable_auto_rollback | true | boolean | Auto-rollback on failure |
-| max_file_listing_items | 1000 | int | Max items in dir listing |
+| max_file_listing_items | 20 | int | Max items in dir listing |
 
 ## 🔄 Migration Commands
 
