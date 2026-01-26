@@ -493,9 +493,9 @@
             window.location.href = 'login.html';
         }
 
-        // Check admin role
+        // Check admin role (backend returns uppercase ADMIN, OPERATOR, VIEWER)
         const currentUser = getCurrentUser();
-        if (!currentUser || currentUser.role !== 'admin') {
+        if (!currentUser || currentUser.role?.toUpperCase() !== 'ADMIN') {
             alert('Access denied. Admin role required.');
             window.location.href = 'explorer.html';
         }
@@ -702,7 +702,7 @@
                     row.innerHTML = `
                         <td>${user.id}</td>
                         <td>${user.username}</td>
-                        <td><span class="badge badge-${user.role === 'admin' ? 'primary' : 'secondary'}">${user.role}</span></td>
+                        <td><span class="badge badge-${user.role?.toUpperCase() === 'ADMIN' ? 'primary' : 'secondary'}">${user.role}</span></td>
                         <td><span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>${formatDate(user.created_at)}</td>
                         <td>
