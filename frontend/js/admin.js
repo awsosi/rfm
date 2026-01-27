@@ -236,7 +236,7 @@ export class AdminPanel {
                 document.getElementById('user-id').value = user.id;
                 document.getElementById('user-username').value = user.username;
                 document.getElementById('user-password').value = '';
-                document.getElementById('user-role').value = user.role.toLowerCase();
+                document.getElementById('user-role').value = user.role;
                 document.getElementById('user-active').checked = user.is_active;
             }
         } catch (error) {

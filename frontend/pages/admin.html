@@ -498,8 +498,8 @@
                     <div class="form-group">
                         <label for="user-role">Role</label>
                         <select id="user-role" name="role" class="form-control" required>
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="USER">User</option>
+                            <option value="ADMIN">Admin</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -538,7 +538,7 @@
     <script type="module">
         import { checkAuth, logout, getCurrentUser } from '../js/auth.js';
         import { getUsers, createUser, updateUser, deleteUser, getWorkers, approveWorker, rejectWorker, getConfig, updateConfig, getLogs, apiRequest } from '../js/api.js';
-        import { showModal, hideModal, showConfirm, formatDate } from '../js/utils.js';
+        import { showModal, hideModal, showConfirm, formatDate, escapeHtml } from '../js/utils.js';
         import AdminSystem from '../js/admin-system.js';
 
         // Check authentication
@@ -1088,18 +1088,23 @@
             loading.classList.remove('hidden');
 
             try {
-                const level = document.getElementById('log-level-filter').value;
-                const search = document.getElementById('log-search').value;
+                const level = document.getElementById('log-level-filter')?.value;
+                const search = document.getElementById('log-search')?.value;
 
                 const logs = await getLogs({ level, search, offset: logsOffset, limit: logsLimit });
 
+                if (logs.length === 0 && !append) {
+                    container.innerHTML = '<div class="no-logs">No audit logs found.</div>';
+                }
+
                 logs.forEach(log => {
                     const entry = document.createElement('div');
-                    entry.className = `log-entry log-${log.level.toLowerCase()}`;
+                    entry.className = 'log-entry';
                     entry.innerHTML = `
                         <span class="log-timestamp">${formatDate(log.timestamp)}</span>
-                        <span class="log-level">${log.level}</span>
-                        <span class="log-message">${log.message}</span>
+                        <span class="log-action">${escapeHtml(log.action)}</span>
+                        ${log.user_id ? `<span class="log-user">User ID: ${log.user_id}</span>` : ''}
+                        ${log.ip_address ? `<span class="log-ip">IP: ${escapeHtml(log.ip_address)}</span>` : ''}
                     `;
                     container.appendChild(entry);
                 });
@@ -1113,7 +1118,8 @@
                 }
 
             } catch (error) {
-                container.innerHTML = '<div class="error">Error loading logs</div>';
+                console.error('Failed to load logs:', error);
+                container.innerHTML = '<div class="error">Error loading logs: ' + error.message + '</div>';
             } finally {
                 loading.classList.add('hidden');
             }
