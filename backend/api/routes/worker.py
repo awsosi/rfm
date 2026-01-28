@@ -41,9 +41,9 @@ async def get_worker_by_hostname(
 @router.get("/{worker_id}/commands/poll")
 async def poll_commands(
     worker_id: str,
-    timeout: int = Query(default=30, ge=1, le=60),
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    timeout: int = Query(default=30, ge=1, le=60),
 ) -> CommandPollResponse:
     """
     Long-poll for pending commands (worker-side).
