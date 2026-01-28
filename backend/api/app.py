@@ -234,7 +234,9 @@ async def copy_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/move", response_model=OperationResponse)
@@ -277,7 +279,9 @@ async def move_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/delete", response_model=OperationResponse)
@@ -319,7 +323,9 @@ async def delete_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/mkdir", response_model=OperationResponse)
@@ -361,7 +367,9 @@ async def create_directory(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/operations/push", response_model=OperationResponse)
@@ -418,7 +426,9 @@ async def push_operation(
             }
         )
 
-        return OperationResponse.model_validate(operation)
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = current_user.username
+        return op_response
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -477,7 +487,9 @@ async def pull_operation(
             }
         )
 
-        return OperationResponse.model_validate(operation)
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = current_user.username
+        return op_response
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -498,8 +510,8 @@ async def get_operations_history(
     Returns paginated list of all operations with filters.
     """
     try:
-        # Build query
-        query = select(Operation).order_by(desc(Operation.created_at))
+        # Build query with User join to get username
+        query = select(Operation, User).join(User, Operation.user_id == User.id).order_by(desc(Operation.created_at))
 
         # Apply filters
         if operation_type:
@@ -511,9 +523,16 @@ async def get_operations_history(
         query = query.limit(limit).offset(offset)
 
         result = await db.execute(query)
-        operations = result.scalars().all()
+        rows = result.all()
 
-        return [OperationResponse.model_validate(op) for op in operations]
+        # Build response with username
+        responses = []
+        for operation, user in rows:
+            op_response = OperationResponse.model_validate(operation)
+            op_response.user_name = user.username
+            responses.append(op_response)
+
+        return responses
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -626,7 +645,7 @@ async def list_operations(
     """List operations with optional status filter."""
     from models import OperationStatus
 
-    stmt = select(Operation).where(Operation.user_id == current_user.id)
+    stmt = select(Operation, User).join(User, Operation.user_id == User.id).where(Operation.user_id == current_user.id)
 
     # Apply status filter if provided
     if status:
@@ -643,8 +662,16 @@ async def list_operations(
     stmt = stmt.order_by(desc(Operation.created_at)).offset(offset).limit(limit)
 
     result = await db.execute(stmt)
-    operations = result.scalars().all()
-    return [OperationResponse.model_validate(op) for op in operations]
+    rows = result.all()
+
+    # Build response with username
+    responses = []
+    for operation, user in rows:
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = user.username
+        responses.append(op_response)
+
+    return responses
 
 
 # =============================================================================

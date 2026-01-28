@@ -262,6 +262,7 @@ class OperationResponse(BaseModel):
 
     id: int
     user_id: int
+    user_name: Optional[str] = None  # Username for display in operation queue
     type: OperationType
     source_path: str
     dest_path: Optional[str]

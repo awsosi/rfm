@@ -72,10 +72,16 @@ export async function apiRequest(endpoint, options = {}) {
  * @param {string} path - Directory path
  * @param {number} offset - Pagination offset
  * @param {number} limit - Pagination limit
+ * @param {number} workerId - Worker ID (defaults to 1 for VF redesign)
  * @returns {Promise<Array>}
  */
-export async function listFiles(path, offset = 0, limit = 50) {
-    const params = new URLSearchParams({ path, offset: offset.toString(), limit: limit.toString() });
+export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        offset: offset.toString(),
+        limit: limit.toString()
+    });
     return await apiRequest(`/api/files/list?${params}`);
 }
 
