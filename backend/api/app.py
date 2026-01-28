@@ -60,9 +60,18 @@ async def lifespan(app: FastAPI):
     from api.websocket_manager import ws_manager
     await ws_manager.start()
 
+    # Start background tasks (command cleanup, worker health checks)
+    from api.background_tasks import start_background_tasks
+    await start_background_tasks(settings)
+
     yield
 
     # Shutdown
+    # Stop background tasks
+    from api.background_tasks import stop_background_tasks
+    await stop_background_tasks()
+
+    # Stop WebSocket manager
     from api.websocket_manager import ws_manager
     await ws_manager.stop()
 

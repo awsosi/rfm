@@ -1,53 +1,68 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace FileManagerWorker.Models
 {
     /// <summary>
-    /// Represents a response to a command execution
+    /// Represents a response to a command execution (matches API CommandResponseRequest schema)
     /// </summary>
     public class CommandResponse
     {
-        public string CommandId { get; set; }
-        public string Status { get; set; } // "success", "failed", "in_progress"
-        public string Error { get; set; }
-        public string RollbackStatus { get; set; }
-        public Dictionary<string, object> Details { get; set; }
-        public int ProgressPercent { get; set; }
+        [JsonProperty("status")]
+        public string Status { get; set; } // "success", "failed", "error"
+
+        [JsonProperty("message")]
+        public string Message { get; set; }
+
+        [JsonProperty("file_count")]
+        public int? FileCount { get; set; }
+
+        [JsonProperty("total_size_bytes")]
+        public long? TotalSizeBytes { get; set; }
+
+        [JsonProperty("error_details")]
+        public Dictionary<string, object> ErrorDetails { get; set; }
+
+        // Not sent to API, used internally
+        [JsonIgnore]
+        public int CommandId { get; set; }
 
         public CommandResponse()
         {
-            Details = new Dictionary<string, object>();
+            ErrorDetails = new Dictionary<string, object>();
         }
 
-        public static CommandResponse Success(string commandId, Dictionary<string, object> details = null)
+        public static CommandResponse Success(int commandId, string message = null, int? fileCount = null, long? totalSizeBytes = null)
         {
             return new CommandResponse
             {
                 CommandId = commandId,
                 Status = "success",
-                Details = details ?? new Dictionary<string, object>()
+                Message = message ?? "Command completed successfully",
+                FileCount = fileCount,
+                TotalSizeBytes = totalSizeBytes
             };
         }
 
-        public static CommandResponse Failed(string commandId, string error, string rollbackStatus = null)
+        public static CommandResponse Failed(int commandId, string message, Dictionary<string, object> errorDetails = null)
         {
             return new CommandResponse
             {
                 CommandId = commandId,
                 Status = "failed",
-                Error = error,
-                RollbackStatus = rollbackStatus
+                Message = message,
+                ErrorDetails = errorDetails ?? new Dictionary<string, object>()
             };
         }
 
-        public static CommandResponse InProgress(string commandId, int progressPercent, Dictionary<string, object> details = null)
+        public static CommandResponse Error(int commandId, string message, Dictionary<string, object> errorDetails = null)
         {
             return new CommandResponse
             {
                 CommandId = commandId,
-                Status = "in_progress",
-                ProgressPercent = progressPercent,
-                Details = details ?? new Dictionary<string, object>()
+                Status = "error",
+                Message = message,
+                ErrorDetails = errorDetails ?? new Dictionary<string, object>()
             };
         }
     }
