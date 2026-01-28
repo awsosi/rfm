@@ -746,11 +746,34 @@ async def list_workers(
 async def register_worker(
     worker_data: WorkerRegister,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Register new worker (requires admin approval)."""
-    # Create worker with pending status
+    """
+    Register new worker (self-registration with PENDING status).
+
+    Workers can register themselves using mTLS authentication.
+    Status is set to PENDING and requires admin approval to become active.
+    """
+    # Check if worker with same hostname already exists
+    stmt = select(Worker).where(Worker.hostname == worker_data.hostname)
+    result = await db.execute(stmt)
+    existing_worker = result.scalar_one_or_none()
+
+    if existing_worker:
+        # Update existing worker
+        existing_worker.name = worker_data.name
+        existing_worker.public_key = worker_data.public_key
+        existing_worker.path_a_prefix = worker_data.path_a_prefix
+        existing_worker.path_b_prefix = worker_data.path_b_prefix
+        existing_worker.version = worker_data.version
+        existing_worker.last_heartbeat = datetime.now(timezone.utc)
+
+        await db.commit()
+        await db.refresh(existing_worker)
+
+        return WorkerResponse.model_validate(existing_worker)
+
+    # Create new worker with pending status
     worker = Worker(
         name=worker_data.name,
         hostname=worker_data.hostname,
@@ -759,6 +782,7 @@ async def register_worker(
         path_b_prefix=worker_data.path_b_prefix,
         version=worker_data.version,
         status=WorkerStatus.PENDING,
+        last_heartbeat=datetime.now(timezone.utc),
     )
 
     db.add(worker)
@@ -766,10 +790,10 @@ async def register_worker(
     await db.refresh(worker)
 
     await AuditLogger.log_admin_action(
-        user_id=current_user.id,
+        user_id=None,
         action="worker_register",
         target="worker",
-        details={"worker_id": worker.id, "worker_name": worker.name},
+        details={"worker_id": worker.id, "worker_name": worker.name, "hostname": worker.hostname},
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
