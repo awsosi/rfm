@@ -160,6 +160,38 @@ export async function moveFiles(sourcePaths, destPath) {
 }
 
 /**
+ * VF REDESIGN: Push operation - Copy directory to PATH_B and archive to PATH_C
+ * @param {string} sourcePath - Source directory path (from Path A)
+ * @param {number} workerId - Worker ID to execute operation
+ * @returns {Promise<Object>}
+ */
+export async function pushOperation(sourcePath, workerId) {
+    return await apiRequest('/api/operations/push', {
+        method: 'POST',
+        body: JSON.stringify({
+            source_path: sourcePath,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
+ * VF REDESIGN: Pull operation - Revert PUSH by copying from PATH_B to original location
+ * @param {number} operationId - ID of the original PUSH operation to revert
+ * @param {number} workerId - Worker ID to execute operation
+ * @returns {Promise<Object>}
+ */
+export async function pullOperation(operationId, workerId) {
+    return await apiRequest('/api/operations/pull', {
+        method: 'POST',
+        body: JSON.stringify({
+            operation_id: operationId,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
  * Get operation status
  * @param {string} operationId - Operation ID
  * @returns {Promise<Object>}
@@ -169,13 +201,25 @@ export async function getOperationStatus(operationId) {
 }
 
 /**
- * Get list of operations
+ * Get operation history (VF REDESIGN: Returns all operations with filters)
+ * @param {Object} filters - Filter options { limit, offset, operation_type, status }
+ * @returns {Promise<Array>}
+ */
+export async function getOperationHistory(filters = {}) {
+    const { limit = 100, offset = 0, operation_type = null, status = null } = filters;
+    let params = `?limit=${limit}&offset=${offset}`;
+    if (operation_type) params += `&operation_type=${operation_type}`;
+    if (status) params += `&status=${status}`;
+    return await apiRequest(`/api/operations/history${params}`);
+}
+
+/**
+ * Get list of operations (legacy - kept for compatibility)
  * @param {string} status - Filter by status (optional)
  * @returns {Promise<Array>}
  */
 export async function getOperations(status = null) {
-    const params = status ? `?status=${status}` : '';
-    return await apiRequest(`/api/operations/list${params}`);
+    return await getOperationHistory({ status });
 }
 
 /**
