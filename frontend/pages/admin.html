@@ -317,6 +317,29 @@
                                 </div>
                             </div>
 
+                            <!-- VF Redesign: Push/Pull Operation Paths -->
+                            <div class="config-section">
+                                <h3>VF Redesign: Push/Pull Operation Paths</h3>
+                                <p class="config-description">
+                                    <strong>Note:</strong> These paths are used for the VF redesign PUSH and PULL operations.
+                                    Only admin users can configure these paths. Changes affect new operations only.
+                                </p>
+                                <div class="form-group">
+                                    <label for="config-path-b">PATH_B (Destination Path)</label>
+                                    <input type="text" id="config-path-b" name="path_b" class="form-control" placeholder="/path/to/destination">
+                                    <small>Destination path where PUSH operations copy directories</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-path-c">PATH_C (Archive Path)</label>
+                                    <input type="text" id="config-path-c" name="path_c" class="form-control" placeholder="/path/to/archive">
+                                    <small>Archive path where PUSH operations move original directories</small>
+                                </div>
+                                <div class="form-group">
+                                    <button type="button" class="btn btn-secondary" id="test-vf-paths-btn">Test Paths</button>
+                                    <small>Verify that PATH_B and PATH_C are accessible by the worker</small>
+                                </div>
+                            </div>
+
                             <!-- Maintenance Mode -->
                             <div class="config-section">
                                 <h3>Maintenance Mode</h3>
