@@ -149,10 +149,9 @@ Complete application makeover with simplified UI and new operation flow:
   - Path validation before saving
 
 ### ✅ Phase 9: Configuration & Environment (100%)
-- ✅ Updated backend/.env.example
+- ✅ Updated root .env.example
   - Added PATH_B (default destination for Push)
   - Added PATH_C (default archive location)
-- ✅ Updated root .env.example
   - Documented PATH_B and PATH_C variables
 
 ---
@@ -426,7 +425,7 @@ elasticsearch_timeout: int = 30
 elasticsearch==8.12.0
 ```
 
-**Environment Variables** (`/home/user/rfm/backend/.env.example`)
+**Environment Variables** (`/home/user/rfm/.env.example`)
 ```
 ELASTICSEARCH_ENABLED=true
 ELASTICSEARCH_URL=http://localhost:9200
