@@ -198,18 +198,19 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Sends progress update for long-running commands
+        /// Sends progress update for long-running commands (optional feature)
         /// </summary>
-        public async Task SendProgressAsync(string commandId, int progressPercent, Dictionary<string, object> details = null)
+        public async Task SendProgressAsync(int commandId, int progressPercent, string message = null)
         {
             try
             {
-                var response = CommandResponse.InProgress(commandId, progressPercent, details);
-                await SendResponseAsync(response);
+                // Note: Progress updates are optional in pull-based architecture
+                // The command is updated with final response only
+                Logger.Debug("Progress update: Command {0} at {1}%", commandId, progressPercent);
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Error sending progress update");
+                Logger.Warn(ex, "Error logging progress update");
             }
         }
 

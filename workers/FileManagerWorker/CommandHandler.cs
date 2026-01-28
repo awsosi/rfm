@@ -30,10 +30,17 @@ namespace FileManagerWorker
         {
             if (request == null)
             {
-                return CommandResponse.Failed("unknown", "Request is null");
+                return CommandResponse.Failed(0, "Request is null");
             }
 
-            Logger.Info("Executing command: {0} (ID: {1})", request.Command, request.CommandId);
+            if (!request.CommandId.HasValue)
+            {
+                return CommandResponse.Failed(0, "Command ID is missing");
+            }
+
+            int cmdId = request.CommandId.Value;
+
+            Logger.Info("Executing command: {0} (ID: {1})", request.Command, cmdId);
 
             try
             {
@@ -73,13 +80,13 @@ namespace FileManagerWorker
                         return await HandleReloadConfigAsync(request);
 
                     default:
-                        return CommandResponse.Failed(request.CommandId, $"Unknown command: {request.Command}");
+                        return CommandResponse.Failed(cmdId, $"Unknown command: {request.Command}");
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Command execution failed: {0}", request.CommandId);
-                return CommandResponse.Failed(request.CommandId, ex.Message);
+                Logger.Error(ex, "Command execution failed: {0}", cmdId);
+                return CommandResponse.Failed(cmdId, ex.Message);
             }
         }
 
@@ -88,13 +95,15 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleCopyAsync(CommandRequest request)
         {
-            if (!request.Parameters.ContainsKey("source") || !request.Parameters.ContainsKey("destination"))
+            int cmdId = request.CommandId.Value;
+
+            if (string.IsNullOrEmpty(request.SourcePath) || string.IsNullOrEmpty(request.DestPath))
             {
-                return CommandResponse.Failed(request.CommandId, "Copy requires 'source' and 'destination' parameters");
+                return CommandResponse.Failed(cmdId, "Copy requires source_path and dest_path");
             }
 
-            var source = request.Parameters["source"];
-            var destination = request.Parameters["destination"];
+            var source = request.SourcePath;
+            var destination = request.DestPath;
 
             List<RollbackContext> backups = null;
 
@@ -108,7 +117,7 @@ namespace FileManagerWorker
                 {
                     if (percent % 10 == 0) // Report every 10%
                     {
-                        await _apiClient.SendProgressAsync(request.CommandId, percent);
+                        await _apiClient.SendProgressAsync(cmdId, percent);
                     }
                 });
 
@@ -118,7 +127,11 @@ namespace FileManagerWorker
                 // Success - cleanup backups
                 _rollbackManager.CleanupBackups(backups);
 
-                return CommandResponse.Success(request.CommandId, result);
+                // Extract file count and size from result
+                int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
+                long? totalSize = result?.ContainsKey("total_size") == true ? Convert.ToInt64(result["total_size"]) : null;
+
+                return CommandResponse.Success(cmdId, "Copy completed successfully", fileCount, totalSize);
             }
             catch (Exception ex)
             {
@@ -126,9 +139,14 @@ namespace FileManagerWorker
 
                 // Attempt rollback
                 var rollbackSuccess = _rollbackManager.RestoreAll(backups);
-                var rollbackStatus = rollbackSuccess ? "success" : "failed";
 
-                return CommandResponse.Failed(request.CommandId, ex.Message, rollbackStatus);
+                var errorDetails = new Dictionary<string, object>
+                {
+                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
+                    { "error_type", ex.GetType().Name }
+                };
+
+                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
             }
         }
 
@@ -137,13 +155,15 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleMoveAsync(CommandRequest request)
         {
-            if (!request.Parameters.ContainsKey("source") || !request.Parameters.ContainsKey("destination"))
+            int cmdId = request.CommandId.Value;
+
+            if (string.IsNullOrEmpty(request.SourcePath) || string.IsNullOrEmpty(request.DestPath))
             {
-                return CommandResponse.Failed(request.CommandId, "Move requires 'source' and 'destination' parameters");
+                return CommandResponse.Failed(cmdId, "Move requires source_path and dest_path");
             }
 
-            var source = request.Parameters["source"];
-            var destination = request.Parameters["destination"];
+            var source = request.SourcePath;
+            var destination = request.DestPath;
 
             List<RollbackContext> backups = null;
 
@@ -158,7 +178,11 @@ namespace FileManagerWorker
                 // Success - cleanup backups
                 _rollbackManager.CleanupBackups(backups);
 
-                return CommandResponse.Success(request.CommandId, result);
+                // Extract file count and size from result
+                int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
+                long? totalSize = result?.ContainsKey("total_size") == true ? Convert.ToInt64(result["total_size"]) : null;
+
+                return CommandResponse.Success(cmdId, "Move completed successfully", fileCount, totalSize);
             }
             catch (Exception ex)
             {
@@ -166,9 +190,14 @@ namespace FileManagerWorker
 
                 // Attempt rollback
                 var rollbackSuccess = _rollbackManager.RestoreAll(backups);
-                var rollbackStatus = rollbackSuccess ? "success" : "failed";
 
-                return CommandResponse.Failed(request.CommandId, ex.Message, rollbackStatus);
+                var errorDetails = new Dictionary<string, object>
+                {
+                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
+                    { "error_type", ex.GetType().Name }
+                };
+
+                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
             }
         }
 
@@ -177,12 +206,16 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleDeleteAsync(CommandRequest request)
         {
-            if (!request.Parameters.ContainsKey("path"))
+            int cmdId = request.CommandId.Value;
+
+            if (string.IsNullOrEmpty(request.SourcePath))
             {
-                return CommandResponse.Failed(request.CommandId, "Delete requires 'path' parameter");
+                return CommandResponse.Failed(cmdId, "Delete requires source_path");
             }
 
-            var path = request.Parameters["path"];
+            var path = request.SourcePath;
+            bool recursive = request.Parameters?.ContainsKey("recursive") == true &&
+                           Convert.ToBoolean(request.Parameters["recursive"]);
 
             RollbackContext backup = null;
 
@@ -192,12 +225,14 @@ namespace FileManagerWorker
                 backup = _rollbackManager.CreateBackup(path);
 
                 // Execute delete
-                var result = await _fileOps.DeleteAsync(path);
+                var result = await _fileOps.DeleteAsync(path, recursive);
 
                 // Success - cleanup backup
                 _rollbackManager.CleanupBackup(backup);
 
-                return CommandResponse.Success(request.CommandId, result);
+                int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
+
+                return CommandResponse.Success(cmdId, "Delete completed successfully", fileCount);
             }
             catch (Exception ex)
             {
@@ -205,9 +240,14 @@ namespace FileManagerWorker
 
                 // Attempt rollback
                 var rollbackSuccess = _rollbackManager.Restore(backup);
-                var rollbackStatus = rollbackSuccess ? "success" : "failed";
 
-                return CommandResponse.Failed(request.CommandId, ex.Message, rollbackStatus);
+                var errorDetails = new Dictionary<string, object>
+                {
+                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
+                    { "error_type", ex.GetType().Name }
+                };
+
+                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
             }
         }
 
@@ -216,12 +256,16 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleMkdirAsync(CommandRequest request)
         {
-            if (!request.Parameters.ContainsKey("path"))
+            int cmdId = request.CommandId.Value;
+
+            if (string.IsNullOrEmpty(request.SourcePath))
             {
-                return CommandResponse.Failed(request.CommandId, "Mkdir requires 'path' parameter");
+                return CommandResponse.Failed(cmdId, "Mkdir requires source_path");
             }
 
-            var path = request.Parameters["path"];
+            var path = request.SourcePath;
+            bool parents = request.Parameters?.ContainsKey("parents") != true ||
+                          Convert.ToBoolean(request.Parameters["parents"]); // Default true
 
             RollbackContext backup = null;
 
