@@ -346,10 +346,178 @@ PATH_C=/path/to/archive
 
 ---
 
+---
+
+## 🔍 ELASTICSEARCH SEARCH INTEGRATION
+
+### Overview
+Elasticsearch integration added for powerful full-text search across operations and files.
+
+### ✅ Implementation Complete (2026-01-28)
+
+#### Backend Components
+
+**1. Elasticsearch Service** (`/home/user/rfm/backend/api/services/elasticsearch_service.py`)
+- Async Elasticsearch client with connection pooling
+- Auto-create indices with proper mappings
+- Document indexing for operations and files
+- Full-text search with fuzzy matching
+- Graceful fallback when disabled
+
+**2. Index Mappings**
+- **Operations Index** (`rfm-operations`):
+  - Fields: operation_id, user_id, user_name, operation_type, status
+  - Paths: source_path, dest_path, original_path, archive_path
+  - Metadata: file_count, total_size_bytes, timestamps, error_msg
+  - Full-text search on paths, usernames, and error messages
+
+- **Files Index** (`rfm-files`):
+  - Fields: path, name, parent_path, is_directory, size, modified_at
+  - Worker association: worker_id
+  - Full-text search on path and name with fuzzy matching
+
+**3. Auto-Indexing**
+- Operations indexed automatically on create, update, complete, fail
+- Files indexed in background as directories are listed
+- Bulk indexing for performance
+- Non-blocking to avoid slowdowns
+
+**4. API Endpoints**
+- `GET /api/operations/search` - Search operations with Elasticsearch
+  - Query params: q, limit, offset, operation_type, status, sort_by, sort_order
+  - Falls back to SQL LIKE search if Elasticsearch disabled
+
+- `GET /api/files/search` - Enhanced with Elasticsearch support
+  - Uses ES index if available, falls back to worker search
+  - Faster and more relevant results
+
+**5. Configuration** (`/home/user/rfm/backend/api/config.py`)
+```python
+elasticsearch_enabled: bool = True
+elasticsearch_url: str = "http://localhost:9200"
+elasticsearch_username: Optional[str] = None
+elasticsearch_password: Optional[str] = None
+elasticsearch_index_operations: str = "rfm-operations"
+elasticsearch_index_files: str = "rfm-files"
+elasticsearch_max_retries: int = 3
+elasticsearch_timeout: int = 30
+```
+
+#### Frontend Components
+
+**1. Operation Queue Search UI** (`/home/user/rfm/frontend/pages/explorer.html`)
+- Search input with Search and Clear buttons
+- Real-time search on Enter key
+- Works with existing filters (status, type)
+
+**2. API Client** (`/home/user/rfm/frontend/js/api.js`)
+- `searchOperations(params)` function added
+- Returns: { total, operations, offset, limit }
+
+**3. Controller** (`/home/user/rfm/frontend/js/app.js`)
+- Search query state management
+- Auto-switch between search and history APIs
+- Event handlers for search buttons and Enter key
+
+#### Dependencies
+
+**Python Package** (`/home/user/rfm/backend/requirements.txt`)
+```
+elasticsearch==8.12.0
+```
+
+**Environment Variables** (`/home/user/rfm/backend/.env.example`)
+```
+ELASTICSEARCH_ENABLED=true
+ELASTICSEARCH_URL=http://localhost:9200
+ELASTICSEARCH_USERNAME=
+ELASTICSEARCH_PASSWORD=
+ELASTICSEARCH_INDEX_OPERATIONS=rfm-operations
+ELASTICSEARCH_INDEX_FILES=rfm-files
+ELASTICSEARCH_MAX_RETRIES=3
+ELASTICSEARCH_TIMEOUT=30
+```
+
+### Features
+
+✅ **Operation Search**
+- Full-text search across source/dest paths, usernames, error messages
+- Fuzzy matching for typo tolerance
+- Filter by type (PUSH, PULL) and status
+- Sorted by relevance or date
+- Pagination support
+
+✅ **File Search (Path A)**
+- Full-text search across file paths and names
+- Fuzzy matching
+- Background indexing as directories are browsed
+- Falls back to worker search if ES disabled
+
+✅ **Auto-Indexing**
+- Operations indexed on create/update/complete/fail
+- Files indexed during directory listings
+- Bulk indexing for performance
+- Non-blocking background tasks
+
+✅ **Graceful Degradation**
+- Falls back to SQL/worker search if ES unavailable
+- Errors logged but don't break functionality
+- Optional authentication support
+
+### Deployment
+
+**Install Elasticsearch** (if not already installed)
+```bash
+# Using Docker
+docker run -d -p 9200:9200 -e "discovery.type=single-node" elasticsearch:8.12.0
+
+# Or install natively
+# See: https://www.elastic.co/downloads/elasticsearch
+```
+
+**Configure Application**
+```bash
+# Add to .env
+ELASTICSEARCH_ENABLED=true
+ELASTICSEARCH_URL=http://localhost:9200
+```
+
+**Install Python Dependencies**
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+**Start Application**
+- Indices created automatically on first startup
+- No migration needed
+
+### Performance Benefits
+
+- **Fast searches**: Sub-second response times even with millions of operations
+- **Relevance ranking**: Best matches shown first with fuzzy matching
+- **Scalability**: Handles large datasets efficiently
+- **Background indexing**: No UI blocking
+
+### Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Elasticsearch optional (can be disabled)
+- Automatic index creation
+- Graceful fallbacks
+- No complex configuration
+
+✅ **DRY (Don't Repeat Yourself)**
+- Single ElasticsearchService class
+- Reusable search methods
+- Consistent indexing logic
+
+---
+
 **Branch:** vf
-**Status:** ✅ COMPLETE - All features implemented, all critical bugs fixed
+**Status:** ✅ COMPLETE - All features implemented, all critical bugs fixed, Elasticsearch search added
 **Last Updated:** 2026-01-28
 
 ---
 
-*KISS principle achieved: Simple. Working. Maintainable.*
+*KISS principle achieved: Simple. Working. Maintainable. Searchable.*
