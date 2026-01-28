@@ -227,6 +227,12 @@ class OperationService:
                 response = await self.worker_service.create_directory(
                     worker, operation.source_path, db, parents
                 )
+            elif operation.type == OperationType.PUSH:
+                # PUSH: Copy to pathB + Archive to pathC
+                response = await self._execute_push_operation(operation, worker, db)
+            elif operation.type == OperationType.PULL:
+                # PULL: Revert from pathB to original location
+                response = await self._execute_pull_operation(operation, worker, db)
             else:
                 raise OperationError(f"Unsupported operation type: {operation.type}")
 
@@ -503,3 +509,292 @@ class OperationService:
         if path not in self._operation_locks:
             self._operation_locks[path] = asyncio.Lock()
         return self._operation_locks[path]
+
+    async def create_push_operation(
+        self,
+        user: User,
+        source_dir: str,
+        worker_id: int,
+        db: AsyncSession,
+    ) -> Operation:
+        """
+        Create and execute a PUSH operation.
+
+        PUSH: Copy directory from source to PATH_B, then archive to PATH_C.
+
+        Args:
+            user: User creating the operation
+            source_dir: Source directory path (from Path A)
+            worker_id: Worker ID to execute operation
+            db: Database session
+
+        Returns:
+            Created Operation model
+
+        Raises:
+            OperationError: If PATH_B or PATH_C not configured or operation fails
+        """
+        # Validate PATH_B and PATH_C are configured
+        if not self.settings.path_b:
+            raise OperationError("PATH_B not configured. Contact administrator.")
+        if not self.settings.path_c:
+            raise OperationError("PATH_C not configured. Contact administrator.")
+
+        # Extract directory name from source path
+        import os
+        dir_name = os.path.basename(source_dir.rstrip('/\\'))
+
+        # Build destination paths
+        dest_path_b = os.path.join(self.settings.path_b, dir_name)
+        archive_path_c = os.path.join(self.settings.path_c, dir_name)
+
+        # Create operation record
+        operation = Operation(
+            user_id=user.id,
+            type=OperationType.PUSH,
+            source_path=source_dir,
+            dest_path=dest_path_b,
+            original_path=source_dir,  # Save original for PULL operations
+            archive_path=archive_path_c,
+            status=OperationStatus.PENDING,
+        )
+        db.add(operation)
+        await db.flush()
+
+        # Create operation-worker association
+        op_worker = OperationWorker(
+            operation_id=operation.id,
+            worker_id=worker_id,
+            worker_status=OperationStatus.PENDING,
+        )
+        db.add(op_worker)
+
+        await db.commit()
+        await db.refresh(operation)
+
+        logger.info(
+            f"Created PUSH operation {operation.id}: {source_dir} -> "
+            f"pathB:{dest_path_b}, archive:{archive_path_c}"
+        )
+
+        return operation
+
+    async def create_pull_operation(
+        self,
+        user: User,
+        original_operation_id: int,
+        worker_id: int,
+        db: AsyncSession,
+    ) -> Operation:
+        """
+        Create and execute a PULL operation (revert a PUSH).
+
+        PULL: Copy directory from PATH_B back to original location, then remove from PATH_B.
+
+        Args:
+            user: User creating the operation
+            original_operation_id: ID of the original PUSH operation to revert
+            worker_id: Worker ID to execute operation
+            db: Database session
+
+        Returns:
+            Created Operation model
+
+        Raises:
+            OperationError: If original operation not found or invalid
+        """
+        # Get original PUSH operation
+        stmt = select(Operation).where(Operation.id == original_operation_id)
+        result = await db.execute(stmt)
+        original_op = result.scalar_one_or_none()
+
+        if not original_op:
+            raise OperationError(f"Operation {original_operation_id} not found")
+
+        if original_op.type != OperationType.PUSH:
+            raise OperationError(
+                f"Operation {original_operation_id} is not a PUSH operation. "
+                f"Only PUSH operations can be reverted."
+            )
+
+        if not original_op.original_path:
+            raise OperationError(
+                f"Original path not found for operation {original_operation_id}. "
+                f"Cannot revert."
+            )
+
+        # Create PULL operation
+        operation = Operation(
+            user_id=user.id,
+            type=OperationType.PULL,
+            source_path=original_op.dest_path,  # Copy from PATH_B
+            dest_path=original_op.original_path,  # Back to original location
+            original_path=original_op.original_path,
+            rollback_operation_id=original_operation_id,  # Link to original PUSH
+            status=OperationStatus.PENDING,
+        )
+        db.add(operation)
+        await db.flush()
+
+        # Create operation-worker association
+        op_worker = OperationWorker(
+            operation_id=operation.id,
+            worker_id=worker_id,
+            worker_status=OperationStatus.PENDING,
+        )
+        db.add(op_worker)
+
+        await db.commit()
+        await db.refresh(operation)
+
+        logger.info(
+            f"Created PULL operation {operation.id}: revert PUSH {original_operation_id} "
+            f"from {original_op.dest_path} to {original_op.original_path}"
+        )
+
+        return operation
+
+    async def _execute_push_operation(
+        self,
+        operation: Operation,
+        worker: Worker,
+        db: AsyncSession,
+    ) -> WorkerCommandResponse:
+        """
+        Execute PUSH operation on worker.
+
+        Steps:
+        1. Copy directory from source to PATH_B
+        2. Move directory from source to PATH_C (archive)
+
+        Args:
+            operation: PUSH operation to execute
+            worker: Worker to execute on
+            db: Database session
+
+        Returns:
+            WorkerCommandResponse from worker
+        """
+        logger.info(
+            f"Executing PUSH operation {operation.id}: "
+            f"{operation.source_path} -> {operation.dest_path} + archive to {operation.archive_path}"
+        )
+
+        # Update worker status
+        await self._update_worker_status(
+            operation, worker, OperationStatus.IN_PROGRESS, db
+        )
+
+        try:
+            # Step 1: Copy to PATH_B
+            logger.info(f"PUSH Step 1: Copying {operation.source_path} to {operation.dest_path}")
+            copy_response = await self.worker_service.copy_file(
+                worker, operation.source_path, operation.dest_path, db
+            )
+
+            # Step 2: Move to PATH_C (archive)
+            logger.info(f"PUSH Step 2: Archiving {operation.source_path} to {operation.archive_path}")
+            archive_response = await self.worker_service.move_file(
+                worker, operation.source_path, operation.archive_path, db
+            )
+
+            # Combine results
+            total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
+            total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
+
+            # Update operation metadata
+            operation.file_count = total_files
+            operation.total_size_bytes = total_size
+
+            # Update worker status
+            await self._update_worker_status(
+                operation, worker, OperationStatus.COMPLETED, db
+            )
+
+            logger.info(f"PUSH operation {operation.id} completed: {total_files} files, {total_size} bytes")
+
+            # Return combined response
+            return WorkerCommandResponse(
+                status="success",
+                message=f"PUSH completed: copied to {operation.dest_path} and archived to {operation.archive_path}",
+                file_count=total_files,
+                total_size_bytes=total_size,
+            )
+
+        except WorkerCommunicationError as exc:
+            await self._update_worker_status(
+                operation, worker, OperationStatus.FAILED, db, str(exc)
+            )
+            raise OperationError(f"PUSH operation failed: {exc}")
+
+    async def _execute_pull_operation(
+        self,
+        operation: Operation,
+        worker: Worker,
+        db: AsyncSession,
+    ) -> WorkerCommandResponse:
+        """
+        Execute PULL operation on worker.
+
+        Steps:
+        1. Copy directory from PATH_B back to original location
+        2. Delete directory from PATH_B
+
+        Args:
+            operation: PULL operation to execute
+            worker: Worker to execute on
+            db: Database session
+
+        Returns:
+            WorkerCommandResponse from worker
+        """
+        logger.info(
+            f"Executing PULL operation {operation.id}: "
+            f"{operation.source_path} -> {operation.dest_path}"
+        )
+
+        # Update worker status
+        await self._update_worker_status(
+            operation, worker, OperationStatus.IN_PROGRESS, db
+        )
+
+        try:
+            # Step 1: Copy from PATH_B to original location
+            logger.info(f"PULL Step 1: Copying {operation.source_path} to {operation.dest_path}")
+            copy_response = await self.worker_service.copy_file(
+                worker, operation.source_path, operation.dest_path, db
+            )
+
+            # Step 2: Delete from PATH_B
+            logger.info(f"PULL Step 2: Deleting {operation.source_path} from PATH_B")
+            delete_response = await self.worker_service.delete_file(
+                worker, operation.source_path, db, recursive=True
+            )
+
+            # Update operation metadata
+            operation.file_count = copy_response.file_count
+            operation.total_size_bytes = copy_response.total_size_bytes
+
+            # Update worker status
+            await self._update_worker_status(
+                operation, worker, OperationStatus.COMPLETED, db
+            )
+
+            logger.info(
+                f"PULL operation {operation.id} completed: "
+                f"{copy_response.file_count} files restored, {operation.source_path} removed from PATH_B"
+            )
+
+            # Return response
+            return WorkerCommandResponse(
+                status="success",
+                message=f"PULL completed: restored to {operation.dest_path} and removed from PATH_B",
+                file_count=copy_response.file_count,
+                total_size_bytes=copy_response.total_size_bytes,
+            )
+
+        except WorkerCommunicationError as exc:
+            await self._update_worker_status(
+                operation, worker, OperationStatus.FAILED, db, str(exc)
+            )
+            raise OperationError(f"PULL operation failed: {exc}")

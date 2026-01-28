@@ -226,6 +226,20 @@ class FileMkdirRequest(BaseModel):
     parents: bool = True
 
 
+class FilePushRequest(BaseModel):
+    """File push operation request (VF redesign)."""
+
+    source_path: str = Field(..., min_length=1, description="Source directory path from Path A")
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+
+
+class FilePullRequest(BaseModel):
+    """File pull operation request (VF redesign)."""
+
+    operation_id: int = Field(..., description="ID of the original PUSH operation to revert")
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+
+
 # =============================================================================
 # Operation Schemas
 # =============================================================================

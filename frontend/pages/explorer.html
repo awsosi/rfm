@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Explorer - File Manager</title>
+    <title>File Explorer - File Manager (VF Redesign)</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/responsive.css">
 </head>
-<body class="explorer-page">
+<body class="explorer-page vf-redesign">
     <!-- Header -->
     <header class="app-header">
         <div class="header-left">
@@ -24,12 +24,11 @@
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="main-content">
-        <!-- Dual Pane Explorer -->
-        <div class="dual-pane-container">
-            <!-- Left Pane (Path A) -->
-            <div class="pane pane-left" id="pane-a">
+    <!-- Main Content - VF Redesign: Single Pane + Operation Queue -->
+    <main class="main-content vf-layout">
+        <div class="vf-container">
+            <!-- Path A Pane (Single Pane) -->
+            <div class="pane pane-single" id="pane-a">
                 <div class="pane-header">
                     <h2>Path A</h2>
                     <div class="pane-controls">
@@ -43,7 +42,7 @@
                 </div>
 
                 <div class="search-container">
-                    <input type="text" class="search-input" id="search-a" placeholder="Search files...">
+                    <input type="text" class="search-input" id="search-a" placeholder="Search directories...">
                     <button class="btn btn-sm" id="search-btn-a">Search</button>
                 </div>
 
@@ -51,95 +50,73 @@
                     <table class="file-list" id="file-list-a">
                         <thead>
                             <tr>
-                                <th class="col-select"><input type="checkbox" id="select-all-a"></th>
-                                <th class="col-name">Name</th>
+                                <th class="col-select"><input type="checkbox" id="select-all-a" disabled title="Select directories only"></th>
+                                <th class="col-name">Name (Directories Only)</th>
                                 <th class="col-size">Size</th>
                                 <th class="col-modified">Modified</th>
                             </tr>
                         </thead>
                         <tbody id="file-list-body-a">
-                            <!-- Files will be loaded here -->
+                            <!-- Directories will be loaded here -->
                         </tbody>
                     </table>
                     <div class="loading-indicator hidden" id="loading-a">Loading...</div>
-                    <div class="no-files hidden" id="no-files-a">No files found</div>
+                    <div class="no-files hidden" id="no-files-a">No directories found</div>
                     <button class="btn btn-secondary load-more hidden" id="load-more-a">Load More</button>
                 </div>
             </div>
 
-            <!-- Right Pane (Path B) -->
-            <div class="pane pane-right" id="pane-b">
-                <div class="pane-header">
-                    <h2>Path B</h2>
-                    <div class="pane-controls">
-                        <button class="btn-icon" id="refresh-b" title="Refresh">&#x21bb;</button>
+            <!-- Action Buttons (Between Panes) -->
+            <div class="action-buttons-container">
+                <button class="btn btn-primary btn-push" id="push-btn" title="Copy to PATH_B and archive to PATH_C" disabled>
+                    Push &gt;
+                </button>
+                <button class="btn btn-secondary btn-pull" id="pull-btn" title="Revert selected operation from Operation Queue" disabled>
+                    &lt; Pull
+                </button>
+            </div>
+
+            <!-- Operation Queue (Right Side) -->
+            <div class="operation-queue-panel" id="operation-queue-panel">
+                <div class="queue-header">
+                    <h2>Operation Queue</h2>
+                    <div class="queue-controls">
+                        <button class="btn-icon" id="refresh-queue" title="Refresh Queue">&#x21bb;</button>
+                        <select id="queue-filter-status" class="filter-select" title="Filter by status">
+                            <option value="">All Statuses</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="FAILED">Failed</option>
+                        </select>
+                        <select id="queue-filter-type" class="filter-select" title="Filter by type">
+                            <option value="">All Types</option>
+                            <option value="PUSH">Push</option>
+                            <option value="PULL">Pull</option>
+                        </select>
                     </div>
                 </div>
 
-                <div class="breadcrumb-container">
-                    <input type="text" class="breadcrumb-input" id="path-input-b" placeholder="/path/to/directory">
-                    <button class="btn btn-sm" id="path-go-b">Go</button>
-                </div>
-
-                <div class="search-container">
-                    <input type="text" class="search-input" id="search-b" placeholder="Search files...">
-                    <button class="btn btn-sm" id="search-btn-b">Search</button>
-                </div>
-
-                <div class="file-list-container">
-                    <table class="file-list" id="file-list-b">
+                <div class="queue-list-container">
+                    <table class="queue-table" id="queue-table">
                         <thead>
                             <tr>
-                                <th class="col-select"><input type="checkbox" id="select-all-b"></th>
-                                <th class="col-name">Name</th>
-                                <th class="col-size">Size</th>
-                                <th class="col-modified">Modified</th>
+                                <th class="col-select"><input type="checkbox" id="select-operation" title="Select operation for Pull"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-type">Type</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-directory">Directory</th>
+                                <th class="col-user">User</th>
+                                <th class="col-timestamp">Timestamp</th>
                             </tr>
                         </thead>
-                        <tbody id="file-list-body-b">
-                            <!-- Files will be loaded here -->
+                        <tbody id="queue-table-body">
+                            <!-- Operations will be loaded here -->
                         </tbody>
                     </table>
-                    <div class="loading-indicator hidden" id="loading-b">Loading...</div>
-                    <div class="no-files hidden" id="no-files-b">No files found</div>
-                    <button class="btn btn-secondary load-more hidden" id="load-more-b">Load More</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Operations Panel -->
-        <div class="operations-panel">
-            <div class="operations-buttons">
-                <button class="btn btn-primary" id="copy-a-to-b" title="Copy selected files from A to B">
-                    Copy A &rarr; B
-                </button>
-                <button class="btn btn-primary" id="move-a-to-b" title="Move selected files from A to B">
-                    Move A &rarr; B
-                </button>
-                <button class="btn btn-primary" id="copy-b-to-a" title="Copy selected files from B to A">
-                    Copy B &rarr; A
-                </button>
-                <button class="btn btn-primary" id="move-b-to-a" title="Move selected files from B to A">
-                    Move B &rarr; A
-                </button>
-                <button class="btn btn-secondary" id="new-folder-btn">New Folder</button>
-                <button class="btn btn-danger" id="delete-btn">Delete</button>
-            </div>
-
-            <div class="operation-status" id="operation-status">
-                <div class="status-message" id="status-message"></div>
-                <div class="progress-container hidden" id="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
-                    <div class="progress-text" id="progress-text">0%</div>
-                </div>
-            </div>
-
-            <div class="operation-queue" id="operation-queue">
-                <h3>Operation Queue</h3>
-                <div class="queue-list" id="queue-list">
-                    <p class="queue-empty">No operations in queue</p>
+                    <div class="loading-indicator hidden" id="loading-queue">Loading operations...</div>
+                    <div class="no-operations hidden" id="no-operations">No operations in history</div>
+                    <button class="btn btn-secondary load-more hidden" id="load-more-queue">Load More</button>
                 </div>
             </div>
         </div>
@@ -149,11 +126,7 @@
     <div class="context-menu hidden" id="context-menu">
         <ul>
             <li data-action="open">Open</li>
-            <li data-action="rename">Rename</li>
-            <li data-action="copy">Copy</li>
-            <li data-action="move">Move</li>
-            <li class="separator"></li>
-            <li data-action="delete" class="danger">Delete</li>
+            <li data-action="push">Push &gt;</li>
         </ul>
     </div>
 
@@ -198,14 +171,6 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="pane-layout">Pane Layout:</label>
-                            <select id="pane-layout" name="pane_layout" class="form-control">
-                                <option value="horizontal">Horizontal (Side by Side)</option>
-                                <option value="vertical">Vertical (Top and Bottom)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
                             <label for="show-hidden-files">
                                 <input type="checkbox" id="show-hidden-files" name="show_hidden_files">
                                 Show hidden files
@@ -245,7 +210,7 @@
                         <div class="form-group">
                             <label for="remember-last-paths">
                                 <input type="checkbox" id="remember-last-paths" name="remember_last_paths">
-                                Remember last visited paths
+                                Remember last visited path
                             </label>
                         </div>
                     </div>
