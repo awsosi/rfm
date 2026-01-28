@@ -264,9 +264,21 @@ namespace FileManagerWorker
             var recursive = request.Parameters.ContainsKey("recursive") &&
                            bool.TryParse(request.Parameters["recursive"], out var rec) && rec;
 
+            // Parse pagination parameters
+            var offset = 0;
+            var limit = 0;
+            if (request.Parameters.ContainsKey("offset") && int.TryParse(request.Parameters["offset"], out var off))
+            {
+                offset = off;
+            }
+            if (request.Parameters.ContainsKey("limit") && int.TryParse(request.Parameters["limit"], out var lim))
+            {
+                limit = lim;
+            }
+
             try
             {
-                var result = await _fileOps.ListAsync(path, recursive);
+                var result = await _fileOps.ListAsync(path, recursive, offset, limit);
                 return CommandResponse.Success(request.CommandId, result);
             }
             catch (Exception ex)
@@ -383,6 +395,7 @@ namespace FileManagerWorker
                 {
                     config["path_a_prefix"] = _fileOps.PathAPrefix;
                     config["path_b_prefix"] = _fileOps.PathBPrefix;
+                    config["path_c_prefix"] = _fileOps.PathCPrefix;
                 }
                 catch (Exception ex)
                 {
@@ -426,6 +439,14 @@ namespace FileManagerWorker
                     Logger.Info("Updating PathBPrefix to: {0}", newPath);
                     _fileOps.PathBPrefix = newPath;
                     updated.Add("path_b_prefix");
+                }
+
+                if (request.Parameters.ContainsKey("path_c_prefix"))
+                {
+                    var newPath = request.Parameters["path_c_prefix"];
+                    Logger.Info("Updating PathCPrefix to: {0}", newPath);
+                    _fileOps.PathCPrefix = newPath;
+                    updated.Add("path_c_prefix");
                 }
 
                 // TODO: Handle other configuration parameters (polling_interval, etc.)

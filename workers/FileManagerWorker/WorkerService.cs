@@ -60,7 +60,7 @@ namespace FileManagerWorker
 	                : CertificateManager.CertStoreMode.LocalMachine;
 				Logger.Info("Using certificate store: {0}", _certManager.StoreMode);
 				_apiClient = new ApiClient(config.ApiUrl, _certManager);
-                _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix);
+                _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix, config.PathCPrefix);
                 _rollbackManager = new RollbackManager();
                 _commandHandler = new CommandHandler(_fileOps, _rollbackManager, _apiClient);
 
