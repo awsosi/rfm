@@ -20,7 +20,8 @@ import {
     startPolling,
     pushOperation,
     pullOperation,
-    getOperationHistory
+    getOperationHistory,
+    searchOperations
 } from './api.js';
 import {
     renderFileList,
@@ -82,7 +83,8 @@ const state = {
         filters: {
             status: null,
             type: null
-        }
+        },
+        searchQuery: null
     },
     // VF Redesign: Worker ID (for single worker operations)
     workerId: 1 // Default to first worker, can be updated from settings
@@ -918,6 +920,37 @@ function setupVFRedesignControls() {
         });
     }
 
+    // Queue search button
+    const queueSearchBtn = document.getElementById('queue-search-btn');
+    const queueSearchInput = document.getElementById('queue-search-input');
+    if (queueSearchBtn && queueSearchInput) {
+        queueSearchBtn.addEventListener('click', async () => {
+            state.operationQueue.searchQuery = queueSearchInput.value.trim();
+            state.operationQueue.offset = 0;
+            await loadOperationHistory();
+        });
+
+        // Also trigger search on Enter key
+        queueSearchInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                state.operationQueue.searchQuery = queueSearchInput.value.trim();
+                state.operationQueue.offset = 0;
+                await loadOperationHistory();
+            }
+        });
+    }
+
+    // Queue clear search button
+    const queueClearSearchBtn = document.getElementById('queue-clear-search-btn');
+    if (queueClearSearchBtn && queueSearchInput) {
+        queueClearSearchBtn.addEventListener('click', async () => {
+            queueSearchInput.value = '';
+            state.operationQueue.searchQuery = null;
+            state.operationQueue.offset = 0;
+            await loadOperationHistory();
+        });
+    }
+
     // File selection change handler to update Push button state
     const fileListA = document.getElementById('file-list-body-a');
     if (fileListA) {
@@ -946,14 +979,32 @@ async function loadOperationHistory(append = false) {
     showQueueLoading();
 
     try {
-        const filters = {
-            limit: 100,
-            offset: append ? state.operationQueue.offset : 0,
-            operation_type: state.operationQueue.filters.type,
-            status: state.operationQueue.filters.status
-        };
+        const hasSearchQuery = state.operationQueue.searchQuery && state.operationQueue.searchQuery.trim() !== '';
+        let operations;
 
-        const operations = await getOperationHistory(filters);
+        if (hasSearchQuery) {
+            // Use search API with Elasticsearch
+            const searchParams = {
+                q: state.operationQueue.searchQuery,
+                limit: 100,
+                offset: append ? state.operationQueue.offset : 0,
+                operation_type: state.operationQueue.filters.type,
+                status: state.operationQueue.filters.status
+            };
+
+            const result = await searchOperations(searchParams);
+            operations = result.operations;
+        } else {
+            // Use regular history API
+            const filters = {
+                limit: 100,
+                offset: append ? state.operationQueue.offset : 0,
+                operation_type: state.operationQueue.filters.type,
+                status: state.operationQueue.filters.status
+            };
+
+            operations = await getOperationHistory(filters);
+        }
 
         if (append) {
             state.operationQueue.operations.push(...operations);

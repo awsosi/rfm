@@ -23,6 +23,7 @@ from api.services.worker_service import (
     WorkerCommunicationError,
     get_worker_by_id,
 )
+from api.services.elasticsearch_service import get_elasticsearch_service
 from models import (
     Operation,
     OperationType,
@@ -58,6 +59,51 @@ class OperationService:
         self.settings = settings
         self.worker_service = worker_service
         self._operation_locks: dict[str, asyncio.Lock] = {}
+
+    async def _index_operation_in_elasticsearch(
+        self, operation: Operation, user_name: Optional[str] = None, db: Optional[AsyncSession] = None
+    ) -> None:
+        """
+        Index operation in Elasticsearch.
+
+        Args:
+            operation: Operation to index
+            user_name: User name (optional, will be fetched if not provided)
+            db: Database session (optional, needed to fetch user_name if not provided)
+        """
+        try:
+            es_service = await get_elasticsearch_service()
+
+            # Get user_name if not provided
+            if not user_name and db:
+                stmt = select(User).where(User.id == operation.user_id)
+                result = await db.execute(stmt)
+                user = result.scalar_one_or_none()
+                user_name = user.username if user else None
+
+            # Prepare operation data for Elasticsearch
+            operation_data = {
+                "operation_id": operation.id,
+                "user_id": operation.user_id,
+                "user_name": user_name,
+                "operation_type": operation.type.value if operation.type else None,
+                "status": operation.status.value if operation.status else None,
+                "source_path": operation.source_path,
+                "dest_path": operation.dest_path,
+                "original_path": operation.original_path,
+                "archive_path": operation.archive_path,
+                "error_msg": operation.error_msg,
+                "file_count": operation.file_count,
+                "total_size_bytes": operation.total_size_bytes,
+                "created_at": operation.created_at.isoformat() if operation.created_at else None,
+                "started_at": operation.started_at.isoformat() if operation.started_at else None,
+                "completed_at": operation.completed_at.isoformat() if operation.completed_at else None,
+            }
+
+            await es_service.index_operation(operation_data)
+        except Exception as e:
+            # Log error but don't fail the operation
+            logger.warning(f"Failed to index operation {operation.id} in Elasticsearch: {e}")
 
     async def create_operation(
         self,
@@ -113,6 +159,9 @@ class OperationService:
             f"from {source_path} with {len(worker_ids)} worker(s)"
         )
 
+        # Index in Elasticsearch
+        await self._index_operation_in_elasticsearch(operation, user.username, db)
+
         return operation
 
     async def execute_operation(
@@ -140,6 +189,9 @@ class OperationService:
             operation.started_at = datetime.now(timezone.utc)
             await db.commit()
 
+            # Update in Elasticsearch
+            await self._index_operation_in_elasticsearch(operation, None, db)
+
             try:
                 # Get workers
                 workers = await self._get_operation_workers(operation, db)
@@ -166,6 +218,9 @@ class OperationService:
 
                 logger.info(f"Operation {operation.id} completed successfully")
 
+                # Update in Elasticsearch
+                await self._index_operation_in_elasticsearch(operation, None, db)
+
                 return operation
 
             except Exception as exc:
@@ -176,6 +231,9 @@ class OperationService:
                 await db.commit()
 
                 logger.error(f"Operation {operation.id} failed: {exc}")
+
+                # Update in Elasticsearch
+                await self._index_operation_in_elasticsearch(operation, None, db)
 
                 # Attempt automatic rollback if enabled
                 if self.settings.enable_auto_rollback:
@@ -577,6 +635,9 @@ class OperationService:
             f"pathB:{dest_path_b}, archive:{archive_path_c}"
         )
 
+        # Index in Elasticsearch
+        await self._index_operation_in_elasticsearch(operation, user.username, db)
+
         return operation
 
     async def create_pull_operation(
@@ -651,6 +712,9 @@ class OperationService:
             f"Created PULL operation {operation.id}: revert PUSH {original_operation_id} "
             f"from {original_op.dest_path} to {original_op.original_path}"
         )
+
+        # Index in Elasticsearch
+        await self._index_operation_in_elasticsearch(operation, user.username, db)
 
         return operation
 

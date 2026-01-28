@@ -220,6 +220,20 @@ export async function getOperationHistory(filters = {}) {
 }
 
 /**
+ * Search operations using Elasticsearch
+ * @param {Object} params - Search parameters { q, limit, offset, operation_type, status, sort_by, sort_order }
+ * @returns {Promise<Object>} - Returns { total, operations, offset, limit }
+ */
+export async function searchOperations(params = {}) {
+    const { q = '', limit = 50, offset = 0, operation_type = null, status = null, sort_by = 'created_at', sort_order = 'desc' } = params;
+    let queryParams = `?limit=${limit}&offset=${offset}&sort_by=${sort_by}&sort_order=${sort_order}`;
+    if (q) queryParams += `&q=${encodeURIComponent(q)}`;
+    if (operation_type) queryParams += `&operation_type=${operation_type}`;
+    if (status) queryParams += `&status=${status}`;
+    return await apiRequest(`/api/operations/search${queryParams}`);
+}
+
+/**
  * Get list of operations (legacy - kept for compatibility)
  * @param {string} status - Filter by status (optional)
  * @returns {Promise<Array>}
