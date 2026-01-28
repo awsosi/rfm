@@ -158,6 +158,26 @@ Complete application makeover with simplified UI and new operation flow:
 
 ## 🔧 RECENT FIXES (2026-01-28)
 
+### Issue: Worker Registration Missing Import ✅ FIXED
+**Problem:** Worker registration failed with 500 Internal Server Error:
+```
+NameError: name 'timezone' is not defined
+File "/app/backend/api/app.py", line 796, in register_worker
+    last_heartbeat=datetime.now(timezone.utc),
+                                ^^^^^^^^
+```
+
+**Root Cause**: The `register_worker` endpoint used `timezone.utc` at lines 780 and 796, but `timezone` was not imported at the module level.
+
+**Solution**: Added `from datetime import datetime, timezone` import at the top of `app.py`.
+
+**Files Modified**:
+- `/home/user/rfm/backend/api/app.py` (line 10)
+
+**Impact**: Workers can now successfully register with the API server.
+
+---
+
 ### Issue: API Container Startup Failure ✅ FIXED
 **Problem:** API container marked as unhealthy and failed to start with ImportError:
 ```
