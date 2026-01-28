@@ -113,6 +113,16 @@ class Settings(BaseSettings):
     global_path_a_prefix: str = ""
     global_path_b_prefix: str = ""
 
+    # VF Redesign: Preset paths for Push/Pull operations
+    path_b: Optional[str] = Field(
+        default=None,
+        description="Destination path for PUSH operations (admin-configurable)",
+    )
+    path_c: Optional[str] = Field(
+        default=None,
+        description="Archive path for PUSH operations (admin-configurable)",
+    )
+
     @field_validator("database_url", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

@@ -52,6 +52,8 @@ class OperationType(str, PyEnum):
     MOVE = "MOVE"
     DELETE = "DELETE"
     MKDIR = "MKDIR"
+    PUSH = "PUSH"  # Copy to pathB + archive to pathC
+    PULL = "PULL"  # Revert from pathB to original location
 
 
 class OperationStatus(str, PyEnum):
@@ -222,6 +224,8 @@ class Operation(Base):
     type = Column(Enum(OperationType), nullable=False, index=True)
     source_path = Column(Text, nullable=False)
     dest_path = Column(Text, nullable=True)
+    original_path = Column(Text, nullable=True)  # Original location for PULL operations
+    archive_path = Column(Text, nullable=True)  # Archive location for PUSH operations
 
     # Status tracking
     status = Column(

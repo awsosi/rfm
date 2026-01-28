@@ -364,6 +364,161 @@ async def create_directory(
     return OperationResponse.model_validate(operation)
 
 
+@app.post("/api/operations/push", response_model=OperationResponse)
+async def push_operation(
+    request_data: FilePushRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    PUSH operation: Copy directory to PATH_B and archive to PATH_C.
+
+    VF Redesign: This replaces the dual-pane copy operation.
+    """
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    try:
+        # Create and execute PUSH operation
+        operation = await operation_service.create_push_operation(
+            user=current_user,
+            source_dir=request_data.source_path,
+            worker_id=request_data.worker_id,
+            db=db,
+        )
+
+        # Log operation
+        await AuditLogger.log_operation(
+            user_id=current_user.id,
+            operation_id=operation.id,
+            action="push",
+            details={
+                "source": request_data.source_path,
+                "path_b": operation.dest_path,
+                "path_c": operation.archive_path,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        # Execute operation
+        operation = await operation_service.execute_operation(operation, db)
+
+        # Broadcast to WebSocket clients
+        from api.websocket_manager import ws_manager
+        await ws_manager.broadcast(
+            "operation",
+            {
+                "type": "operation_update",
+                "operation_id": operation.id,
+                "status": operation.status.value,
+                "user": current_user.username,
+            }
+        )
+
+        return OperationResponse.model_validate(operation)
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/operations/pull", response_model=OperationResponse)
+async def pull_operation(
+    request_data: FilePullRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    PULL operation: Revert PUSH operation by copying from PATH_B to original location.
+
+    VF Redesign: Any authenticated user can revert any operation.
+    """
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    try:
+        # Create and execute PULL operation
+        operation = await operation_service.create_pull_operation(
+            user=current_user,
+            original_operation_id=request_data.operation_id,
+            worker_id=request_data.worker_id,
+            db=db,
+        )
+
+        # Log operation
+        await AuditLogger.log_operation(
+            user_id=current_user.id,
+            operation_id=operation.id,
+            action="pull",
+            details={
+                "original_operation_id": request_data.operation_id,
+                "restore_to": operation.dest_path,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        # Execute operation
+        operation = await operation_service.execute_operation(operation, db)
+
+        # Broadcast to WebSocket clients
+        from api.websocket_manager import ws_manager
+        await ws_manager.broadcast(
+            "operation",
+            {
+                "type": "operation_update",
+                "operation_id": operation.id,
+                "status": operation.status.value,
+                "user": current_user.username,
+            }
+        )
+
+        return OperationResponse.model_validate(operation)
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/operations/history", response_model=List[OperationResponse])
+async def get_operations_history(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 100,
+    offset: int = 0,
+    operation_type: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    """
+    Get operation history for all users (VF redesign).
+
+    Returns paginated list of all operations with filters.
+    """
+    try:
+        # Build query
+        query = select(Operation).order_by(desc(Operation.created_at))
+
+        # Apply filters
+        if operation_type:
+            query = query.where(Operation.type == operation_type.upper())
+        if status:
+            query = query.where(Operation.status == status.upper())
+
+        # Pagination
+        query = query.limit(limit).offset(offset)
+
+        result = await db.execute(query)
+        operations = result.scalars().all()
+
+        return [OperationResponse.model_validate(op) for op in operations]
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # =============================================================================
 # Workers
 # =============================================================================

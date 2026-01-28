@@ -2,713 +2,350 @@
 
 > **Projekt:** System zarządzania operacjami plikowymi z architekturą mikroserwisową
 >
-> **Status:** MVP w trakcie rozwoju
+> **Status:** REDESIGN - VF Branch - Complete Application Makeover
 >
-> **Ostatnia aktualizacja:** 2026-01-26
+> **Ostatnia aktualizacja:** 2026-01-28
 
 ---
 
-## 📋 Spis Treści
+## 🚨 REDESIGN PLAN - VF BRANCH (IN PROGRESS)
 
-- [Legenda](#legenda)
-- [Status Ogólny](#status-ogólny)
-- [Backend - API & Core](#backend---api--core)
-- [Frontend - WebUI](#frontend---webui)
-- [Workers - Usługi Windows](#workers---usługi-windows)
-- [Baza Danych](#baza-danych)
-- [Infrastruktura & DevOps](#infrastruktura--devops)
-- [Bezpieczeństwo](#bezpieczeństwo)
-- [Logowanie & Audyt](#logowanie--audyt)
-- [Dokumentacja](#dokumentacja)
-- [Testy](#testy)
-- [Optymalizacja & Performance](#optymalizacja--performance)
-- [Przyszłe Funkcjonalności](#przyszłe-funkcjonalności)
+### Overview
+Complete application makeover with simplified UI and new operation flow:
+- **Single pane (Path A) + Operation Queue** layout
+- **Directory-only operations** (no single file selections)
+- **Single worker architecture** (simplified from multi-worker)
+- **Push/Pull operations** with automatic archiving
+- **Persistent operation history** with real-time status
 
----
-
-## Legenda
-
-- ✅ **Zrobione** - Feature zaimplementowany i przetestowany
-- 🚧 **W trakcie** - Feature w trakcie implementacji
-- 📝 **Zaplanowane** - Feature zaplanowany do implementacji
-- ⚠️ **Wymaga uwagi** - Feature z problemami lub wymagający poprawek
-- 🔄 **Do refaktoryzacji** - Feature wymaga przepisania/poprawy
+### New Operation Flow
+1. **User selects directory** in Path A pane
+2. **Clicks Push >** button
+3. **System copies** directory from Path A to preset Path B (admin-configured)
+4. **System archives** original directory from Path A to preset Path C (admin-configured)
+5. **Everything logged** with full audit trail
+6. **Operation appears** in Operation Queue with real-time status
+7. **Operation persists** indefinitely in history
+8. **< Pull button** allows any authenticated user to revert (copy from Path B to original location, remove from Path B)
 
 ---
 
-## Status Ogólny
+## 📋 REDESIGN TASKS - VF BRANCH
 
-### Moduły Główne
+### ✅ Phase 0: Planning & Exploration
+- ✅ Explore codebase structure
+- ✅ Understand current architecture
+- ✅ Create redesign TODO
 
+### 🚧 Phase 1: Backend - Models & Database
+- 📝 **Update models.py**
+  - Add PUSH and PULL to OperationType enum
+  - Add original_path field to Operation model (to track source for Pull)
+  - Ensure operations are never deleted (only marked as complete/failed)
+  - Add archive_path field to Operation model
+- 📝 **Create database migration (004_redesign_vf.py)**
+  - Add new operation types (PUSH, PULL)
+  - Add original_path column to operations table
+  - Add archive_path column to operations table
+- 📝 **Update config.py**
+  - Add PATH_B setting (destination path)
+  - Add PATH_C setting (archive path)
+  - Both should be overridable by admin settings
+
+### 🚧 Phase 2: Backend - Business Logic
+- 📝 **Create operation_service_v2.py** (or update existing)
+  - Implement create_push_operation(user_id, source_dir, worker_id)
+    - Validate source is a directory
+    - Get PATH_B and PATH_C from config
+    - Create operation record with PUSH type
+    - Execute: copy source_dir to PATH_B, move source_dir to PATH_C
+    - Track both operations (copy + archive)
+    - Real-time status updates via WebSocket
+  - Implement create_pull_operation(user_id, operation_id)
+    - Get original operation details
+    - Validate operation exists and is PUSH type
+    - Create new operation record with PULL type
+    - Execute: copy from PATH_B to original_path, delete from PATH_B
+    - Link Pull operation to original Push operation
+- 📝 **Update worker_service.py**
+  - Add support for PUSH command (copy + move)
+  - Add support for PULL command (copy + delete)
+  - Ensure single worker handles all operations
+  - Remove multi-worker logic
+
+### 🚧 Phase 3: Backend - API Endpoints
+- 📝 **Update app.py or create routes/operations.py**
+  - POST /api/operations/push
+    - Request: { source_path: string (directory only) }
+    - Response: { operation_id, status, message }
+  - POST /api/operations/pull
+    - Request: { operation_id: string }
+    - Response: { operation_id, status, message }
+  - GET /api/operations/history
+    - Return all operations (paginated)
+    - Include: id, type, status, username, timestamp, paths
+    - Filter by user, type, status, date range
+  - GET /api/operations/{id}/status
+    - Real-time operation status
+- 📝 **Update admin endpoints**
+  - Add PATH_B and PATH_C to admin config management
+  - Restrict PATH_B/PATH_C changes to admin users only
+
+### 🚧 Phase 4: Backend - Worker Updates
+- 📝 **Update workers/FileManagerWorker/CommandHandler.cs**
+  - Add 'push' command handler
+    - Copy directory recursively
+    - Move original directory to archive location
+    - Return detailed status (files copied, size, errors)
+  - Add 'pull' command handler
+    - Copy directory from PATH_B to original location
+    - Delete directory from PATH_B
+    - Return detailed status
+- 📝 **Update workers/FileManagerWorker/FileOperations.cs**
+  - Ensure directory-only validation
+  - Add archive operation support
+  - Improve error handling for multi-step operations
+
+### 🚧 Phase 5: Frontend - HTML Structure
+- 📝 **Update frontend/pages/explorer.html**
+  - Remove Path B pane (entire right side)
+  - Keep Path A pane (left side, expand to ~40% width)
+  - Add Operation Queue section (right side, ~55% width)
+  - Add button container in the middle (~5% width)
+  - Remove ALL existing operation buttons (copy, move, delete, mkdir)
+  - Add only:
+    - Button: "Push >" (top)
+    - Button: "< Pull" (below Push)
+  - Update Operation Queue section:
+    - Table with columns: ID, Type, Status, Directory, User, Timestamp, Actions
+    - Real-time status indicators (pending, in_progress, completed, failed)
+    - Color coding for statuses
+    - Expandable details for each operation
+
+### 🚧 Phase 6: Frontend - CSS Styling
+- 📝 **Update frontend/css/style.css**
+  - New layout: .pane-a (40%) | .button-container (5%) | .operation-queue (55%)
+  - Center button container vertically
+  - Style Push > button (primary action, blue/green)
+  - Style < Pull button (secondary action, orange/yellow)
+  - Disable buttons when invalid selection
+  - Style operation queue table (modern, clean)
+  - Status indicators (colors, icons, animations)
+  - Responsive design adjustments
+
+### 🚧 Phase 7: Frontend - JavaScript
+- 📝 **Update frontend/js/app.js**
+  - Remove pane B state management
+  - Add operation history state
+  - Implement Push operation flow:
+    - Validate directory selection
+    - Show confirmation dialog
+    - Call POST /api/operations/push
+    - Update UI with operation status
+  - Implement Pull operation flow:
+    - Get selected operation from queue
+    - Show confirmation dialog
+    - Call POST /api/operations/pull
+    - Update UI with operation status
+  - Add WebSocket listener for operation updates
+  - Auto-refresh operation queue on updates
+- 📝 **Update frontend/js/ui.js**
+  - Remove Path B rendering functions
+  - Add renderOperationQueue() function
+  - Add renderOperationStatus() function
+  - Add updateOperationInQueue() function
+  - Implement directory-only selection in file list
+  - Disable file selection (only directories)
+  - Update button states based on selection
+- 📝 **Update frontend/js/api.js**
+  - Add pushOperation(sourcePath) function
+  - Add pullOperation(operationId) function
+  - Add getOperationHistory(filters) function
+  - Add getOperationStatus(operationId) function
+  - Update WebSocket topic subscriptions
+
+### 🚧 Phase 8: Frontend - Admin Panel
+- 📝 **Update frontend/pages/admin.html**
+  - Add PATH_B configuration field (admin only)
+  - Add PATH_C configuration field (admin only)
+  - Show warning that changing paths affects new operations only
+- 📝 **Update frontend/js/admin-system.js**
+  - Add PATH_B and PATH_C to configuration management
+  - Validate paths before saving
+  - Show confirmation dialog for path changes
+
+### 🚧 Phase 9: Configuration & Environment
+- 📝 **Update backend/.env.example**
+  - Add PATH_B=/path/to/destination (default destination for Push)
+  - Add PATH_C=/path/to/archive (default archive location)
+- 📝 **Update root .env.example**
+  - Document PATH_B and PATH_C variables
+
+### 🚧 Phase 10: Testing & Validation
+- 📝 **Test Push operation**
+  - Select directory in Path A
+  - Click Push >
+  - Verify directory copied to PATH_B
+  - Verify directory moved to PATH_C
+  - Verify operation appears in queue
+  - Verify real-time status updates
+- 📝 **Test Pull operation**
+  - Select completed Push operation
+  - Click < Pull
+  - Verify directory copied from PATH_B to original location
+  - Verify directory removed from PATH_B
+  - Verify operation appears in queue
+- 📝 **Test edge cases**
+  - Invalid directory selection
+  - Missing PATH_B or PATH_C configuration
+  - Insufficient permissions
+  - Network errors
+  - Worker offline
+- 📝 **Test admin configuration**
+  - Change PATH_B and PATH_C as admin
+  - Verify new operations use new paths
+  - Verify non-admin users cannot change paths
+
+### 🚧 Phase 11: Documentation
+- 📝 **Update README.md**
+  - Document new operation flow
+  - Document Push/Pull operations
+  - Document PATH_B and PATH_C configuration
+- 📝 **Update TODO.md** (this file)
+  - Mark completed tasks
+  - Add any new issues discovered
+
+### 🚧 Phase 12: Deployment
+- 📝 **Run database migration**
+  - alembic upgrade head
+- 📝 **Update worker installations**
+  - Deploy new worker version with Push/Pull support
+- 📝 **Test in staging environment**
+- 📝 **Commit all changes**
+- 📝 **Push to vf branch**
+- 📝 **Create pull request** (if needed)
+
+---
+
+## 🎯 Key Design Principles for Redesign
+
+### KISS (Keep It Simple, Stupid)
+- ✅ Single pane instead of dual-pane (simpler mental model)
+- ✅ Only 2 buttons instead of 6+ buttons
+- ✅ Directory-only operations (no file selection complexity)
+- ✅ Single worker (no multi-worker coordination complexity)
+- ✅ Preset destinations (no user path selection)
+
+### DRY (Don't Repeat Yourself)
+- ✅ Reuse existing operation framework
+- ✅ Reuse WebSocket infrastructure
+- ✅ Reuse authentication/authorization
+- ✅ Reuse audit logging
+
+### Security First
+- ✅ Admin-only PATH_B and PATH_C configuration
+- ✅ Validate all directory paths
+- ✅ Prevent path traversal attacks
+- ✅ Full audit trail for all operations
+- ✅ Any authenticated user can Pull (revert)
+
+### User Experience
+- ✅ Clear, simple UI with minimal cognitive load
+- ✅ Real-time operation status (no guessing)
+- ✅ Persistent history (never lose track)
+- ✅ Easy revert with Pull operation
+- ✅ Clear status indicators and timestamps
+
+---
+
+## 📊 Progress Tracker
+
+| Phase | Status | Completion |
+|-------|--------|------------|
+| Phase 0: Planning | ✅ | 100% |
+| Phase 1: Backend Models | 📝 | 0% |
+| Phase 2: Backend Logic | 📝 | 0% |
+| Phase 3: Backend API | 📝 | 0% |
+| Phase 4: Worker Updates | 📝 | 0% |
+| Phase 5: Frontend HTML | 📝 | 0% |
+| Phase 6: Frontend CSS | 📝 | 0% |
+| Phase 7: Frontend JS | 📝 | 0% |
+| Phase 8: Admin Panel | 📝 | 0% |
+| Phase 9: Configuration | 📝 | 0% |
+| Phase 10: Testing | 📝 | 0% |
+| Phase 11: Documentation | 📝 | 0% |
+| Phase 12: Deployment | 📝 | 0% |
+
+**Overall Progress: 8% (1/12 phases complete)**
+
+---
+
+## 📋 Original TODO (Pre-Redesign) - Archived
+
+<details>
+<summary>Click to expand original TODO items (for reference)</summary>
+
+### Moduły Główne (Original)
 | Moduł | Status | Kompletność | Priorytet |
 |-------|--------|-------------|-----------|
 | **Autentykacja & Autoryzacja** | ✅ | 95% | Wysoki |
 | **Panel Administracyjny** | ✅ | 95% | Wysoki |
-| **Operacje Plikowe** | ✅ | 90% | Wysoki |
-| **Worker Management** | ✅ | 85% | Wysoki |
+| **Operacje Plikowe** | 🔄 | 90% → REDESIGNED | Wysoki |
+| **Worker Management** | 🔄 | 85% → SIMPLIFIED | Wysoki |
 | **WebSocket Real-time** | ✅ | 90% | Średni |
-| **Zewnętrzna Autentykacja** | 📝 | 0% | Średni |
-| **Remote Audit API** | 📝 | 0% | Niski |
-| **Worker (Windows Service)** | ✅ | 90% | Wysoki |
+
+### Notes on Original Features
+- Dual-pane explorer → REMOVED (single pane now)
+- Multi-worker coordination → REMOVED (single worker now)
+- File-level operations → REMOVED (directories only now)
+- Manual path selection → REMOVED (preset paths now)
+
+</details>
 
 ---
 
-## Backend - API & Core
+## 🔥 Critical Notes
 
-### Autentykacja & Autoryzacja
-- ✅ JWT token-based authentication (HS256)
-- ✅ Argon2id password hashing
-- ✅ RBAC (ADMIN, USER) - *simplified from ADMIN/OPERATOR/VIEWER*
-- ✅ Session management z długimi tokenami (30 dni)
-- ✅ Last admin protection (cannot delete/demote/deactivate last admin)
-- ✅ IP address & user agent tracking
-- 📝 **Zewnętrzna autentykacja Sybase 17**
-  - Przygotować connector do Sybase API
-  - Zaimplementować fallback do lokalnej DB
-  - Obsługa timeoutów (2s)
-  - Stored procedure call: weryfikacja username/password
-- 📝 **Admin zawsze loguje się z .env**
-  - Hash hasła admina w .env
-  - Oddzielna ścieżka logowania dla admina
-  - Bypass external auth dla admina
+### IMPORTANT: Single Worker Architecture
+- All operations must go through ONE worker
+- Remove any multi-worker selection logic
+- Simplify operation routing
+- Ensure worker is properly configured with PATH_B and PATH_C access
 
-### User Management
-- ✅ Model User w bazie danych
-- ✅ CRUD endpoints dla użytkowników (`/api/admin/users`)
-- ✅ User preferences model (UserPreferences)
-- ✅ Preferences API endpoints (`/api/preferences/me`)
-- 📝 **Zaawansowane funkcje użytkownika**
-  - Rate limiting per user
-  - User activity tracking
-  - Password reset flow (opcjonalny)
-  - User groups/teams (future)
+### IMPORTANT: Directory-Only Operations
+- No single file selection allowed
+- UI must disable file selection
+- Backend must validate directory-only
+- Error messages for invalid selections
 
-### Worker Management
-- ✅ Worker registration z public key
-- ✅ Worker approval workflow (PENDING → ACTIVE)
-- ✅ Worker suspend/activate
-- ✅ Heartbeat tracking
-- ✅ Path prefix override per worker
-- 📝 **Worker Health Monitoring**
-  - Auto-suspend przy braku heartbeat
-  - Worker performance metrics
-  - Capacity planning (ile operacji może obsłużyć)
-- 📝 **Worker Failover & Redundancy**
-  - Automatic worker failover
-  - Load balancing między workers
-  - Worker clustering (2 workery = 1 para)
+### IMPORTANT: PATH_B and PATH_C Security
+- Only settable via .env OR admin users
+- Regular users CANNOT change these paths
+- Validate paths exist and are accessible
+- Prevent path traversal attacks
 
-### Operacje Plikowe
-- ✅ Copy operation (1 lub 2 workery)
-- ✅ Move operation
-- ✅ Delete operation
-- ✅ Mkdir operation
-- ✅ List directory (paginacja, lazy loading)
-- ✅ Search files (recursive)
-- 📝 **Rozszerzone operacje**
-  - Rename file/folder
-  - File properties/metadata viewing
-  - Batch operations (multiple files at once)
-  - Operation scheduling (zaplanuj operację na później)
-- 📝 **Rollback & Recovery**
-  - ✅ Auto-rollback on failure (basic)
-  - Snapshot-based rollback
-  - Manual rollback przez użytkownika
-  - Rollback history & restore points
-- 📝 **Operation Queue & Locking**
-  - FIFO queue per worker
-  - Resource locking (file/folder level)
-  - Conflict detection & resolution
-  - Max concurrent operations (parametryzowane, default: 4)
-  - Queue status visibility dla użytkownika
-
-### Configuration Management
-- ✅ Config model w bazie danych
-- ✅ 30+ parametrów konfiguracyjnych
-- ✅ GET `/api/admin/config` endpoint
-- ✅ PUT `/api/admin/config/{key}` endpoint
-- ✅ POST `/api/admin/config/bulk` endpoint
-- ✅ Frontend Configuration tab z wszystkimi parametrami
-- 📝 **Configuration Validation**
-  - Walidacja przed zapisem (typy, ranges)
-  - Configuration backup & restore
-  - Configuration versioning (history zmian)
-- 📝 **Hot Configuration Reload**
-  - Reload konfiguracji bez restartu
-  - Broadcast zmian do workerów
-  - Configuration change notifications
-
-### API Endpoints - Missing
-- 📝 **Statistics & Monitoring**
-  - `/api/stats/operations` - statystyki operacji
-  - `/api/stats/users` - aktywność użytkowników
-  - `/api/stats/workers` - wydajność workerów
-  - `/api/stats/system` - system resources
-- 📝 **Batch Operations**
-  - `/api/operations/batch` - multiple operations at once
-  - `/api/operations/schedule` - scheduled operations
-- 📝 **File Preview**
-  - `/api/files/preview` - preview file content (text, images)
-  - `/api/files/download` - download file through API (opcjonalne)
+### IMPORTANT: Operation History
+- Operations NEVER deleted
+- Keep full history indefinitely
+- Pagination for performance
+- Filters for usability (user, type, status, date)
 
 ---
 
-## Frontend - WebUI
+## 📞 Questions/Clarifications Needed
 
-### Dual-Pane Explorer
-- ✅ Basic dual-pane layout (A/B)
-- ✅ File listing z paginacją
-- ✅ Breadcrumb navigation
-- ✅ Search functionality
-- ✅ Context menu (right-click)
-- ✅ Select all/none checkboxes
-- 📝 **Real-time Updates**
-  - WebSocket connection for live updates
-  - Auto-refresh directory on changes
-  - Real-time operation progress
-  - Worker status live updates
-- 📝 **Zaawansowane UI Features**
-  - Drag & drop między panelami
-  - File icons based on type
-  - File size visualization (progress bars)
-  - Keyboard shortcuts (F5 refresh, Ctrl+A select, etc.)
-  - Dual-pane sync scroll (opcjonalnie)
-- 📝 **User Preferences**
-  - Remember last paths (A i B)
-  - Theme switcher (light/dark)
-  - Layout preferences (horizontal/vertical)
-  - Sort preferences persistence
-  - Items per page customization
-
-### Admin Panel
-- ✅ User management (CRUD)
-- ✅ Worker management (approve, suspend, delete)
-- ✅ Configuration tab z wszystkimi parametrami
-- ✅ Audit logs viewer
-- ✅ **Samba Path Management**
-  - ✅ Model SambaPath w bazie danych
-  - ✅ CRUD endpoints dla Samba paths
-  - ✅ UI dla zarządzania Samba paths
-- ✅ **Worker Provisioning & Control**
-  - ✅ Real-time worker status endpoint
-  - ✅ Worker provisioning endpoint (config update)
-  - ✅ Worker command sending (ping, get_status, update_config, reload_config)
-  - ✅ Worker health monitoring
-- ✅ **System Statistics & Monitoring**
-  - ✅ System stats endpoint (operations, workers, users)
-  - ✅ System health endpoint
-  - ✅ UI dla statistics dashboard
-  - ✅ Auto-refresh statistics
-- ✅ **Real-time Log Viewing**
-  - ✅ Log streaming endpoint z filtrami
-  - ✅ UI dla log viewer
-- ✅ **WebSocket Real-time Updates**
-  - ✅ WebSocket manager implementation
-  - ✅ Operation progress updates
-  - ✅ Worker status change notifications
-  - ✅ System alerts broadcasting
-  - ✅ Log entry streaming
-- ✅ **JavaScript Module**
-  - ✅ admin-system.js module
-  - ✅ Integracja z istniejącym admin.html
-  - ✅ Configuration tab - loads and saves all 30+ config parameters
-  - ✅ Worker Control panel - ping, status, provision, reload config
-  - ✅ System Stats dashboard with real-time metrics
-  - ✅ Samba Paths management (CRUD)
-  - 📝 Toast notifications (TODO - używa alert())
-- 📝 **Dashboard Enhancement**
-  - Charts (operacje, użytkownicy, workery)
-  - Export reports (PDF, CSV)
-
-### UI/UX Improvements
-- 📝 **Responsive Design**
-  - Mobile-friendly layout
-  - Tablet optimization
-  - Touch gestures support
-- 📝 **Accessibility**
-  - Keyboard navigation
-  - Screen reader support
-  - ARIA labels
-  - High contrast mode
-- 📝 **Loading States**
-  - Skeleton screens
-  - Progress indicators
-  - Lazy loading dla dużych list
-- 📝 **Error Handling**
-  - Friendly error messages
-  - Retry mechanisms
-  - Fallback UI dla błędów
+- ❓ Should PATH_B and PATH_C be per-worker or global? (Assuming global for now)
+- ❓ Should we support subdirectory creation in PATH_B (e.g., /path/b/username/dirname)? (Assuming flat structure for now)
+- ❓ Archive PATH_C: should it preserve directory structure or flatten? (Assuming preserve structure)
+- ❓ Pull operation: should it delete from PATH_C as well? (Assuming no - archive remains)
+- ❓ Should regular users see all operations or only their own? (Assuming all for transparency)
 
 ---
 
-## Workers - Usługi Windows
-
-### Core Functionality
-- ✅ Windows Service (TopShelf framework)
-- ✅ Self-installing .exe
-- ✅ Configuration wizard (URL centrali, user/pass)
-- ✅ Public/private key generation
-- ✅ mTLS communication z centralą
-- ✅ File operations (copy, move, delete, mkdir, list, search)
-- ✅ Rollback manager
-- ✅ Windows Credential Manager integration
-
-### Wymagane Usprawnienia
-- ✅ **Admin Commands Support**
-  - ✅ ping - health check
-  - ✅ get_status - returns worker status and metrics
-  - ✅ update_config - updates worker configuration
-  - ✅ reload_config - reloads config from source
-- 📝 **Asynchroniczne Operacje**
-  - ✅ Podstawowa asynchroniczność
-  - ✅ Progress reporting do centrali
-  - Thread pool dla wielu operacji
-  - Cancelation tokens
-- 📝 **Locking & Concurrency**
-  - File-level locking
-  - Folder-level locking
-  - Lock timeout handling
-  - Deadlock detection
-- 📝 **Error Handling & Resilience**
-  - Retry logic z exponential backoff
-  - Circuit breaker pattern
-  - Graceful degradation
-  - Detailed error reporting
-- 📝 **Logging (Local)**
-  - Worker NIE zostawia logów (zgodnie z wymaganiami)
-  - Debug mode: output do konsoli
-  - Opcjonalny tryb verbose dla debugowania
-- 📝 **Performance**
-  - Bandwidth throttling (opcjonalne)
-  - Compression dla dużych transferów (opcjonalne)
-  - Resume interrupted operations
-- 📝 **Compatibility**
-  - ✅ Windows Server 2012 R2 (HV2012r2) minimum
-  - Testowanie na różnych wersjach Windows
-  - Obsługa różnych lokalizacji (non-English Windows)
-- 📝 **Installation & Uninstallation**
-  - ✅ Self-installing .exe
-  - Uninstall command (`worker.exe /uninstall`)
-  - Upgrade mechanism
-  - Configuration migration przy upgrade
-- 📝 **2-Worker Coordination**
-  - Worker-to-worker communication
-  - Push operation (A → B)
-  - Weryfikacja przez drugi worker
-  - Transaction coordination (2-phase commit)
+**Last Updated:** 2026-01-28
+**Branch:** vf
+**Status:** In Progress - Phase 1 starting
 
 ---
 
-## Baza Danych
-
-### Aktualne Modele
-- ✅ Users
-- ✅ Sessions
-- ✅ Workers
-- ✅ Operations
-- ✅ OperationWorkers (M2M)
-- ✅ AuditLogs
-- ✅ Config
-- ✅ UserPreferences
-- ✅ SambaPath *(nowy)*
-- ✅ SystemMetrics *(nowy)*
-
-### Migracje
-- ✅ `001_initial_schema.py` - Initial schema (ADMIN/USER roles, max_file_listing_items=20)
-- ✅ `002_add_user_preferences.py` - User preferences
-- ✅ `003_add_admin_models.py` - Samba paths & system metrics
-- 📝 **Wymagane Migracje**
-  - 🚧 Uruchomić migracje na środowisku (`alembic upgrade head`)
-  - Dodać indeksy dla performance
-  - Partycjonowanie tabeli audit_logs (jeśli duża)
-
-### Optymalizacje
-- 📝 **Indeksy**
-  - Przeanalizować query patterns
-  - Dodać composite indexes gdzie potrzeba
-  - Index maintenance strategy
-- 📝 **Partycjonowanie**
-  - Partycjonowanie audit_logs po dacie
-  - Archive old operations
-- 📝 **Backup & Recovery**
-  - Automated backup strategy
-  - Point-in-time recovery
-  - Disaster recovery plan
-- 📝 **Views & Materialized Views**
-  - ✅ system_stats view
-  - Worker performance view
-  - User activity summary view
-
----
-
-## Infrastruktura & DevOps
-
-### Docker & Compose
-- ✅ docker-compose.yml z PostgreSQL, Redis, API, WebUI
-- ✅ Dockerfiles dla API i WebUI
-- ✅ Health checks
-- ✅ Volume management
-- ✅ Network isolation
-- 📝 **Production Readiness**
-  - Multi-stage builds dla mniejszych images
-  - Secret management (nie .env w repo)
-  - Docker secrets / Vault integration
-  - Resource limits (CPU, memory)
-  - Log aggregation (Fluentd, ELK)
-
-### Deployment
-- 📝 **CI/CD Pipeline**
-  - GitHub Actions / GitLab CI
-  - Automated tests before deploy
-  - Blue-green deployment
-  - Rollback mechanism
-- 📝 **Environments**
-  - Development
-  - Staging
-  - Production
-  - Environment-specific configs
-- 📝 **Monitoring**
-  - Prometheus metrics
-  - Grafana dashboards
-  - Alerting (PagerDuty, Slack)
-  - Uptime monitoring
-
-### Scalability
-- 📝 **Horizontal Scaling**
-  - Load balancer przed API
-  - Multiple API instances
-  - Session affinity (sticky sessions)
-  - Database connection pooling
-- 📝 **Caching**
-  - ✅ Redis dla sessions
-  - Cache dla file listings
-  - Cache dla configuration
-  - Cache invalidation strategy
-
----
-
-## Bezpieczeństwo
-
-### Aktualne Zabezpieczenia
-- ✅ JWT authentication
-- ✅ Argon2id password hashing
-- ✅ HTTPS/TLS 1.3
-- ✅ mTLS dla worker-central communication
-- ✅ Public key authentication dla workerów
-- ✅ CORS configuration
-- ⚠️ Default admin credentials (admin/admin123) - **ZMIENIĆ PRZED PRODUKCJĄ**
-- ⚠️ Self-signed certificates - **prawdziwe certy w produkcji**
-
-### Wymagane Usprawnienia
-- 📝 **SSL/TLS**
-  - Prawdziwe certyfikaty (Let's Encrypt)
-  - Certificate rotation
-  - Certificate pinning dla workerów
-- 📝 **Secrets Management**
-  - Usunąć hasła z .env
-  - Hashicorp Vault / AWS Secrets Manager
-  - Rotate secrets regularly
-- 📝 **IP Whitelisting**
-  - ✅ Config parametr enable_ip_whitelist
-  - Implementacja IP filtering middleware
-  - Geo-IP blocking (opcjonalnie)
-- 📝 **Rate Limiting**
-  - ✅ Config parametr enable_rate_limiting
-  - Implementacja rate limiting middleware (per user, per IP)
-  - DDoS protection
-  - Brute force protection dla logowania
-- 📝 **Audit & Compliance**
-  - GDPR compliance (data retention, deletion)
-  - SOC 2 requirements
-  - PCI DSS (jeśli aplikable)
-- 📝 **Security Scanning**
-  - SAST (Bandit, Semgrep)
-  - DAST (OWASP ZAP)
-  - Dependency scanning (Snyk, Dependabot)
-  - Container scanning (Trivy)
-
----
-
-## Logowanie & Audyt
-
-### Aktualne Logowanie
-- ✅ Structured logging (loguru)
-- ✅ Request/response logging
-- ✅ Audit logs w bazie danych
-- ✅ User action tracking
-- ✅ Operation tracking
-- ✅ Admin action tracking
-
-### Wymagane Integracje
-- ✅ **Syslog Integration**
-  - ✅ Config parametry (host, port, protocol)
-  - ✅ Logging configuration UI in admin panel (Logs tab)
-  - 📝 Implementacja syslog handler (runtime)
-  - 📝 Format zgodny z RFC 5424
-  - ✅ UDP/TCP protocol selection
-- 📝 **Remote Audit API (Sybase)**
-  - ✅ Config parametry (URL, token, timeout)
-  - Async push do zdalnego API
-  - Retry logic przy failure
-  - Batch sending (grupowanie logów)
-  - Fallback przy niedostępności API
-- 📝 **Log Rotation & Compression**
-  - ✅ Config: log_retention_days, enable_log_compression
-  - Implementacja automatycznej rotacji
-  - Kompresja starszych logów (gzip)
-  - Usuwanie po upływie retencji
-  - Archiwizacja (opcjonalne)
-- ✅ **Log Viewing & Search**
-  - ✅ Audit log viewer w admin panel (database logs)
-  - ✅ Application log viewer (file-based logs)
-  - ✅ Log type selector (audit/application)
-  - ✅ Log level filtering
-  - ✅ Search in logs
-  - ✅ Log export (JSON)
-  - 📝 Full-text search w logach (advanced)
-  - 📝 Real-time log streaming (WebSocket)
-- 📝 **Metrics & Analytics**
-  - Operation success/failure rates
-  - Average operation duration
-  - User activity heatmaps
-  - Worker utilization metrics
-
----
-
-## Dokumentacja
-
-### Istniejąca Dokumentacja
-- ✅ README.md (główny)
-- ✅ README_DATABASE.md
-- ✅ README-DOCKER.md
-- ✅ README_API.md (backend/api/)
-- ✅ Workers documentation
-- ✅ Installer guide
-
-### Wymagana Dokumentacja
-- ✅ TODO.md (ten plik)
-- 📝 **Architecture Documentation**
-  - System architecture diagram
-  - Data flow diagrams
-  - Sequence diagrams (operacje 1-worker, 2-worker)
-  - Component interaction diagrams
-- 📝 **API Documentation**
-  - OpenAPI/Swagger spec
-  - Postman collection
-  - API usage examples
-  - Rate limits documentation
-- 📝 **Deployment Guide**
-  - Production deployment checklist
-  - Configuration guide
-  - Backup & restore procedures
-  - Troubleshooting guide
-- 📝 **User Manual**
-  - End-user guide (operatorzy)
-  - Admin guide
-  - FAQ
-  - Video tutorials (opcjonalnie)
-- 📝 **Developer Guide**
-  - Development setup
-  - Code style guide
-  - Contributing guidelines
-  - Git workflow
-  - How to add new features
-
----
-
-## Testy
-
-### Aktualne Testy
-- ✅ Auth tests only (basic)
-- ❌ File operation tests
-- ❌ Worker communication tests
-- ❌ Integration tests
-- ❌ E2E tests
-
-### Wymagane Testy
-- 📝 **Unit Tests**
-  - Backend models (100% coverage)
-  - API endpoints (90%+ coverage)
-  - Auth & authorization logic
-  - Configuration management
-  - Utilities & helpers
-- 📝 **Integration Tests**
-  - Database operations
-  - API with database
-  - Worker communication
-  - External API integration (Sybase mock)
-- 📝 **E2E Tests**
-  - User workflows (login → browse → copy file → logout)
-  - Admin workflows (user management, worker approval)
-  - 2-worker operations
-  - Failure scenarios (rollback)
-- 📝 **Performance Tests**
-  - Load testing (JMeter, Locust)
-  - Stress testing
-  - Capacity planning
-  - Database query optimization
-- 📝 **Security Tests**
-  - Penetration testing
-  - Vulnerability scanning
-  - Authentication bypass attempts
-  - SQL injection, XSS tests
-
----
-
-## Optymalizacja & Performance
-
-### Backend Optimizations
-- 📝 **Database**
-  - Connection pooling (już jest, ale sprawdzić parametry)
-  - Query optimization (EXPLAIN ANALYZE)
-  - Eager loading vs. lazy loading
-  - Caching frequently accessed data
-- 📝 **API**
-  - Response compression (gzip)
-  - Pagination optimization
-  - Async everywhere (już jest, ale weryfikacja)
-  - Background tasks (Celery/RQ dla heavy operations)
-- 📝 **Caching Strategy**
-  - Redis caching dla config
-  - File listing cache (short TTL)
-  - Worker status cache
-  - Cache warming
-
-### Frontend Optimizations
-- 📝 **Performance**
-  - Code splitting
-  - Lazy loading routes
-  - Image optimization
-  - Minification & bundling (Webpack/Vite)
-- 📝 **Network**
-  - Service Worker dla offline support
-  - HTTP/2 push
-  - CDN dla static assets
-
-### Worker Optimizations
-- 📝 **File Operations**
-  - Parallel file transfers (threads)
-  - Bandwidth throttling dla niezakłócania sieci
-  - Smart retry logic
-  - Resume partial transfers
-
----
-
-## Przyszłe Funkcjonalności
-
-### Planowane na Wersję 2.0
-- 📝 **Scheduled Operations**
-  - Zaplanowanie operacji na określony czas
-  - Recurring operations (cron-like)
-  - Operation templates
-- 📝 **File Synchronization**
-  - Automatic sync A ↔ B
-  - Conflict resolution strategies
-  - Sync scheduling
-- 📝 **Multi-site Support**
-  - Multiple locations (więcej niż 2)
-  - Site-to-site replication
-  - Geo-distributed workers
-- 📝 **Advanced Permissions**
-  - Folder-level permissions
-  - User groups
-  - ACL management UI
-- 📝 **Notifications**
-  - Email notifications
-  - Slack/Teams integration
-  - SMS notifications (critical alerts)
-  - In-app notifications
-- 📝 **Workflow Engine**
-  - Define multi-step workflows
-  - Approval workflows
-  - Automated workflows (if X then Y)
-- 📝 **API Webhooks**
-  - Webhooks dla operation events
-  - Webhook retry logic
-  - Webhook logs
-- 📝 **Multi-tenancy**
-  - Separate tenants/organizations
-  - Tenant isolation
-  - Per-tenant configuration
-- 📝 **Cloud Storage Integration**
-  - AWS S3 support
-  - Azure Blob Storage
-  - Google Cloud Storage
-  - Hybrid cloud/on-prem
-
-### Planowane na Wersję 3.0+
-- 📝 **Machine Learning**
-  - Predictive analytics (które pliki będą przenoszone)
-  - Anomaly detection (unusual operations)
-  - Capacity forecasting
-- 📝 **Mobile App**
-  - iOS app
-  - Android app
-  - Mobile notifications
-- 📝 **Linux Worker Support**
-  - Linux worker implementation
-  - Cross-platform compatibility
-  - Docker-based workers
-- 📝 **Advanced Reporting**
-  - Custom reports
-  - Report scheduling
-  - Business intelligence dashboard
-
----
-
-## Priorytety - Co Zrobić Najpierw?
-
-### 🔥 Krytyczne (Przed Produkcją)
-1. ⚠️ **Zmienić default admin credentials**
-2. ⚠️ **Prawdziwe SSL/TLS certificates**
-3. 🚧 **Uruchomić migrację 002 (UserPreferences)**
-4. 🚧 **Uruchomić migrację 003 (Admin models)**
-5. ✅ **Admin Settings WebUI** - ZAKOŃCZONE (2026-01-26)
-   - ✅ Configuration tab z 30+ parametrami
-   - ✅ Worker Control (ping, status, provision, reload)
-   - ✅ System Stats dashboard
-   - ✅ Samba Paths management
-   - ✅ Real-time log viewing
-6. 📝 **Zewnętrzna autentykacja Sybase** (jeśli wymagana od razu)
-7. 📝 **Rate limiting & IP whitelisting** (basic security)
-
-### 🚀 Wysokie Priority (MVP)
-1. ✅ **Real-time WebSocket updates** - zaimplementowane
-2. ✅ **Worker provisioning & control** - zaimplementowane
-3. ✅ **System monitoring & statistics** - zaimplementowane
-4. 📝 **Operation queue & locking** (prevent conflicts)
-5. 📝 **2-worker coordination** (push A→B z weryfikacją)
-6. 📝 **Syslog integration** (logowanie)
-7. 📝 **Rollback improvements** (manual rollback UI)
-8. 📝 **Worker failover** (high availability)
-
-### 📊 Średnie Priority
-1. 📝 **Dashboard & statistics** (admin panel)
-2. 📝 **Drag & drop UI**
-3. 📝 **File preview**
-4. 📝 **Batch operations**
-5. 📝 **User preferences UI**
-6. 📝 **Dark mode**
-
-### 🔮 Niskie Priority (Post-MVP)
-1. 📝 **Remote Audit API (Sybase)** - jeśli nie wymagane od razu
-2. 📝 **Operation scheduling**
-3. 📝 **File synchronization**
-4. 📝 **Notifications**
-5. 📝 **Advanced reporting**
-
----
-
-## Kontakt & Support
-
-**Projekt:** RFM - Remote File Manager
-**Wersja:** 1.0.0-beta
-**Ostatnia aktualizacja:** 2026-01-22
-
-Dla pytań i problemów:
-- GitHub Issues: [awsosi/rfm/issues](https://github.com/awsosi/rfm/issues)
-- Email: [contact email placeholder]
-
----
-
-*Dokument będzie regularnie aktualizowany w miarę postępu projektu.*
+*KISS principle: Make it simple. Make it work. Make it maintainable.*
