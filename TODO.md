@@ -158,6 +158,27 @@ Complete application makeover with simplified UI and new operation flow:
 
 ## 🔧 RECENT FIXES (2026-01-28)
 
+### Issue: API Container Startup Failure ✅ FIXED
+**Problem:** API container marked as unhealthy and failed to start with ImportError:
+```
+ImportError: cannot import name 'get_db_context' from 'database' (/app/backend/database.py)
+```
+
+**Root Cause**: `background_tasks.py` was importing a non-existent function `get_db_context` from the `database` module. The correct function is `get_db_session` (alias for `DatabaseManager.session()`).
+
+**Solution**: Updated import and all usages in `background_tasks.py`:
+- Changed import from `get_db_context` to `get_db_session`
+- Updated all async context manager calls to use `get_db_session()`
+
+**Files Modified**:
+- `/home/user/rfm/backend/api/background_tasks.py` (line 19, 87, 121)
+
+**Impact**: API container now starts successfully and background tasks (command cleanup, worker health checks) run properly.
+
+---
+
+## 🔧 PREVIOUS FIXES (2026-01-28)
+
 ### Issue 1: Directory Row Styling Not Applied ✅ FIXED
 **Problem:** `markDirectoryRows()` function existed but was never called, causing files to appear selectable instead of visually disabled.
 
