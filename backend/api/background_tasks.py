@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
 from api.services.command_queue_service import CommandQueueService
-from database import get_db_context
+from database import get_db_session
 
 
 class BackgroundTaskManager:
@@ -84,7 +84,7 @@ class BackgroundTaskManager:
 
                 logger.info("Running command queue cleanup...")
 
-                async with get_db_context() as db:
+                async with get_db_session() as db:
                     count = await self.command_queue.cleanup_old_commands(
                         db,
                         days=retention_days
@@ -118,7 +118,7 @@ class BackgroundTaskManager:
 
                 logger.debug("Checking worker health...")
 
-                async with get_db_context() as db:
+                async with get_db_session() as db:
                     from models import Worker, WorkerStatus
                     from sqlalchemy import select, and_
 
