@@ -345,7 +345,7 @@ namespace FileManagerWorker
         private async Task<CommandResponse> HandlePingAsync(CommandRequest request)
         {
             Logger.Debug("Ping command received");
-            return await Task.FromResult(CommandResponse.Success(request.CommandId, "pong"));
+            return await Task.FromResult(CommandResponse.Success(request.CommandId, new Dictionary<string, object> { { "message", "pong" } }));
         }
 
         /// <summary>
