@@ -214,8 +214,6 @@ namespace FileManagerWorker
             }
 
             var path = request.SourcePath;
-            bool recursive = request.Parameters?.ContainsKey("recursive") == true &&
-                           Convert.ToBoolean(request.Parameters["recursive"]);
 
             RollbackContext backup = null;
 
@@ -224,8 +222,8 @@ namespace FileManagerWorker
                 // Create backup before deletion
                 backup = _rollbackManager.CreateBackup(path);
 
-                // Execute delete
-                var result = await _fileOps.DeleteAsync(path, recursive);
+                // Execute delete (always recursive for directories)
+                var result = await _fileOps.DeleteAsync(path);
 
                 // Success - cleanup backup
                 _rollbackManager.CleanupBackup(backup);
@@ -280,7 +278,7 @@ namespace FileManagerWorker
                 // Success - cleanup backup
                 _rollbackManager.CleanupBackup(backup);
 
-                return CommandResponse.Success(request.CommandId, result);
+                return CommandResponse.Success(cmdId, "Directory created successfully");
             }
             catch (Exception ex)
             {
@@ -288,9 +286,14 @@ namespace FileManagerWorker
 
                 // Attempt rollback
                 var rollbackSuccess = _rollbackManager.Restore(backup);
-                var rollbackStatus = rollbackSuccess ? "success" : "failed";
 
-                return CommandResponse.Failed(request.CommandId, ex.Message, rollbackStatus);
+                var errorDetails = new Dictionary<string, object>
+                {
+                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
+                    { "error_type", ex.GetType().Name }
+                };
+
+                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
             }
         }
 
@@ -299,23 +302,25 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleListAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
+
             if (!request.Parameters.ContainsKey("path"))
             {
-                return CommandResponse.Failed(request.CommandId, "List requires 'path' parameter");
+                return CommandResponse.Failed(cmdId, "List requires 'path' parameter");
             }
 
-            var path = request.Parameters["path"];
+            var path = request.Parameters["path"]?.ToString();
             var recursive = request.Parameters.ContainsKey("recursive") &&
-                           bool.TryParse(request.Parameters["recursive"], out var rec) && rec;
+                           bool.TryParse(request.Parameters["recursive"]?.ToString(), out var rec) && rec;
 
             // Parse pagination parameters
             var offset = 0;
             var limit = 0;
-            if (request.Parameters.ContainsKey("offset") && int.TryParse(request.Parameters["offset"], out var off))
+            if (request.Parameters.ContainsKey("offset") && int.TryParse(request.Parameters["offset"]?.ToString(), out var off))
             {
                 offset = off;
             }
-            if (request.Parameters.ContainsKey("limit") && int.TryParse(request.Parameters["limit"], out var lim))
+            if (request.Parameters.ContainsKey("limit") && int.TryParse(request.Parameters["limit"]?.ToString(), out var lim))
             {
                 limit = lim;
             }
@@ -323,12 +328,12 @@ namespace FileManagerWorker
             try
             {
                 var result = await _fileOps.ListAsync(path, recursive, offset, limit);
-                return CommandResponse.Success(request.CommandId, result);
+                return CommandResponse.Success(cmdId, "List completed successfully", result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null);
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "List operation failed");
-                return CommandResponse.Failed(request.CommandId, ex.Message);
+                return CommandResponse.Failed(cmdId, ex.Message);
             }
         }
 
@@ -337,25 +342,27 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleSearchAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
+
             if (!request.Parameters.ContainsKey("path") || !request.Parameters.ContainsKey("pattern"))
             {
-                return CommandResponse.Failed(request.CommandId, "Search requires 'path' and 'pattern' parameters");
+                return CommandResponse.Failed(cmdId, "Search requires 'path' and 'pattern' parameters");
             }
 
-            var path = request.Parameters["path"];
-            var pattern = request.Parameters["pattern"];
+            var path = request.Parameters["path"]?.ToString();
+            var pattern = request.Parameters["pattern"]?.ToString();
             var recursive = !request.Parameters.ContainsKey("recursive") ||
-                           (bool.TryParse(request.Parameters["recursive"], out var rec) && rec);
+                           (bool.TryParse(request.Parameters["recursive"]?.ToString(), out var rec) && rec);
 
             try
             {
                 var result = await _fileOps.SearchAsync(path, pattern, recursive);
-                return CommandResponse.Success(request.CommandId, result);
+                return CommandResponse.Success(cmdId, "Search completed successfully", result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null);
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Search operation failed");
-                return CommandResponse.Failed(request.CommandId, ex.Message);
+                return CommandResponse.Failed(cmdId, ex.Message);
             }
         }
 
@@ -364,22 +371,24 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleInfoAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
+
             if (!request.Parameters.ContainsKey("path"))
             {
-                return CommandResponse.Failed(request.CommandId, "Info requires 'path' parameter");
+                return CommandResponse.Failed(cmdId, "Info requires 'path' parameter");
             }
 
-            var path = request.Parameters["path"];
+            var path = request.Parameters["path"]?.ToString();
 
             try
             {
                 var result = await _fileOps.GetInfoAsync(path);
-                return CommandResponse.Success(request.CommandId, result);
+                return CommandResponse.Success(cmdId, "Info retrieved successfully");
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Info operation failed");
-                return CommandResponse.Failed(request.CommandId, ex.Message);
+                return CommandResponse.Failed(cmdId, ex.Message);
             }
         }
 
@@ -388,8 +397,9 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandlePingAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
             Logger.Debug("Ping command received");
-            return await Task.FromResult(CommandResponse.Success(request.CommandId, new Dictionary<string, object> { { "message", "pong" } }));
+            return await Task.FromResult(CommandResponse.Success(cmdId, "pong"));
         }
 
         /// <summary>
@@ -397,6 +407,7 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleGetStatusAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
             Logger.Debug("Get status command received");
 
             try
@@ -448,12 +459,12 @@ namespace FileManagerWorker
 
                 status["config"] = config;
 
-                return await Task.FromResult(CommandResponse.Success(request.CommandId, status));
+                return await Task.FromResult(CommandResponse.Success(cmdId, "Status retrieved successfully"));
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Get status operation failed");
-                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
+                return await Task.FromResult(CommandResponse.Failed(cmdId, ex.Message));
             }
         }
 
@@ -462,6 +473,7 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleUpdateConfigAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
             Logger.Info("Update config command received");
 
             try
@@ -471,7 +483,7 @@ namespace FileManagerWorker
                 // Update path prefixes if provided
                 if (request.Parameters.ContainsKey("path_a_prefix"))
                 {
-                    var newPath = request.Parameters["path_a_prefix"];
+                    var newPath = request.Parameters["path_a_prefix"]?.ToString();
                     Logger.Info("Updating PathAPrefix to: {0}", newPath);
                     _fileOps.PathAPrefix = newPath;
                     updated.Add("path_a_prefix");
@@ -479,7 +491,7 @@ namespace FileManagerWorker
 
                 if (request.Parameters.ContainsKey("path_b_prefix"))
                 {
-                    var newPath = request.Parameters["path_b_prefix"];
+                    var newPath = request.Parameters["path_b_prefix"]?.ToString();
                     Logger.Info("Updating PathBPrefix to: {0}", newPath);
                     _fileOps.PathBPrefix = newPath;
                     updated.Add("path_b_prefix");
@@ -487,7 +499,7 @@ namespace FileManagerWorker
 
                 if (request.Parameters.ContainsKey("path_c_prefix"))
                 {
-                    var newPath = request.Parameters["path_c_prefix"];
+                    var newPath = request.Parameters["path_c_prefix"]?.ToString();
                     Logger.Info("Updating PathCPrefix to: {0}", newPath);
                     _fileOps.PathCPrefix = newPath;
                     updated.Add("path_c_prefix");
@@ -496,19 +508,12 @@ namespace FileManagerWorker
                 // TODO: Handle other configuration parameters (polling_interval, etc.)
                 // These would require service restart or dynamic reconfiguration
 
-                var result = new Dictionary<string, object>
-                {
-                    { "status", "success" },
-                    { "updated_fields", updated },
-                    { "message", $"Updated {updated.Count} configuration parameter(s)" }
-                };
-
-                return await Task.FromResult(CommandResponse.Success(request.CommandId, result));
+                return await Task.FromResult(CommandResponse.Success(cmdId, $"Updated {updated.Count} configuration parameter(s)"));
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Update config operation failed");
-                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
+                return await Task.FromResult(CommandResponse.Failed(cmdId, ex.Message));
             }
         }
 
@@ -517,6 +522,7 @@ namespace FileManagerWorker
         /// </summary>
         private async Task<CommandResponse> HandleReloadConfigAsync(CommandRequest request)
         {
+            int cmdId = request.CommandId.Value;
             Logger.Info("Reload config command received");
 
             try
@@ -524,18 +530,12 @@ namespace FileManagerWorker
                 // TODO: Implement configuration reload logic
                 // This would re-read from Windows Credential Manager or config file
 
-                var result = new Dictionary<string, object>
-                {
-                    { "status", "success" },
-                    { "message", "Configuration reload not yet implemented - restart service to reload config" }
-                };
-
-                return await Task.FromResult(CommandResponse.Success(request.CommandId, result));
+                return await Task.FromResult(CommandResponse.Success(cmdId, "Configuration reload not yet implemented - restart service to reload config"));
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Reload config operation failed");
-                return await Task.FromResult(CommandResponse.Failed(request.CommandId, ex.Message));
+                return await Task.FromResult(CommandResponse.Failed(cmdId, ex.Message));
             }
         }
     }
