@@ -1295,3 +1295,380 @@ select {
     background-color: #dbeafe;
     color: #1e40af;
 }
+/* ==========================================
+   VF REDESIGN - Single Pane + Operation Queue Layout
+   ========================================== */
+
+/* Main VF Layout Container */
+.vf-layout .vf-container {
+    display: grid;
+    grid-template-columns: 40% 5% 55%;
+    gap: var(--spacing-md);
+    height: calc(100vh - 80px);
+    padding: var(--spacing-lg);
+}
+
+/* Single Pane (Path A) */
+.vf-layout .pane-single {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Action Buttons Container (Middle Column) */
+.action-buttons-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
+
+.btn-push {
+    width: 100%;
+    max-width: 80px;
+    height: 60px;
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary-color), #1e40af);
+    border: none;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
+}
+
+.btn-push:hover:not(:disabled) {
+    transform: translateX(3px);
+    box-shadow: var(--shadow-lg);
+    background: linear-gradient(135deg, var(--primary-hover), #1e3a8a);
+}
+
+.btn-push:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-pull {
+    width: 100%;
+    max-width: 80px;
+    height: 60px;
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--warning-color), #d97706);
+    border: none;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
+}
+
+.btn-pull:hover:not(:disabled) {
+    transform: translateX(-3px);
+    box-shadow: var(--shadow-lg);
+    background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.btn-pull:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Operation Queue Panel (Right Side) */
+.operation-queue-panel {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.queue-header h2 {
+    font-size: 16px;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.queue-controls {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.filter-select {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.filter-select:hover {
+    border-color: var(--border-hover);
+}
+
+/* Queue List Container */
+.queue-list-container {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+.queue-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.queue-table thead {
+    background-color: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.queue-table th {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.queue-table th.col-select {
+    width: 40px;
+}
+
+.queue-table th.col-id {
+    width: 60px;
+}
+
+.queue-table th.col-type {
+    width: 80px;
+}
+
+.queue-table th.col-status {
+    width: 120px;
+}
+
+.queue-table th.col-timestamp {
+    width: 150px;
+}
+
+.queue-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color var(--transition-fast);
+}
+
+.queue-table tbody tr:hover {
+    background-color: var(--bg-secondary);
+}
+
+.queue-table tbody tr.selected {
+    background-color: #eff6ff;
+}
+
+.queue-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.queue-table td.col-directory {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Operation Type Badge */
+.operation-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.operation-type.push {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.operation-type.pull {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+/* Operation Status Badge */
+.operation-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.operation-status::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.operation-status.pending {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+.operation-status.pending::before {
+    background-color: #9ca3af;
+}
+
+.operation-status.in-progress {
+    background-color: #dbeafe;
+    color: #1e40af;
+    animation: pulse 2s infinite;
+}
+
+.operation-status.in-progress::before {
+    background-color: #3b82f6;
+    animation: blink 1s infinite;
+}
+
+.operation-status.completed {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.operation-status.completed::before {
+    background-color: #22c55e;
+}
+
+.operation-status.failed {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.operation-status.failed::before {
+    background-color: #ef4444;
+}
+
+/* Animations */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Loading States */
+.loading-queue {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+}
+
+.no-operations {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Directory-only Selection (VF Redesign) */
+.vf-redesign .file-list tbody tr:not(.directory) {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.vf-redesign .file-list tbody tr.directory {
+    cursor: pointer;
+}
+
+.vf-redesign .file-list tbody tr.directory input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.vf-redesign .file-list tbody tr:not(.directory) input[type="checkbox"] {
+    visibility: hidden;
+}
+
+/* Responsive Design for VF Layout */
+@media (max-width: 1400px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 35% 5% 60%;
+    }
+}
+
+@media (max-width: 1024px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 100%;
+        grid-template-rows: auto auto auto;
+        height: auto;
+    }
+
+    .action-buttons-container {
+        flex-direction: row;
+        justify-content: center;
+        padding: var(--spacing-md) 0;
+    }
+
+    .btn-push,
+    .btn-pull {
+        max-width: 150px;
+        height: 50px;
+    }
+
+    .operation-queue-panel {
+        min-height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .queue-table th.col-id,
+    .queue-table td.col-id {
+        display: none;
+    }
+
+    .queue-table th.col-timestamp,
+    .queue-table td.col-timestamp {
+        display: none;
+    }
+}

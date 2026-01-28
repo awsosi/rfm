@@ -462,3 +462,214 @@ export function setCurrentPath(paneId, path) {
     const pathInput = document.getElementById(`path-input-${paneId}`);
     pathInput.value = path;
 }
+
+/* ==========================================
+   VF REDESIGN - Operation Queue Table Rendering
+   ========================================== */
+
+/**
+ * Render operation history in queue table (VF REDESIGN)
+ */
+export function renderOperationQueue(operations, append = false) {
+    const tbody = document.getElementById('queue-table-body');
+    const loadingIndicator = document.getElementById('loading-queue');
+    const noOperationsMsg = document.getElementById('no-operations');
+
+    if (!tbody) return;
+
+    if (loadingIndicator) {
+        loadingIndicator.classList.add('hidden');
+    }
+
+    if (!append) {
+        tbody.innerHTML = '';
+    }
+
+    if (operations.length === 0 && !append) {
+        if (noOperationsMsg) {
+            noOperationsMsg.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (noOperationsMsg) {
+        noOperationsMsg.classList.add('hidden');
+    }
+
+    operations.forEach(operation => {
+        const row = createOperationTableRow(operation);
+        tbody.appendChild(row);
+    });
+}
+
+function createOperationTableRow(operation) {
+    const row = document.createElement('tr');
+    row.dataset.operationId = operation.id;
+    row.dataset.operationType = operation.type;
+
+    if (operation.selected) {
+        row.classList.add('selected');
+    }
+
+    const checkboxCell = document.createElement('td');
+    checkboxCell.className = 'col-select';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'radio';
+    checkbox.name = 'selected-operation';
+    checkbox.value = operation.id;
+    checkbox.dataset.operationType = operation.type;
+
+    if (operation.type === 'PUSH' && operation.status === 'COMPLETED') {
+        checkbox.addEventListener('change', (e) => {
+            document.querySelectorAll('#queue-table-body tr').forEach(r => {
+                r.classList.remove('selected');
+            });
+            if (e.target.checked) {
+                row.classList.add('selected');
+            }
+        });
+    } else {
+        checkbox.disabled = true;
+        checkbox.style.visibility = 'hidden';
+    }
+
+    checkboxCell.appendChild(checkbox);
+    row.appendChild(checkboxCell);
+
+    const idCell = document.createElement('td');
+    idCell.className = 'col-id';
+    idCell.textContent = operation.id;
+    row.appendChild(idCell);
+
+    const typeCell = document.createElement('td');
+    typeCell.className = 'col-type';
+    const typeBadge = document.createElement('span');
+    typeBadge.className = 'operation-type ' + operation.type.toLowerCase();
+    typeBadge.textContent = operation.type;
+    typeCell.appendChild(typeBadge);
+    row.appendChild(typeCell);
+
+    const statusCell = document.createElement('td');
+    statusCell.className = 'col-status';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'operation-status ' + operation.status.toLowerCase().replace('_', '-');
+    statusBadge.textContent = formatStatus(operation.status);
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+
+    const directoryCell = document.createElement('td');
+    directoryCell.className = 'col-directory';
+    directoryCell.textContent = getOperationDirectory(operation);
+    directoryCell.title = getOperationDirectory(operation);
+    row.appendChild(directoryCell);
+
+    const userCell = document.createElement('td');
+    userCell.className = 'col-user';
+    userCell.textContent = operation.user_name || 'Unknown';
+    row.appendChild(userCell);
+
+    const timestampCell = document.createElement('td');
+    timestampCell.className = 'col-timestamp';
+    timestampCell.textContent = formatTimestamp(operation.created_at);
+    timestampCell.title = new Date(operation.created_at).toLocaleString();
+    row.appendChild(timestampCell);
+
+    return row;
+}
+
+function getOperationDirectory(operation) {
+    if (operation.type === 'PUSH') {
+        return operation.source_path || operation.original_path || 'N/A';
+    } else if (operation.type === 'PULL') {
+        return operation.dest_path || operation.original_path || 'N/A';
+    }
+    return operation.source_path || 'N/A';
+}
+
+function formatStatus(status) {
+    return status.replace('_', ' ').toLowerCase()
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return diffMins + 'm ago';
+    if (diffHours < 24) return diffHours + 'h ago';
+    if (diffDays < 7) return diffDays + 'd ago';
+
+    return date.toLocaleDateString();
+}
+
+export function updateOperationInQueueTable(operation) {
+    const row = document.querySelector('#queue-table-body tr[data-operation-id="' + operation.id + '"]');
+    if (row) {
+        const newRow = createOperationTableRow(operation);
+        row.replaceWith(newRow);
+    } else {
+        const tbody = document.getElementById('queue-table-body');
+        if (tbody) {
+            const newRow = createOperationTableRow(operation);
+            tbody.insertBefore(newRow, tbody.firstChild);
+        }
+    }
+}
+
+export function getSelectedOperationId() {
+    const selectedCheckbox = document.querySelector('#queue-table-body input[type="radio"]:checked');
+    return selectedCheckbox ? parseInt(selectedCheckbox.value) : null;
+}
+
+export function showQueueLoading() {
+    const loadingIndicator = document.getElementById('loading-queue');
+    if (loadingIndicator) {
+        loadingIndicator.classList.remove('hidden');
+    }
+}
+
+export function hideQueueLoading() {
+    const loadingIndicator = document.getElementById('loading-queue');
+    if (loadingIndicator) {
+        loadingIndicator.classList.add('hidden');
+    }
+}
+
+export function filterDirectoriesOnly(files) {
+    return files.filter(file => file.is_directory);
+}
+
+export function markDirectoryRows(paneId) {
+    const tbody = document.getElementById('file-list-body-' + paneId);
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const isDirectory = row.dataset.isDirectory === 'true';
+        if (isDirectory) {
+            row.classList.add('directory');
+        } else {
+            row.classList.remove('directory');
+        }
+    });
+}
+
+export function updatePushButtonState(hasSelection) {
+    const pushBtn = document.getElementById('push-btn');
+    if (pushBtn) {
+        pushBtn.disabled = !hasSelection;
+    }
+}
+
+export function updatePullButtonState(hasSelection) {
+    const pullBtn = document.getElementById('pull-btn');
+    if (pullBtn) {
+        pullBtn.disabled = !hasSelection;
+    }
+}
