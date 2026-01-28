@@ -602,9 +602,10 @@ class OperationService:
         import os
         dir_name = os.path.basename(source_dir.rstrip('/\\'))
 
-        # Build destination paths
-        dest_path_b = os.path.join(self.settings.path_b, dir_name)
-        archive_path_c = os.path.join(self.settings.path_c, dir_name)
+        # Build destination paths using B: and C: prefixes for worker resolution
+        # Worker will resolve B: and C: to actual paths via PathBPrefix/PathCPrefix
+        dest_path_b = f"B:/{dir_name}"
+        archive_path_c = f"C:/{dir_name}"
 
         # Create operation record
         operation = Operation(

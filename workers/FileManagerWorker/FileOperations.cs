@@ -15,6 +15,7 @@ namespace FileManagerWorker
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private string _pathAPrefix;
         private string _pathBPrefix;
+        private string _pathCPrefix;
 
         /// <summary>
         /// Path A prefix - can be updated by admin
@@ -42,14 +43,28 @@ namespace FileManagerWorker
             }
         }
 
-        public FileOperations(string pathAPrefix, string pathBPrefix)
+        /// <summary>
+        /// Path C prefix - can be updated by admin
+        /// </summary>
+        public string PathCPrefix
+        {
+            get => _pathCPrefix;
+            set
+            {
+                Logger.Info("PathCPrefix changed from '{0}' to '{1}'", _pathCPrefix, value);
+                _pathCPrefix = value;
+            }
+        }
+
+        public FileOperations(string pathAPrefix, string pathBPrefix, string pathCPrefix)
         {
             _pathAPrefix = pathAPrefix;
             _pathBPrefix = pathBPrefix;
+            _pathCPrefix = pathCPrefix;
         }
 
         /// <summary>
-        /// Resolves a path with A: or B: prefix to actual file system path
+        /// Resolves a path with A:, B:, or C: prefix to actual file system path
         /// </summary>
         private string ResolvePath(string path)
         {
@@ -60,7 +75,7 @@ namespace FileManagerWorker
             }
 
             // Check for absolute paths or network paths
-            if (Path.IsPathRooted(path.Substring(2)) || path.Contains(":") && !path.StartsWith("A:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("B:", StringComparison.OrdinalIgnoreCase))
+            if (Path.IsPathRooted(path.Substring(2)) || path.Contains(":") && !path.StartsWith("A:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("B:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException($"Absolute paths and network paths are not allowed: {path}");
             }
@@ -73,9 +88,13 @@ namespace FileManagerWorker
             {
                 return Path.Combine(_pathBPrefix, path.Substring(2).TrimStart('\\', '/'));
             }
+            else if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+            {
+                return Path.Combine(_pathCPrefix, path.Substring(2).TrimStart('\\', '/'));
+            }
             else
             {
-                throw new ArgumentException($"Path must start with A: or B: prefix. Got: {path}");
+                throw new ArgumentException($"Path must start with A:, B:, or C: prefix. Got: {path}");
             }
         }
 
@@ -88,7 +107,8 @@ namespace FileManagerWorker
 
             // Ensure resolved path is within allowed prefixes
             if (!fullPath.StartsWith(_pathAPrefix, StringComparison.OrdinalIgnoreCase) &&
-                !fullPath.StartsWith(_pathBPrefix, StringComparison.OrdinalIgnoreCase))
+                !fullPath.StartsWith(_pathBPrefix, StringComparison.OrdinalIgnoreCase) &&
+                !fullPath.StartsWith(_pathCPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 throw new UnauthorizedAccessException($"Path is outside allowed boundaries: {fullPath}");
             }
@@ -288,14 +308,14 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Lists files and directories
+        /// Lists files and directories with optional pagination
         /// </summary>
-        public async Task<Dictionary<string, object>> ListAsync(string path, bool recursive = false)
+        public async Task<Dictionary<string, object>> ListAsync(string path, bool recursive = false, int offset = 0, int limit = 0)
         {
             var resolvedPath = ResolvePath(path);
             ValidatePath(resolvedPath);
 
-            Logger.Info("Listing {0} (recursive: {1})", resolvedPath, recursive);
+            Logger.Info("Listing {0} (recursive: {1}, offset: {2}, limit: {3})", resolvedPath, recursive, offset, limit);
 
             var result = await Task.Run(() =>
             {
@@ -326,17 +346,24 @@ namespace FileManagerWorker
                         type = "directory"
                     });
 
-                var items = files.Concat(directories).ToList();
+                var allItems = files.Concat(directories).ToList();
+                var totalCount = allItems.Count;
+
+                // Apply pagination if limit > 0
+                var paginatedItems = (limit > 0) ? allItems.Skip(offset).Take(limit).ToList() : allItems;
 
                 return new Dictionary<string, object>
                 {
                     { "path", path },
-                    { "count", items.Count },
-                    { "items", items }
+                    { "count", paginatedItems.Count },
+                    { "total", totalCount },
+                    { "offset", offset },
+                    { "limit", limit },
+                    { "items", paginatedItems }
                 };
             });
 
-            Logger.Info("List completed: {0} items", result["count"]);
+            Logger.Info("List completed: {0} items (total: {1})", result["count"], result["total"]);
             return result;
         }
 
