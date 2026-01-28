@@ -65,6 +65,16 @@ class OperationStatus(str, PyEnum):
     ROLLED_BACK = "ROLLED_BACK"
 
 
+class CommandStatus(str, PyEnum):
+    """Worker command execution status."""
+    PENDING = "PENDING"
+    SENT = "SENT"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    TIMEOUT = "TIMEOUT"
+
+
 class User(Base):
     """
     User model for authentication and authorization.
@@ -201,6 +211,76 @@ class Worker(Base):
 
     def __repr__(self) -> str:
         return f"<Worker(id={self.id}, name='{self.name}', status={self.status.value})>"
+
+
+class WorkerCommand(Base):
+    """
+    Worker command model for pull-based command distribution.
+
+    Commands are created by the API and polled by workers.
+    Workers execute commands and report results back via response endpoint.
+    """
+    __tablename__ = "worker_commands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    worker_id = Column(
+        Integer,
+        ForeignKey("workers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    # Command details
+    command = Column(String(50), nullable=False)  # copy, move, delete, mkdir, list, search, etc.
+    source_path = Column(Text, nullable=True)
+    dest_path = Column(Text, nullable=True)
+    params_json = Column(JSON, nullable=True)  # Additional parameters
+
+    # Status tracking
+    status = Column(
+        Enum(CommandStatus),
+        nullable=False,
+        default=CommandStatus.PENDING,
+        index=True,
+    )
+
+    # Timing
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Response data
+    response_status = Column(String(20), nullable=True)  # success, failed, error
+    response_message = Column(Text, nullable=True)
+    response_data = Column(JSON, nullable=True)  # File count, size, error details, etc.
+    error_msg = Column(Text, nullable=True)
+
+    # Timeout management
+    timeout_seconds = Column(Integer, nullable=False, default=300)  # 5 minutes default
+
+    # Relationships
+    worker = relationship("Worker")
+    operation = relationship("Operation")
+
+    # Indexes for polling queries
+    __table_args__ = (
+        Index("ix_worker_commands_worker_status", "worker_id", "status"),
+        Index("ix_worker_commands_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<WorkerCommand(id={self.id}, worker_id={self.worker_id}, command='{self.command}', status={self.status.value})>"
 
 
 class Operation(Base):

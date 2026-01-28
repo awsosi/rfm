@@ -483,3 +483,32 @@ class WorkerCommandResponse(BaseModel):
     file_count: Optional[int] = None
     total_size_bytes: Optional[int] = None
     error_details: Optional[dict[str, Any]] = None
+
+
+class CommandPollResponse(BaseModel):
+    """Response for command polling endpoint."""
+
+    command_id: Optional[int] = None
+    command: Optional[str] = None
+    source_path: Optional[str] = None
+    dest_path: Optional[str] = None
+    parameters: Optional[dict[str, Any]] = None
+
+
+class CommandResponseRequest(BaseModel):
+    """Request to submit command response."""
+
+    status: str = Field(..., description="Response status: success, failed, error")
+    message: Optional[str] = None
+    file_count: Optional[int] = None
+    total_size_bytes: Optional[int] = None
+    error_details: Optional[dict[str, Any]] = None
+
+
+class WorkerConfigResponse(BaseModel):
+    """Worker configuration response."""
+
+    path_a_prefix: Optional[str] = None
+    path_b_prefix: Optional[str] = None
+    path_c_prefix: Optional[str] = None
+    polling_interval_seconds: int = 5
