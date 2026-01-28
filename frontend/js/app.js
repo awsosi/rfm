@@ -17,7 +17,10 @@ import {
     connectWebSocket,
     disconnectWebSocket,
     onWebSocketEvent,
-    startPolling
+    startPolling,
+    pushOperation,
+    pullOperation,
+    getOperationHistory
 } from './api.js';
 import {
     renderFileList,
@@ -41,7 +44,16 @@ import {
     disableOperationButtons,
     enableOperationButtons,
     getCurrentPath,
-    setCurrentPath
+    setCurrentPath,
+    renderOperationQueue,
+    updateOperationInQueueTable,
+    getSelectedOperationId,
+    showQueueLoading,
+    hideQueueLoading,
+    filterDirectoriesOnly,
+    markDirectoryRows,
+    updatePushButtonState,
+    updatePullButtonState
 } from './ui.js';
 import { normalizePath, joinPath, debounce } from './utils.js';
 
@@ -62,7 +74,18 @@ const state = {
         }
     },
     operations: new Map(),
-    refreshInterval: null
+    refreshInterval: null,
+    // VF Redesign: Operation queue state
+    operationQueue: {
+        operations: [],
+        offset: 0,
+        filters: {
+            status: null,
+            type: null
+        }
+    },
+    // VF Redesign: Worker ID (for single worker operations)
+    workerId: 1 // Default to first worker, can be updated from settings
 };
 
 /**
@@ -97,9 +120,20 @@ async function init() {
     // Setup event listeners
     setupEventListeners();
 
-    // Initialize both panes
-    await loadDirectory('a', '/');
-    await loadDirectory('b', '/');
+    // VF Redesign: Check if we're on the redesigned layout
+    const isVFRedesign = document.body.classList.contains('vf-redesign');
+
+    if (isVFRedesign) {
+        // Initialize single pane (Path A only)
+        await loadDirectory('a', '/');
+
+        // Load operation history
+        await loadOperationHistory();
+    } else {
+        // Initialize both panes (legacy dual-pane)
+        await loadDirectory('a', '/');
+        await loadDirectory('b', '/');
+    }
 
     // Connect WebSocket for real-time updates
     await connectWebSocket();
@@ -142,16 +176,26 @@ function setupEventListeners() {
         await openSettingsModal();
     });
 
-    // Setup pane controls
-    setupPaneControls('a');
-    setupPaneControls('b');
+    // VF Redesign: Check if we're on the redesigned layout
+    const isVFRedesign = document.body.classList.contains('vf-redesign');
 
-    // Setup operation buttons
-    setupOperationButtons();
+    if (isVFRedesign) {
+        // Setup single pane controls (Path A only)
+        setupPaneControls('a');
+        setupSelectAll('a');
 
-    // Setup select all checkboxes
-    setupSelectAll('a');
-    setupSelectAll('b');
+        // Setup VF redesign buttons and filters
+        setupVFRedesignControls();
+    } else {
+        // Setup dual pane controls (legacy)
+        setupPaneControls('a');
+        setupPaneControls('b');
+        setupSelectAll('a');
+        setupSelectAll('b');
+
+        // Setup operation buttons (legacy)
+        setupOperationButtons();
+    }
 
     // Path change event
     document.addEventListener('pathchange', async (e) => {
@@ -623,43 +667,66 @@ async function loadActiveOperations() {
 function handleWebSocketEvent(data) {
     console.log('WebSocket event:', data);
 
-    switch (data.type) {
-        case 'operation_started':
-            addOperationToQueue(data.operation);
-            break;
+    // VF Redesign: Check if we're on the redesigned layout
+    const isVFRedesign = document.body.classList.contains('vf-redesign');
 
-        case 'operation_progress':
-            updateOperationInQueue(data.operation);
-            if (data.operation.progress !== undefined) {
-                updateProgress(data.operation.progress);
-            }
-            break;
+    if (isVFRedesign) {
+        // Handle VF redesign events
+        switch (data.type) {
+            case 'operation_update':
+            case 'operation_started':
+            case 'operation_progress':
+            case 'operation_completed':
+                handleVFOperationUpdate(data);
+                break;
 
-        case 'operation_completed':
-            updateOperationInQueue(data.operation);
-            removeOperationFromQueue(data.operation.operation_id);
-            hideProgress();
+            case 'file_changed':
+                // Refresh Path A if affected
+                if (data.path && data.path.startsWith(state.panes.a.currentPath)) {
+                    refreshPane('a');
+                }
+                break;
+        }
+    } else {
+        // Legacy dual-pane event handling
+        switch (data.type) {
+            case 'operation_started':
+                addOperationToQueue(data.operation);
+                break;
 
-            if (data.operation.status === 'completed') {
-                showSuccess(`Operation completed: ${data.operation.operation_type}`);
-                // Refresh panes
-                refreshPane('a');
-                refreshPane('b');
-            } else if (data.operation.status === 'failed') {
-                showError(`Operation failed: ${data.operation.error || 'Unknown error'}`);
-            }
-            break;
+            case 'operation_progress':
+                updateOperationInQueue(data.operation);
+                if (data.operation.progress !== undefined) {
+                    updateProgress(data.operation.progress);
+                }
+                break;
 
-        case 'file_changed':
-            // Refresh affected pane
-            if (data.path) {
-                ['a', 'b'].forEach(paneId => {
-                    if (data.path.startsWith(state.panes[paneId].currentPath)) {
-                        refreshPane(paneId);
-                    }
-                });
-            }
-            break;
+            case 'operation_completed':
+                updateOperationInQueue(data.operation);
+                removeOperationFromQueue(data.operation.operation_id);
+                hideProgress();
+
+                if (data.operation.status === 'completed') {
+                    showSuccess(`Operation completed: ${data.operation.operation_type}`);
+                    // Refresh panes
+                    refreshPane('a');
+                    refreshPane('b');
+                } else if (data.operation.status === 'failed') {
+                    showError(`Operation failed: ${data.operation.error || 'Unknown error'}`);
+                }
+                break;
+
+            case 'file_changed':
+                // Refresh affected pane
+                if (data.path) {
+                    ['a', 'b'].forEach(paneId => {
+                        if (data.path.startsWith(state.panes[paneId].currentPath)) {
+                            refreshPane(paneId);
+                        }
+                    });
+                }
+                break;
+        }
     }
 }
 
@@ -786,6 +853,288 @@ async function openSettingsModal() {
     } catch (error) {
         showError('Failed to load settings: ' + error.message);
         console.error('Settings error:', error);
+    }
+}
+
+/* ==========================================
+   VF REDESIGN - Push/Pull Operations & Queue
+   ========================================== */
+
+/**
+ * Setup VF redesign controls (Push/Pull buttons and filters)
+ */
+function setupVFRedesignControls() {
+    // Push button
+    const pushBtn = document.getElementById('push-btn');
+    if (pushBtn) {
+        pushBtn.addEventListener('click', async () => {
+            await handlePushOperation();
+        });
+    }
+
+    // Pull button
+    const pullBtn = document.getElementById('pull-btn');
+    if (pullBtn) {
+        pullBtn.addEventListener('click', async () => {
+            await handlePullOperation();
+        });
+    }
+
+    // Refresh queue button
+    const refreshQueueBtn = document.getElementById('refresh-queue');
+    if (refreshQueueBtn) {
+        refreshQueueBtn.addEventListener('click', async () => {
+            await loadOperationHistory();
+        });
+    }
+
+    // Queue filter - status
+    const statusFilter = document.getElementById('queue-filter-status');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', async () => {
+            state.operationQueue.filters.status = statusFilter.value || null;
+            state.operationQueue.offset = 0;
+            await loadOperationHistory();
+        });
+    }
+
+    // Queue filter - type
+    const typeFilter = document.getElementById('queue-filter-type');
+    if (typeFilter) {
+        typeFilter.addEventListener('change', async () => {
+            state.operationQueue.filters.type = typeFilter.value || null;
+            state.operationQueue.offset = 0;
+            await loadOperationHistory();
+        });
+    }
+
+    // Load more queue button
+    const loadMoreQueue = document.getElementById('load-more-queue');
+    if (loadMoreQueue) {
+        loadMoreQueue.addEventListener('click', async () => {
+            await loadOperationHistory(true);
+        });
+    }
+
+    // File selection change handler to update Push button state
+    const fileListA = document.getElementById('file-list-body-a');
+    if (fileListA) {
+        fileListA.addEventListener('change', (e) => {
+            if (e.target.type === 'checkbox') {
+                updateVFButtonStates();
+            }
+        });
+    }
+
+    // Operation queue selection change handler to update Pull button state
+    const queueTable = document.getElementById('queue-table-body');
+    if (queueTable) {
+        queueTable.addEventListener('change', (e) => {
+            if (e.target.type === 'radio') {
+                updateVFButtonStates();
+            }
+        });
+    }
+}
+
+/**
+ * Load operation history (VF Redesign)
+ */
+async function loadOperationHistory(append = false) {
+    showQueueLoading();
+
+    try {
+        const filters = {
+            limit: 100,
+            offset: append ? state.operationQueue.offset : 0,
+            operation_type: state.operationQueue.filters.type,
+            status: state.operationQueue.filters.status
+        };
+
+        const operations = await getOperationHistory(filters);
+
+        if (append) {
+            state.operationQueue.operations.push(...operations);
+            state.operationQueue.offset += operations.length;
+        } else {
+            state.operationQueue.operations = operations;
+            state.operationQueue.offset = operations.length;
+        }
+
+        renderOperationQueue(operations, append);
+
+        // Show/hide load more button
+        const loadMoreBtn = document.getElementById('load-more-queue');
+        if (loadMoreBtn) {
+            if (operations.length < 100) {
+                loadMoreBtn.classList.add('hidden');
+            } else {
+                loadMoreBtn.classList.remove('hidden');
+            }
+        }
+
+    } catch (error) {
+        console.error('Failed to load operation history:', error);
+        showError('Failed to load operation history: ' + error.message);
+    } finally {
+        hideQueueLoading();
+    }
+}
+
+/**
+ * Handle Push operation (VF Redesign)
+ */
+async function handlePushOperation() {
+    const selectedFiles = getSelectedFiles('a');
+
+    if (selectedFiles.length === 0) {
+        showError('Please select a directory to push');
+        return;
+    }
+
+    if (selectedFiles.length > 1) {
+        showError('Please select only one directory');
+        return;
+    }
+
+    const selectedFile = selectedFiles[0];
+
+    // Ensure it's a directory
+    if (!selectedFile.is_directory) {
+        showError('Please select a directory (not a file)');
+        return;
+    }
+
+    // Confirm operation
+    const confirmed = await confirmAction(
+        `Push directory "${selectedFile.name}"?\n\n` +
+        `This will:\n` +
+        `1. Copy to PATH_B\n` +
+        `2. Archive to PATH_C\n\n` +
+        `Original directory will be moved to archive.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        updateOperationStatus('Pushing directory...', 'info');
+
+        const sourcePath = joinPath(state.panes.a.currentPath, selectedFile.name);
+        const operation = await pushOperation(sourcePath, state.workerId);
+
+        showSuccess('Push operation started');
+        clearSelection('a');
+
+        // Refresh operation history
+        await loadOperationHistory();
+
+        // Refresh Path A (directory will be archived)
+        await refreshPane('a');
+
+    } catch (error) {
+        console.error('Push operation failed:', error);
+        showError('Push operation failed: ' + error.message);
+    } finally {
+        clearOperationStatus();
+    }
+}
+
+/**
+ * Handle Pull operation (VF Redesign)
+ */
+async function handlePullOperation() {
+    const selectedOperationId = getSelectedOperationId();
+
+    if (!selectedOperationId) {
+        showError('Please select a PUSH operation to revert');
+        return;
+    }
+
+    // Find the selected operation
+    const operation = state.operationQueue.operations.find(op => op.id === selectedOperationId);
+
+    if (!operation) {
+        showError('Selected operation not found');
+        return;
+    }
+
+    // Confirm operation
+    const confirmed = await confirmAction(
+        `Pull (revert) operation ${operation.id}?\n\n` +
+        `This will:\n` +
+        `1. Copy from PATH_B back to: ${operation.original_path}\n` +
+        `2. Remove from PATH_B\n\n` +
+        `Original data will be restored from archive.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        updateOperationStatus('Pulling (reverting) operation...', 'info');
+
+        await pullOperation(selectedOperationId, state.workerId);
+
+        showSuccess('Pull operation started');
+
+        // Refresh operation history
+        await loadOperationHistory();
+
+        // Refresh Path A if we're in the same directory
+        if (state.panes.a.currentPath === operation.original_path ||
+            operation.original_path.startsWith(state.panes.a.currentPath)) {
+            await refreshPane('a');
+        }
+
+    } catch (error) {
+        console.error('Pull operation failed:', error);
+        showError('Pull operation failed: ' + error.message);
+    } finally {
+        clearOperationStatus();
+    }
+}
+
+/**
+ * Update VF button states based on selections
+ */
+function updateVFButtonStates() {
+    // Update Push button
+    const selectedFiles = getSelectedFiles('a');
+    const hasDirectorySelection = selectedFiles.length === 1 && selectedFiles[0].is_directory;
+    updatePushButtonState(hasDirectorySelection);
+
+    // Update Pull button
+    const selectedOperationId = getSelectedOperationId();
+    updatePullButtonState(!!selectedOperationId);
+}
+
+/**
+ * Handle WebSocket operation updates for VF redesign
+ */
+function handleVFOperationUpdate(data) {
+    if (data.type === 'operation_update' && data.operation_id) {
+        // Find and update the operation in our local state
+        const opIndex = state.operationQueue.operations.findIndex(
+            op => op.id === data.operation_id
+        );
+
+        if (opIndex !== -1) {
+            // Update local state
+            state.operationQueue.operations[opIndex] = {
+                ...state.operationQueue.operations[opIndex],
+                status: data.status,
+                ...data
+            };
+
+            // Update UI
+            updateOperationInQueueTable(state.operationQueue.operations[opIndex]);
+        } else {
+            // New operation, reload history
+            loadOperationHistory();
+        }
     }
 }
 
