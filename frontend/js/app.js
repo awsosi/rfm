@@ -324,6 +324,7 @@ async function loadDirectory(paneId, path) {
 
         setCurrentPath(paneId, normalizedPath);
         renderFileList(paneId, files, false);
+        markDirectoryRows(paneId); // Apply directory styling for VF redesign
 
     } catch (error) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
@@ -357,6 +358,7 @@ async function loadMoreFiles(paneId) {
         pane.offset += files.length;
 
         renderFileList(paneId, files, true);
+        markDirectoryRows(paneId); // Apply directory styling for VF redesign
 
     } catch (error) {
         console.error(`Error loading more files for pane ${paneId}:`, error);
