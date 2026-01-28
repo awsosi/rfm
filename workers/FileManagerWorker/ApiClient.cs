@@ -23,6 +23,7 @@ namespace FileManagerWorker
         private readonly string _apiUrl;
         private readonly HttpClient _httpClient;
         private readonly CertificateManager _certManager;
+        private readonly ServiceConfiguration _config;
         private X509Certificate2 _clientCertificate;
         private bool _isRegistered = false;private static bool IsNetworkFailure(HttpRequestException ex) =>
         	ex.InnerException is SocketException sock &&
@@ -30,10 +31,11 @@ namespace FileManagerWorker
 	         sock.SocketErrorCode == SocketError.TimedOut ||
 	         sock.SocketErrorCode == SocketError.HostUnreachable);
 
-		public ApiClient(string apiUrl, CertificateManager certManager)
+		public ApiClient(string apiUrl, CertificateManager certManager, ServiceConfiguration config = null)
         {
             _apiUrl = apiUrl?.TrimEnd('/');
             _certManager = certManager;
+            _config = config;
 
             // Get or create client certificate
             _clientCertificate = _certManager.GetOrCreateCertificate();
@@ -64,12 +66,17 @@ namespace FileManagerWorker
                 Logger.Info("Registering worker with Central API...");
 
                 var publicKeyPem = _certManager.ExportPublicKeyAsPem(_clientCertificate);
+                var workerName = Environment.MachineName;
+
+                // Build registration data matching API WorkerRegister schema
                 var registrationData = new
                 {
-                    WorkerId = Environment.MachineName,
-                    PublicKey = publicKeyPem,
-                    Thumbprint = _clientCertificate.Thumbprint,
-                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    name = workerName,
+                    hostname = workerName,
+                    public_key = publicKeyPem,
+                    path_a_prefix = _config?.PathAPrefix ?? @"C:\PathA",
+                    path_b_prefix = _config?.PathBPrefix ?? @"C:\PathB",
+                    version = "1.0.0"
                 };
 
                 var json = JsonConvert.SerializeObject(registrationData);
