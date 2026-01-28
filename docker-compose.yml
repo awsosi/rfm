@@ -27,6 +27,10 @@ volumes:
     driver: local
     name: file-manager-redis-data
 
+  elasticsearch-data:
+    driver: local
+    name: file-manager-elasticsearch-data
+
   logs:
     driver: local
     name: file-manager-logs
@@ -118,6 +122,56 @@ services:
         max-file: "3"
 
   # ----------------------------------------------------------------------------
+  # Elasticsearch (8.x)
+  # ----------------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: file-manager-elasticsearch
+    restart: unless-stopped
+
+    environment:
+      # Single-node cluster configuration (no security for internal network)
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      cluster.name: file-manager-cluster
+      node.name: file-manager-node-1
+      bootstrap.memory_lock: "true"
+
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+    networks:
+      file-manager-internal:
+        ipv4_address: 172.28.0.12
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    # No port exposure - internal only
+    # ports:
+    #   - "127.0.0.1:49200:9200"
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
   # FastAPI Backend
   # ----------------------------------------------------------------------------
   api:
@@ -143,6 +197,16 @@ services:
       # Redis
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-50}
+
+      # Elasticsearch
+      ELASTICSEARCH_ENABLED: ${ELASTICSEARCH_ENABLED:-true}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+      ELASTICSEARCH_INDEX_OPERATIONS: ${ELASTICSEARCH_INDEX_OPERATIONS:-rfm-operations}
+      ELASTICSEARCH_INDEX_FILES: ${ELASTICSEARCH_INDEX_FILES:-rfm-files}
+      ELASTICSEARCH_MAX_RETRIES: ${ELASTICSEARCH_MAX_RETRIES:-3}
+      ELASTICSEARCH_TIMEOUT: ${ELASTICSEARCH_TIMEOUT:-30}
 
       # API Server
       API_HOST: 0.0.0.0
@@ -209,6 +273,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
     healthcheck:

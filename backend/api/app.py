@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI):
         echo=settings.db_echo,
     )
 
+    # Initialize Elasticsearch
+    from api.services.elasticsearch_service import get_elasticsearch_service
+    es_service = await get_elasticsearch_service()
+
     # Start WebSocket manager
     from api.websocket_manager import ws_manager
     await ws_manager.start()
@@ -60,6 +64,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     from api.websocket_manager import ws_manager
     await ws_manager.stop()
+
+    # Close Elasticsearch
+    from api.services.elasticsearch_service import close_elasticsearch_service
+    await close_elasticsearch_service()
+
     await close_database()
 
 
