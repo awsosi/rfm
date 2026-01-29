@@ -2,9 +2,43 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** VF REDESIGN COMPLETE ✅ - Final Fixes Applied
+> **Status:** BUILD FIXED ✅ - Worker Builds Successfully
 >
 > **Ostatnia aktualizacja:** 2026-01-29
+
+---
+
+## 🔧 BUILD FIX (2026-01-29)
+
+### Issue
+After PR #61, the worker failed to build with the following errors:
+- `WindowsImpersonation` class not found in FileOperations.cs (lines 86, 102)
+- Unused field warning for `_isRunning` in WorkerService.cs (line 31)
+
+### Root Cause
+The `WindowsImpersonation.cs` file was created but not included in the project file (`FileManagerWorker.csproj`), causing compilation errors.
+
+### ✅ Fixes Applied
+
+#### 1. Added WindowsImpersonation.cs to Project
+**File**: `workers/FileManagerWorker/FileManagerWorker.csproj`
+
+**Change**: Added missing compile reference:
+```xml
+<Compile Include="WindowsImpersonation.cs" />
+```
+
+**Impact**: WindowsImpersonation class now properly included in build, resolving CS0103 errors.
+
+#### 2. Removed Unused Field
+**File**: `workers/FileManagerWorker/WorkerService.cs`
+
+**Change**: Removed unused `_isRunning` field (lines 31, 110, 135)
+
+**Rationale**: The field was set but never read. Service lifecycle is already managed by `CancellationTokenSource`.
+
+### Build Status
+✅ Worker now builds successfully without errors or warnings
 
 ---
 
