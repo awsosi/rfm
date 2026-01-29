@@ -126,8 +126,26 @@ namespace FileManagerWorker
                 Console.WriteLine("FileManagerWorker Configuration Wizard");
                 Console.WriteLine("==============================================================================");
                 Console.WriteLine();
-                Console.WriteLine("This wizard will securely store your service configuration in");
-                Console.WriteLine("Windows Credential Manager (encrypted by the operating system).");
+
+                // Check for elevation
+                if (!CertificateManager.IsElevated())
+                {
+                    Console.WriteLine("ERROR: This wizard must be run as Administrator");
+                    Console.WriteLine();
+                    Console.WriteLine("The configuration wizard generates an mTLS certificate which requires");
+                    Console.WriteLine("elevated privileges to store in the LocalMachine certificate store.");
+                    Console.WriteLine();
+                    Console.WriteLine("Please run again with Administrator privileges:");
+                    Console.WriteLine("  Right-click Command Prompt -> Run as Administrator");
+                    Console.WriteLine("  Then: FileManagerWorker.exe /config");
+                    Console.WriteLine();
+                    return 1;
+                }
+
+                Console.WriteLine("This wizard will:");
+                Console.WriteLine("  1. Generate mTLS certificate for API authentication");
+                Console.WriteLine("  2. Configure samba credentials for file operations");
+                Console.WriteLine("  3. Securely store configuration in Windows Credential Manager");
                 Console.WriteLine();
 
                 // Prompt for API URL
@@ -139,20 +157,49 @@ namespace FileManagerWorker
                     return 1;
                 }
 
-                // Prompt for Service User
-                Console.Write("Enter service username (e.g., DOMAIN\\User or leave empty for Network Service): ");
+                // Prompt for Samba User (for file operations)
+                Console.WriteLine();
+                Console.WriteLine("--- Samba Credentials (for file operations) ---");
+                Console.WriteLine("These credentials will be used to access network shares (\\\\server\\share).");
+                Console.WriteLine("Leave empty if using Network Service account permissions.");
+                Console.WriteLine();
+                Console.Write("Enter samba username (e.g., DOMAIN\\User): ");
                 string serviceUser = Console.ReadLine();
 
-                // Prompt for Service Password (secure input)
+                // Prompt for Samba Password (secure input)
                 string servicePassword = "";
                 if (!string.IsNullOrWhiteSpace(serviceUser))
                 {
-                    Console.Write("Enter password (input hidden): ");
+                    Console.Write("Enter samba password (input hidden): ");
                     servicePassword = ReadPasswordSecurely();
                     Console.WriteLine();
                 }
 
+                // Generate mTLS certificate
+                Console.WriteLine();
+                Console.WriteLine("--- Generating mTLS Certificate ---");
+                Console.WriteLine("Generating self-signed certificate for API authentication...");
+
+                var certManager = new CertificateManager
+                {
+                    StoreMode = CertificateManager.CertStoreMode.LocalMachine
+                };
+
+                var certificate = certManager.GetOrCreateCertificate();
+                if (certificate == null)
+                {
+                    Console.WriteLine("ERROR: Failed to generate certificate");
+                    return 1;
+                }
+
+                Console.WriteLine($"Certificate generated successfully!");
+                Console.WriteLine($"  Thumbprint: {certificate.Thumbprint}");
+                Console.WriteLine($"  Subject: {certificate.Subject}");
+                Console.WriteLine($"  Valid from: {certificate.NotBefore:yyyy-MM-dd} to {certificate.NotAfter:yyyy-MM-dd}");
+
                 // Save to Windows Credential Manager
+                Console.WriteLine();
+                Console.WriteLine("--- Saving Configuration ---");
                 if (!SaveToCredentialManager(apiUrl, serviceUser, servicePassword))
                 {
                     Console.WriteLine("ERROR: Failed to save configuration to Windows Credential Manager");
@@ -161,8 +208,19 @@ namespace FileManagerWorker
 
                 Console.WriteLine();
                 Console.WriteLine("==============================================================================");
-                Console.WriteLine("Configuration saved successfully to Windows Credential Manager!");
+                Console.WriteLine("Configuration completed successfully!");
                 Console.WriteLine("==============================================================================");
+                Console.WriteLine();
+                Console.WriteLine("WHAT WAS CONFIGURED:");
+                Console.WriteLine($"  ✓ mTLS certificate generated and stored in LocalMachine\\My");
+                Console.WriteLine($"  ✓ API URL saved to Windows Credential Manager");
+                Console.WriteLine($"  ✓ Samba credentials saved to Windows Credential Manager");
+                Console.WriteLine();
+                Console.WriteLine("SECURITY MODEL:");
+                Console.WriteLine("  • Service runs as Network Service (least privilege)");
+                Console.WriteLine("  • Certificate used for API authentication (mTLS)");
+                Console.WriteLine("  • Samba credentials used ONLY for file operations (impersonation)");
+                Console.WriteLine("  • All credentials encrypted by Windows Credential Manager");
                 Console.WriteLine();
                 Console.WriteLine("NEXT STEP:");
                 Console.WriteLine("  Run: FileManagerWorker.exe install --interactive");

@@ -37,8 +37,12 @@ namespace FileManagerWorker
             _certManager = certManager;
             _config = config;
 
-            // Get or create client certificate
-            _clientCertificate = _certManager.GetOrCreateCertificate();
+            // Get client certificate (read-only - must exist from /config setup)
+            _clientCertificate = _certManager.GetCertificateReadOnly();
+            if (_clientCertificate == null)
+            {
+                throw new InvalidOperationException("mTLS certificate not found. Run /config as Administrator first.");
+            }
 
             // Create HttpClientHandler with mTLS support
             var handler = new WebRequestHandler();

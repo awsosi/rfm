@@ -53,14 +53,46 @@ namespace FileManagerWorker
                     return false;
                 }
 
-                // Initialize components
+                // Initialize certificate manager (read-only mode)
                 _certManager = new CertificateManager();
 				_certManager.StoreMode = Debugger.IsAttached || Environment.GetCommandLineArgs().Contains("/debug")
 	                ? CertificateManager.CertStoreMode.CurrentUser
 	                : CertificateManager.CertStoreMode.LocalMachine;
 				Logger.Info("Using certificate store: {0}", _certManager.StoreMode);
+
+                // Get certificate (read-only - must be generated during /config)
+                var certificate = _certManager.GetCertificateReadOnly();
+                if (certificate == null)
+                {
+                    Logger.Error("========================================================================");
+                    Logger.Error("CRITICAL: mTLS certificate not found!");
+                    Logger.Error("========================================================================");
+                    Logger.Error("The service cannot start without an mTLS certificate.");
+                    Logger.Error("");
+                    Logger.Error("DIAGNOSIS:");
+                    Logger.Error("  - Certificate not found in {0} certificate store", _certManager.StoreMode);
+                    Logger.Error("  - Certificate must be generated during /config setup");
+                    Logger.Error("");
+                    Logger.Error("SOLUTION:");
+                    Logger.Error("  1. Run as Administrator: FileManagerWorker.exe /config");
+                    Logger.Error("  2. Complete the configuration wizard");
+                    Logger.Error("  3. Certificate will be generated and stored");
+                    Logger.Error("  4. Then install/restart the service");
+                    Logger.Error("========================================================================");
+                    return false;
+                }
+
+                Logger.Info("Certificate loaded successfully (Thumbprint: {0})", certificate.Thumbprint);
+
+                // Initialize components
 				_apiClient = new ApiClient(config.ApiUrl, _certManager, config);
-                _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix, config.PathCPrefix);
+                _fileOps = new FileOperations(
+                    config.PathAPrefix,
+                    config.PathBPrefix,
+                    config.PathCPrefix,
+                    config.ServiceUser,      // Samba username for file operations
+                    config.ServicePassword   // Samba password for file operations
+                );
                 _rollbackManager = new RollbackManager();
                 _commandHandler = new CommandHandler(_fileOps, _rollbackManager, _apiClient);
 
