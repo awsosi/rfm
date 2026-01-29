@@ -197,13 +197,20 @@ namespace FileManagerWorker
                 Console.WriteLine($"  Subject: {certificate.Subject}");
                 Console.WriteLine($"  Valid from: {certificate.NotBefore:yyyy-MM-dd} to {certificate.NotAfter:yyyy-MM-dd}");
 
-                // Save to Windows Credential Manager
+                // Save to Windows Credential Manager AND App.config
                 Console.WriteLine();
                 Console.WriteLine("--- Saving Configuration ---");
                 if (!SaveToCredentialManager(apiUrl, serviceUser, servicePassword))
                 {
                     Console.WriteLine("ERROR: Failed to save configuration to Windows Credential Manager");
                     return 1;
+                }
+
+                // Also save API URL to App.config as fallback (in case Network Service can't access Credential Manager)
+                if (!UpdateAppConfig(apiUrl))
+                {
+                    Console.WriteLine("WARNING: Failed to update App.config, but Credential Manager was saved successfully");
+                    // Don't fail - Credential Manager is primary storage
                 }
 
                 Console.WriteLine();
@@ -348,6 +355,37 @@ namespace FileManagerWorker
             catch (Exception ex)
             {
                 Logger.Error(ex, "Failed to load credentials from Windows Credential Manager");
+                return false;
+            }
+        }
+
+        static bool UpdateAppConfig(string apiUrl)
+        {
+            try
+            {
+                var configFile = AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
+                var configFileMap = new ExeConfigurationFileMap { ExeConfigFilename = configFile };
+                var config = ConfigurationManager.OpenMappedExeConfiguration(configFileMap, ConfigurationUserLevel.None);
+
+                // Update ApiUrl in appSettings
+                if (config.AppSettings.Settings["ApiUrl"] != null)
+                {
+                    config.AppSettings.Settings["ApiUrl"].Value = apiUrl;
+                }
+                else
+                {
+                    config.AppSettings.Settings.Add("ApiUrl", apiUrl);
+                }
+
+                config.Save(ConfigurationSaveMode.Modified);
+                ConfigurationManager.RefreshSection("appSettings");
+
+                Logger.Info("App.config updated with API URL: {0}", apiUrl);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to update App.config");
                 return false;
             }
         }

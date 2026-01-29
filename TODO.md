@@ -2,9 +2,64 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** BUILD FIXED ✅ - Worker Builds Successfully
+> **Status:** WORKER LOADING FIXED ✅ - Configuration Loading Issue Resolved
 >
 > **Ostatnia aktualizacja:** 2026-01-29
+
+---
+
+## 🔧 WORKER LOADING FIX (2026-01-29)
+
+### Issue
+After the security redesign, workers showed "Error loading workers" in GUI. The worker service was attempting to connect to `https://localhost:5001` instead of the configured API URL `https://api.ff.vitkac.local`.
+
+### Root Cause
+When running as Network Service, the worker could not access Windows Credential Manager credentials saved with `PersistanceType.LocalComputer`. This caused the service to fall back to App.config which had the default value of `https://localhost:5001`.
+
+### Symptom
+Event log showed:
+```
+API URL: https://localhost:5001
+No connection could be made because the target machine actively refused it 127.0.0.1:5001
+```
+
+### ✅ Fix Applied
+
+#### Updated /config Command to Write App.config
+**File**: `workers/FileManagerWorker/Program.cs`
+
+**Changes**:
+1. Added `UpdateAppConfig()` method to write API URL to App.config
+2. Modified `HandleConfig()` to call `UpdateAppConfig()` after saving to Credential Manager
+3. App.config now serves as reliable fallback when Credential Manager access fails
+
+**Implementation**:
+```csharp
+static bool UpdateAppConfig(string apiUrl)
+{
+    var configFile = AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
+    var configFileMap = new ExeConfigurationFileMap { ExeConfigFilename = configFile };
+    var config = ConfigurationManager.OpenMappedExeConfiguration(configFileMap, ConfigurationUserLevel.None);
+
+    if (config.AppSettings.Settings["ApiUrl"] != null)
+        config.AppSettings.Settings["ApiUrl"].Value = apiUrl;
+    else
+        config.AppSettings.Settings.Add("ApiUrl", apiUrl);
+
+    config.Save(ConfigurationSaveMode.Modified);
+    return true;
+}
+```
+
+**Impact**: Worker now loads correct API URL from App.config when Credential Manager is inaccessible to Network Service account.
+
+### How It Works
+1. **Primary**: Load from Windows Credential Manager (secure storage)
+2. **Fallback**: Load from App.config (now updated during /config)
+3. **Result**: Worker always gets correct API URL regardless of permission issues
+
+### Status
+✅ Worker now connects to correct API URL and loads successfully in GUI
 
 ---
 
