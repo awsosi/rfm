@@ -4,7 +4,7 @@
 >
 > **Status:** VF REDESIGN COMPLETE ✅ - Final Fixes Applied
 >
-> **Last Update:** 2026-01-28
+> **Ostatnia aktualizacja:** 2026-01-29
 
 ---
 
@@ -256,35 +256,62 @@ ImportError: cannot import name 'get_db_context' from 'database' (/app/backend/d
 
 ---
 
-## 🎯 Design Principles Achieved
+## Workers - Usługi Windows
 
-### ✅ KISS (Keep It Simple, Stupid)
-- Single pane instead of dual-pane (simpler mental model)
-- Only 2 buttons instead of 6+ buttons
-- Directory-only operations (no file selection complexity)
-- Single worker (no multi-worker coordination complexity)
-- Preset destinations (no user path selection)
+### Core Functionality
+- ✅ Windows Service (TopShelf framework)
+- ✅ Self-installing .exe
+- ✅ Configuration wizard (URL centrali, user/pass)
+- ✅ Public/private key generation
+- ✅ mTLS communication z centralą
+- ✅ File operations (copy, move, delete, mkdir, list, search)
+- ✅ Rollback manager
+- ✅ Windows Credential Manager integration
+- ✅ **Certificate store mode fix (2026-01-29)** - Fixed worker provisioning in service mode by using correct certificate store (LocalMachine for services, CurrentUser for debug mode)
 
-### ✅ DRY (Don't Repeat Yourself)
-- Reused existing operation framework
-- Reused WebSocket infrastructure
-- Reused authentication/authorization
-- Reused audit logging
-
-### ✅ Security First
-- Admin-only PATH_B and PATH_C configuration
-- All directory paths validated
-- Path traversal prevention
-- Full audit trail for all operations
-- Any authenticated user can Pull (transparency principle)
-
-### ✅ User Experience
-- Clear, simple UI with minimal cognitive load
-- Real-time operation status
-- Persistent history (never lose track)
-- Easy revert with Pull operation
-- Clear status indicators and timestamps
-- Usernames displayed in operation queue
+### Wymagane Usprawnienia
+- ✅ **Admin Commands Support**
+  - ✅ ping - health check
+  - ✅ get_status - returns worker status and metrics
+  - ✅ update_config - updates worker configuration
+  - ✅ reload_config - reloads config from source
+- 📝 **Asynchroniczne Operacje**
+  - ✅ Podstawowa asynchroniczność
+  - ✅ Progress reporting do centrali
+  - Thread pool dla wielu operacji
+  - Cancelation tokens
+- 📝 **Locking & Concurrency**
+  - File-level locking
+  - Folder-level locking
+  - Lock timeout handling
+  - Deadlock detection
+- 📝 **Error Handling & Resilience**
+  - Retry logic z exponential backoff
+  - Circuit breaker pattern
+  - Graceful degradation
+  - Detailed error reporting
+- 📝 **Logging (Local)**
+  - Worker NIE zostawia logów (zgodnie z wymaganiami)
+  - Debug mode: output do konsoli
+  - Opcjonalny tryb verbose dla debugowania
+- 📝 **Performance**
+  - Bandwidth throttling (opcjonalne)
+  - Compression dla dużych transferów (opcjonalne)
+  - Resume interrupted operations
+- 📝 **Compatibility**
+  - ✅ Windows Server 2012 R2 (HV2012r2) minimum
+  - Testowanie na różnych wersjach Windows
+  - Obsługa różnych lokalizacji (non-English Windows)
+- 📝 **Installation & Uninstallation**
+  - ✅ Self-installing .exe
+  - Uninstall command (`worker.exe /uninstall`)
+  - Upgrade mechanism
+  - Configuration migration przy upgrade
+- 📝 **2-Worker Coordination**
+  - Worker-to-worker communication
+  - Push operation (A → B)
+  - Weryfikacja przez drugi worker
+  - Transaction coordination (2-phase commit)
 
 ---
 
