@@ -2,9 +2,74 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** WORKER LOADING FIXED ✅ - Configuration Loading Issue Resolved
+> **Status:** DATABASE SCHEMA FIXED ✅ - Missing Column Added via Migration
 >
 > **Ostatnia aktualizacja:** 2026-01-29
+
+---
+
+## 🔧 DATABASE SCHEMA FIX - path_c_prefix Column (2026-01-29)
+
+### Issue
+After adding PUSH/PULL operations with archive path support, the application failed to load workers with the following error:
+
+```
+Error loading workers: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError)
+column workers.path_c_prefix does not exist
+HINT: Perhaps you meant to reference the column "workers.path_a_prefix" or
+the column "workers.path_b_prefix".
+```
+
+### Root Cause
+The Worker model in `backend/models.py:176` defined a `path_c_prefix` column for archive paths (used in PUSH operations), but this column was never added to the database schema. The initial migration `001_initial_schema.py` only created `path_a_prefix` and `path_b_prefix` columns.
+
+### ✅ Fix Applied
+
+#### Created Alembic Migration
+**File**: `backend/alembic/versions/006_add_path_c_prefix.py`
+
+**Changes**:
+- Added migration to add `path_c_prefix VARCHAR(500) NULL` column to `workers` table
+- Follows existing migration pattern (revises: 005, revision: 006)
+- Includes both `upgrade()` and `downgrade()` functions for proper migration management
+
+**Implementation**:
+```python
+def upgrade() -> None:
+    """Add path_c_prefix column to workers table for archive paths."""
+    op.add_column(
+        'workers',
+        sa.Column('path_c_prefix', sa.String(length=500), nullable=True)
+    )
+
+def downgrade() -> None:
+    """Remove path_c_prefix column from workers table."""
+    op.drop_column('workers', 'path_c_prefix')
+```
+
+**Impact**: Migration will run automatically on next backend container restart via `entrypoint.sh:38` (`alembic upgrade head`).
+
+### How to Apply
+The migration will be applied automatically when the backend service restarts:
+```bash
+docker-compose restart api
+```
+
+Or manually via:
+```bash
+docker-compose exec api alembic upgrade head
+```
+
+### Verification
+After restart, verify the column exists:
+```sql
+SELECT column_name, data_type, character_maximum_length
+FROM information_schema.columns
+WHERE table_name = 'workers' AND column_name = 'path_c_prefix';
+```
+
+### Status
+✅ Migration created and ready to apply on next container restart
 
 ---
 
