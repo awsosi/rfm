@@ -68,6 +68,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="WorkerService.cs" />
     <Compile Include="FileOperations.cs" />
+    <Compile Include="WindowsImpersonation.cs" />
     <Compile Include="CertificateManager.cs" />
     <Compile Include="ApiClient.cs" />
     <Compile Include="CommandHandler.cs" />

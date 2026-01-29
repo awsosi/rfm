@@ -28,7 +28,6 @@ namespace FileManagerWorker
         private Task _heartbeatTask;
         private Task _cleanupTask;
 
-        private bool _isRunning;
         private readonly object _commandLock = new object();
 
         public WorkerService()
@@ -107,7 +106,6 @@ namespace FileManagerWorker
 
                 // Start background tasks
                 _cancellationTokenSource = new CancellationTokenSource();
-                _isRunning = true;
 
                 _pollingTask = Task.Run(() => PollingLoop(_cancellationTokenSource.Token));
                 _heartbeatTask = Task.Run(() => HeartbeatLoop(_cancellationTokenSource.Token));
@@ -132,7 +130,6 @@ namespace FileManagerWorker
             {
                 Logger.Info("Stopping FileManagerWorker service...");
 
-                _isRunning = false;
                 _cancellationTokenSource?.Cancel();
 
                 // Wait for tasks to complete
