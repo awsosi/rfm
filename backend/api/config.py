@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     redis_max_connections: int = 50
 
+    # Elasticsearch (Search & Indexing)
+    elasticsearch_enabled: bool = True
+    elasticsearch_url: str = "http://localhost:9200"
+    elasticsearch_username: Optional[str] = None
+    elasticsearch_password: Optional[str] = None
+    elasticsearch_index_operations: str = "rfm-operations"
+    elasticsearch_index_files: str = "rfm-files"
+    elasticsearch_max_retries: int = 3
+    elasticsearch_timeout: int = 30
+
     # Worker Communication
     worker_timeout: int = 3600
     worker_retry_attempts: int = 3
@@ -112,6 +122,16 @@ class Settings(BaseSettings):
     # Path Prefixes
     global_path_a_prefix: str = ""
     global_path_b_prefix: str = ""
+
+    # VF Redesign: Preset paths for Push/Pull operations
+    path_b: Optional[str] = Field(
+        default=None,
+        description="Destination path for PUSH operations (admin-configurable)",
+    )
+    path_c: Optional[str] = Field(
+        default=None,
+        description="Archive path for PUSH operations (admin-configurable)",
+    )
 
     @field_validator("database_url", mode="before")
     @classmethod

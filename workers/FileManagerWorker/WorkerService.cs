@@ -59,8 +59,8 @@ namespace FileManagerWorker
 	                ? CertificateManager.CertStoreMode.CurrentUser
 	                : CertificateManager.CertStoreMode.LocalMachine;
 				Logger.Info("Using certificate store: {0}", _certManager.StoreMode);
-				_apiClient = new ApiClient(config.ApiUrl, _certManager);
-                _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix);
+				_apiClient = new ApiClient(config.ApiUrl, _certManager, config);
+                _fileOps = new FileOperations(config.PathAPrefix, config.PathBPrefix, config.PathCPrefix);
                 _rollbackManager = new RollbackManager();
                 _commandHandler = new CommandHandler(_fileOps, _rollbackManager, _apiClient);
 
@@ -274,6 +274,7 @@ namespace FileManagerWorker
                     ServicePassword = servicePassword,
                     PathAPrefix = ConfigurationManager.AppSettings["PathAPrefix"] ?? @"C:\PathA",
                     PathBPrefix = ConfigurationManager.AppSettings["PathBPrefix"] ?? @"C:\PathB",
+                    PathCPrefix = ConfigurationManager.AppSettings["PathCPrefix"] ?? @"C:\PathC",
                     PollingIntervalSeconds = int.Parse(ConfigurationManager.AppSettings["PollingIntervalSeconds"] ?? "5"),
                     UseMtls = bool.Parse(ConfigurationManager.AppSettings["UseMtls"] ?? "true")
                 };
@@ -283,6 +284,7 @@ namespace FileManagerWorker
                 Logger.Info("  Service User: {0}", string.IsNullOrWhiteSpace(config.ServiceUser) ? "Network Service" : config.ServiceUser);
                 Logger.Info("  Path A Prefix: {0}", config.PathAPrefix);
                 Logger.Info("  Path B Prefix: {0}", config.PathBPrefix);
+                Logger.Info("  Path C Prefix: {0}", config.PathCPrefix);
                 Logger.Info("  Polling Interval: {0}s", config.PollingIntervalSeconds);
                 Logger.Info("  Use mTLS: {0}", config.UseMtls);
                 Logger.Info("  Credential Source: {0}", string.IsNullOrEmpty(apiUrl) ? "App.config (INSECURE)" : "Windows Credential Manager (SECURE)");

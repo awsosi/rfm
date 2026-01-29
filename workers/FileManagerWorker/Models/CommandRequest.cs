@@ -1,15 +1,26 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace FileManagerWorker.Models
 {
     /// <summary>
-    /// Represents a command request from the Central API
+    /// Represents a command request from the Central API (pull-based)
     /// </summary>
     public class CommandRequest
     {
-        public string CommandId { get; set; }
+        [JsonProperty("command_id")]
+        public int? CommandId { get; set; }
+
+        [JsonProperty("command")]
         public string Command { get; set; }
-        public Dictionary<string, string> Parameters { get; set; }
-        public long Timestamp { get; set; }
+
+        [JsonProperty("source_path")]
+        public string SourcePath { get; set; }
+
+        [JsonProperty("dest_path")]
+        public string DestPath { get; set; }
+
+        [JsonProperty("parameters")]
+        public Dictionary<string, object> Parameters { get; set; }
     }
 }

@@ -7,12 +7,13 @@ and admin functionality.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Annotated, List, Optional
+from datetime import datetime, timezone
+from typing import Annotated, Dict, List, Optional, Any
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
@@ -33,6 +34,7 @@ from api.routes.auth import router as auth_router
 from api.routes.admin import router as admin_router
 from api.routes.admin_system import router as admin_system_router
 from api.routes.preferences import router as preferences_router
+from api.routes.worker import router as worker_router
 
 
 @asynccontextmanager
@@ -51,15 +53,33 @@ async def lifespan(app: FastAPI):
         echo=settings.db_echo,
     )
 
+    # Initialize Elasticsearch
+    from api.services.elasticsearch_service import get_elasticsearch_service
+    es_service = await get_elasticsearch_service()
+
     # Start WebSocket manager
     from api.websocket_manager import ws_manager
     await ws_manager.start()
 
+    # Start background tasks (command cleanup, worker health checks)
+    from api.background_tasks import start_background_tasks
+    await start_background_tasks(settings)
+
     yield
 
     # Shutdown
+    # Stop background tasks
+    from api.background_tasks import stop_background_tasks
+    await stop_background_tasks()
+
+    # Stop WebSocket manager
     from api.websocket_manager import ws_manager
     await ws_manager.stop()
+
+    # Close Elasticsearch
+    from api.services.elasticsearch_service import close_elasticsearch_service
+    await close_elasticsearch_service()
+
     await close_database()
 
 
@@ -87,6 +107,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_system_router)
 app.include_router(preferences_router)
+app.include_router(worker_router)
 
 
 # =============================================================================
@@ -139,6 +160,32 @@ async def list_directory(
 
         total_count = response.file_count or len(items)
 
+        # Index files in Elasticsearch in background (non-blocking)
+        try:
+            from api.services.elasticsearch_service import get_elasticsearch_service
+            import os
+
+            es_service = await get_elasticsearch_service()
+            if es_service.is_enabled and items:
+                # Prepare file documents for indexing
+                file_docs = []
+                for item in items:
+                    file_docs.append({
+                        "path": item.path,
+                        "name": item.name,
+                        "parent_path": path,
+                        "is_directory": item.is_directory,
+                        "size": item.size,
+                        "modified_at": item.modified_at.isoformat() if item.modified_at else None,
+                        "worker_id": worker_id,
+                    })
+
+                # Index in background (don't await)
+                asyncio.create_task(es_service.bulk_index_files(file_docs))
+        except Exception as e:
+            # Log error but don't fail the request
+            logger.warning(f"Failed to index files in Elasticsearch: {e}")
+
         return DirectoryListResponse(
             path=path,
             items=items,
@@ -163,29 +210,63 @@ async def search_files(
     offset: int = 0,
     limit: int = 100,
 ):
-    """Search for files on worker."""
+    """Search for files on worker using Elasticsearch or worker service."""
     worker = await get_worker_by_id(worker_id, db)
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    worker_service = WorkerService(settings)
-
     try:
-        response = await worker_service.search_files(
-            worker, path, query, db, recursive
-        )
+        # Try Elasticsearch first
+        from api.services.elasticsearch_service import get_elasticsearch_service
 
-        results = []
-        if response.error_details and "results" in response.error_details:
-            results = [FileInfo(**item) for item in response.error_details["results"]]
+        es_service = await get_elasticsearch_service()
+        if es_service.is_enabled:
+            # Use Elasticsearch for search
+            result = await es_service.search_files(
+                query=query,
+                worker_id=worker_id,
+                is_directory=None,
+                offset=offset,
+                limit=limit,
+            )
 
-        return FileSearchResponse(
-            query=query,
-            results=results,
-            total_count=len(results),
-            offset=offset,
-            limit=limit,
-        )
+            # Convert ES results to FileInfo objects
+            results = []
+            for hit in result["hits"]:
+                from datetime import datetime
+                results.append(FileInfo(
+                    name=hit.get("name", ""),
+                    path=hit.get("path", ""),
+                    is_directory=hit.get("is_directory", False),
+                    size=hit.get("size", 0),
+                    modified_at=datetime.fromisoformat(hit["modified_at"]) if hit.get("modified_at") else None,
+                ))
+
+            return FileSearchResponse(
+                query=query,
+                results=results,
+                total_count=result["total"],
+                offset=offset,
+                limit=limit,
+            )
+        else:
+            # Fall back to worker service search
+            worker_service = WorkerService(settings)
+            response = await worker_service.search_files(
+                worker, path, query, db, recursive
+            )
+
+            results = []
+            if response.error_details and "results" in response.error_details:
+                results = [FileInfo(**item) for item in response.error_details["results"]]
+
+            return FileSearchResponse(
+                query=query,
+                results=results,
+                total_count=len(results),
+                offset=offset,
+                limit=limit,
+            )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -234,7 +315,9 @@ async def copy_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/move", response_model=OperationResponse)
@@ -277,7 +360,9 @@ async def move_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/delete", response_model=OperationResponse)
@@ -319,7 +404,9 @@ async def delete_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
 
 
 @app.post("/api/files/mkdir", response_model=OperationResponse)
@@ -361,7 +448,296 @@ async def create_directory(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return OperationResponse.model_validate(operation)
+    op_response = OperationResponse.model_validate(operation)
+    op_response.user_name = current_user.username
+    return op_response
+
+
+@app.post("/api/operations/push", response_model=OperationResponse)
+async def push_operation(
+    request_data: FilePushRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    PUSH operation: Copy directory to PATH_B and archive to PATH_C.
+
+    VF Redesign: This replaces the dual-pane copy operation.
+    """
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    try:
+        # Create and execute PUSH operation
+        operation = await operation_service.create_push_operation(
+            user=current_user,
+            source_dir=request_data.source_path,
+            worker_id=request_data.worker_id,
+            db=db,
+        )
+
+        # Log operation
+        await AuditLogger.log_operation(
+            user_id=current_user.id,
+            operation_id=operation.id,
+            action="push",
+            details={
+                "source": request_data.source_path,
+                "path_b": operation.dest_path,
+                "path_c": operation.archive_path,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        # Execute operation
+        operation = await operation_service.execute_operation(operation, db)
+
+        # Broadcast to WebSocket clients
+        from api.websocket_manager import ws_manager
+        await ws_manager.broadcast(
+            "operation",
+            {
+                "type": "operation_update",
+                "operation_id": operation.id,
+                "status": operation.status.value,
+                "user": current_user.username,
+            }
+        )
+
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = current_user.username
+        return op_response
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/operations/pull", response_model=OperationResponse)
+async def pull_operation(
+    request_data: FilePullRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    PULL operation: Revert PUSH operation by copying from PATH_B to original location.
+
+    VF Redesign: Any authenticated user can revert any operation.
+    """
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    try:
+        # Create and execute PULL operation
+        operation = await operation_service.create_pull_operation(
+            user=current_user,
+            original_operation_id=request_data.operation_id,
+            worker_id=request_data.worker_id,
+            db=db,
+        )
+
+        # Log operation
+        await AuditLogger.log_operation(
+            user_id=current_user.id,
+            operation_id=operation.id,
+            action="pull",
+            details={
+                "original_operation_id": request_data.operation_id,
+                "restore_to": operation.dest_path,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        # Execute operation
+        operation = await operation_service.execute_operation(operation, db)
+
+        # Broadcast to WebSocket clients
+        from api.websocket_manager import ws_manager
+        await ws_manager.broadcast(
+            "operation",
+            {
+                "type": "operation_update",
+                "operation_id": operation.id,
+                "status": operation.status.value,
+                "user": current_user.username,
+            }
+        )
+
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = current_user.username
+        return op_response
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/operations/history", response_model=List[OperationResponse])
+async def get_operations_history(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 100,
+    offset: int = 0,
+    operation_type: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    """
+    Get operation history for all users (VF redesign).
+
+    Returns paginated list of all operations with filters.
+    """
+    try:
+        # Build query with User join to get username
+        query = select(Operation, User).join(User, Operation.user_id == User.id).order_by(desc(Operation.created_at))
+
+        # Apply filters
+        if operation_type:
+            query = query.where(Operation.type == operation_type.upper())
+        if status:
+            query = query.where(Operation.status == status.upper())
+
+        # Pagination
+        query = query.limit(limit).offset(offset)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        # Build response with username
+        responses = []
+        for operation, user in rows:
+            op_response = OperationResponse.model_validate(operation)
+            op_response.user_name = user.username
+            responses.append(op_response)
+
+        return responses
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/operations/search", response_model=Dict[str, Any])
+async def search_operations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    operation_type: Optional[str] = None,
+    status: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+):
+    """
+    Search operations using Elasticsearch.
+
+    Provides full-text search across operation paths, usernames, and error messages.
+    Falls back to database query if Elasticsearch is disabled.
+    """
+    try:
+        from api.services.elasticsearch_service import get_elasticsearch_service
+
+        es_service = await get_elasticsearch_service()
+
+        if es_service.is_enabled and q:
+            # Use Elasticsearch for search
+            filters = {}
+            if operation_type:
+                filters["operation_type"] = operation_type.upper()
+            if status:
+                filters["status"] = status.upper()
+
+            result = await es_service.search_operations(
+                query=q,
+                filters=filters,
+                offset=offset,
+                limit=limit,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
+
+            # Convert hits to OperationResponse format
+            operations = []
+            for hit in result["hits"]:
+                operations.append({
+                    "id": hit["operation_id"],
+                    "user_id": hit["user_id"],
+                    "user_name": hit.get("user_name"),
+                    "type": hit["operation_type"],
+                    "source_path": hit["source_path"],
+                    "dest_path": hit.get("dest_path"),
+                    "status": hit["status"],
+                    "started_at": hit.get("started_at"),
+                    "completed_at": hit.get("completed_at"),
+                    "error_msg": hit.get("error_msg"),
+                    "file_count": hit.get("file_count"),
+                    "total_size_bytes": hit.get("total_size_bytes"),
+                    "params_json": None,
+                    "created_at": hit["created_at"],
+                    "_score": hit.get("_score"),
+                })
+
+            return {
+                "total": result["total"],
+                "operations": operations,
+                "offset": result["offset"],
+                "limit": result["limit"],
+            }
+        else:
+            # Fall back to database query (no full-text search)
+            query = select(Operation, User).join(User, Operation.user_id == User.id).order_by(desc(Operation.created_at))
+
+            # Apply filters
+            if operation_type:
+                query = query.where(Operation.type == operation_type.upper())
+            if status:
+                query = query.where(Operation.status == status.upper())
+            if q:
+                # Basic path search using SQL LIKE
+                search_pattern = f"%{q}%"
+                query = query.where(
+                    or_(
+                        Operation.source_path.ilike(search_pattern),
+                        Operation.dest_path.ilike(search_pattern),
+                        User.username.ilike(search_pattern),
+                    )
+                )
+
+            # Pagination
+            query = query.limit(limit).offset(offset)
+
+            result = await db.execute(query)
+            rows = result.all()
+
+            # Build response
+            operations = []
+            for operation, user in rows:
+                op_response = OperationResponse.model_validate(operation)
+                op_response.user_name = user.username
+                operations.append(op_response.model_dump())
+
+            # Get total count (approximate)
+            count_query = select(func.count(Operation.id))
+            if operation_type:
+                count_query = count_query.where(Operation.type == operation_type.upper())
+            if status:
+                count_query = count_query.where(Operation.status == status.upper())
+
+            count_result = await db.execute(count_query)
+            total = count_result.scalar()
+
+            return {
+                "total": total,
+                "operations": operations,
+                "offset": offset,
+                "limit": limit,
+            }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # =============================================================================
@@ -382,11 +758,34 @@ async def list_workers(
 async def register_worker(
     worker_data: WorkerRegister,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Register new worker (requires admin approval)."""
-    # Create worker with pending status
+    """
+    Register new worker (self-registration with PENDING status).
+
+    Workers can register themselves using mTLS authentication.
+    Status is set to PENDING and requires admin approval to become active.
+    """
+    # Check if worker with same hostname already exists
+    stmt = select(Worker).where(Worker.hostname == worker_data.hostname)
+    result = await db.execute(stmt)
+    existing_worker = result.scalar_one_or_none()
+
+    if existing_worker:
+        # Update existing worker
+        existing_worker.name = worker_data.name
+        existing_worker.public_key = worker_data.public_key
+        existing_worker.path_a_prefix = worker_data.path_a_prefix
+        existing_worker.path_b_prefix = worker_data.path_b_prefix
+        existing_worker.version = worker_data.version
+        existing_worker.last_heartbeat = datetime.now(timezone.utc)
+
+        await db.commit()
+        await db.refresh(existing_worker)
+
+        return WorkerResponse.model_validate(existing_worker)
+
+    # Create new worker with pending status
     worker = Worker(
         name=worker_data.name,
         hostname=worker_data.hostname,
@@ -395,6 +794,7 @@ async def register_worker(
         path_b_prefix=worker_data.path_b_prefix,
         version=worker_data.version,
         status=WorkerStatus.PENDING,
+        last_heartbeat=datetime.now(timezone.utc),
     )
 
     db.add(worker)
@@ -402,10 +802,10 @@ async def register_worker(
     await db.refresh(worker)
 
     await AuditLogger.log_admin_action(
-        user_id=current_user.id,
+        user_id=None,
         action="worker_register",
         target="worker",
-        details={"worker_id": worker.id, "worker_name": worker.name},
+        details={"worker_id": worker.id, "worker_name": worker.name, "hostname": worker.hostname},
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
@@ -471,7 +871,7 @@ async def list_operations(
     """List operations with optional status filter."""
     from models import OperationStatus
 
-    stmt = select(Operation).where(Operation.user_id == current_user.id)
+    stmt = select(Operation, User).join(User, Operation.user_id == User.id).where(Operation.user_id == current_user.id)
 
     # Apply status filter if provided
     if status:
@@ -488,8 +888,16 @@ async def list_operations(
     stmt = stmt.order_by(desc(Operation.created_at)).offset(offset).limit(limit)
 
     result = await db.execute(stmt)
-    operations = result.scalars().all()
-    return [OperationResponse.model_validate(op) for op in operations]
+    rows = result.all()
+
+    # Build response with username
+    responses = []
+    for operation, user in rows:
+        op_response = OperationResponse.model_validate(operation)
+        op_response.user_name = user.username
+        responses.append(op_response)
+
+    return responses
 
 
 # =============================================================================

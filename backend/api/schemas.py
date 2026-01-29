@@ -226,6 +226,20 @@ class FileMkdirRequest(BaseModel):
     parents: bool = True
 
 
+class FilePushRequest(BaseModel):
+    """File push operation request (VF redesign)."""
+
+    source_path: str = Field(..., min_length=1, description="Source directory path from Path A")
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+
+
+class FilePullRequest(BaseModel):
+    """File pull operation request (VF redesign)."""
+
+    operation_id: int = Field(..., description="ID of the original PUSH operation to revert")
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+
+
 # =============================================================================
 # Operation Schemas
 # =============================================================================
@@ -248,6 +262,7 @@ class OperationResponse(BaseModel):
 
     id: int
     user_id: int
+    user_name: Optional[str] = None  # Username for display in operation queue
     type: OperationType
     source_path: str
     dest_path: Optional[str]
@@ -468,3 +483,32 @@ class WorkerCommandResponse(BaseModel):
     file_count: Optional[int] = None
     total_size_bytes: Optional[int] = None
     error_details: Optional[dict[str, Any]] = None
+
+
+class CommandPollResponse(BaseModel):
+    """Response for command polling endpoint."""
+
+    command_id: Optional[int] = None
+    command: Optional[str] = None
+    source_path: Optional[str] = None
+    dest_path: Optional[str] = None
+    parameters: Optional[dict[str, Any]] = None
+
+
+class CommandResponseRequest(BaseModel):
+    """Request to submit command response."""
+
+    status: str = Field(..., description="Response status: success, failed, error")
+    message: Optional[str] = None
+    file_count: Optional[int] = None
+    total_size_bytes: Optional[int] = None
+    error_details: Optional[dict[str, Any]] = None
+
+
+class WorkerConfigResponse(BaseModel):
+    """Worker configuration response."""
+
+    path_a_prefix: Optional[str] = None
+    path_b_prefix: Optional[str] = None
+    path_c_prefix: Optional[str] = None
+    polling_interval_seconds: int = 5

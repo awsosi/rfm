@@ -10,6 +10,7 @@ namespace FileManagerWorker.Models
         public string ServicePassword { get; set; }
         public string PathAPrefix { get; set; }
         public string PathBPrefix { get; set; }
+        public string PathCPrefix { get; set; }
         public int PollingIntervalSeconds { get; set; } = 5;
         public string CertificateThumbprint { get; set; }
         public bool UseMtls { get; set; } = true;

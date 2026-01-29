@@ -72,10 +72,16 @@ export async function apiRequest(endpoint, options = {}) {
  * @param {string} path - Directory path
  * @param {number} offset - Pagination offset
  * @param {number} limit - Pagination limit
+ * @param {number} workerId - Worker ID (defaults to 1 for VF redesign)
  * @returns {Promise<Array>}
  */
-export async function listFiles(path, offset = 0, limit = 50) {
-    const params = new URLSearchParams({ path, offset: offset.toString(), limit: limit.toString() });
+export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        offset: offset.toString(),
+        limit: limit.toString()
+    });
     return await apiRequest(`/api/files/list?${params}`);
 }
 
@@ -160,6 +166,38 @@ export async function moveFiles(sourcePaths, destPath) {
 }
 
 /**
+ * VF REDESIGN: Push operation - Copy directory to PATH_B and archive to PATH_C
+ * @param {string} sourcePath - Source directory path (from Path A)
+ * @param {number} workerId - Worker ID to execute operation
+ * @returns {Promise<Object>}
+ */
+export async function pushOperation(sourcePath, workerId) {
+    return await apiRequest('/api/operations/push', {
+        method: 'POST',
+        body: JSON.stringify({
+            source_path: sourcePath,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
+ * VF REDESIGN: Pull operation - Revert PUSH by copying from PATH_B to original location
+ * @param {number} operationId - ID of the original PUSH operation to revert
+ * @param {number} workerId - Worker ID to execute operation
+ * @returns {Promise<Object>}
+ */
+export async function pullOperation(operationId, workerId) {
+    return await apiRequest('/api/operations/pull', {
+        method: 'POST',
+        body: JSON.stringify({
+            operation_id: operationId,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
  * Get operation status
  * @param {string} operationId - Operation ID
  * @returns {Promise<Object>}
@@ -169,13 +207,39 @@ export async function getOperationStatus(operationId) {
 }
 
 /**
- * Get list of operations
+ * Get operation history (VF REDESIGN: Returns all operations with filters)
+ * @param {Object} filters - Filter options { limit, offset, operation_type, status }
+ * @returns {Promise<Array>}
+ */
+export async function getOperationHistory(filters = {}) {
+    const { limit = 100, offset = 0, operation_type = null, status = null } = filters;
+    let params = `?limit=${limit}&offset=${offset}`;
+    if (operation_type) params += `&operation_type=${operation_type}`;
+    if (status) params += `&status=${status}`;
+    return await apiRequest(`/api/operations/history${params}`);
+}
+
+/**
+ * Search operations using Elasticsearch
+ * @param {Object} params - Search parameters { q, limit, offset, operation_type, status, sort_by, sort_order }
+ * @returns {Promise<Object>} - Returns { total, operations, offset, limit }
+ */
+export async function searchOperations(params = {}) {
+    const { q = '', limit = 50, offset = 0, operation_type = null, status = null, sort_by = 'created_at', sort_order = 'desc' } = params;
+    let queryParams = `?limit=${limit}&offset=${offset}&sort_by=${sort_by}&sort_order=${sort_order}`;
+    if (q) queryParams += `&q=${encodeURIComponent(q)}`;
+    if (operation_type) queryParams += `&operation_type=${operation_type}`;
+    if (status) queryParams += `&status=${status}`;
+    return await apiRequest(`/api/operations/search${queryParams}`);
+}
+
+/**
+ * Get list of operations (legacy - kept for compatibility)
  * @param {string} status - Filter by status (optional)
  * @returns {Promise<Array>}
  */
 export async function getOperations(status = null) {
-    const params = status ? `?status=${status}` : '';
-    return await apiRequest(`/api/operations/list${params}`);
+    return await getOperationHistory({ status });
 }
 
 /**
@@ -262,8 +326,8 @@ export async function approveWorker(workerId) {
  * @returns {Promise<Object>}
  */
 export async function rejectWorker(workerId) {
-    return await apiRequest(`/api/admin/workers/${workerId}/reject`, {
-        method: 'POST'
+    return await apiRequest(`/api/admin/workers/${workerId}`, {
+        method: 'DELETE'
     });
 }
 
