@@ -4,7 +4,7 @@
 >
 > **Status:** MVP w trakcie rozwoju
 >
-> **Ostatnia aktualizacja:** 2026-01-26
+> **Ostatnia aktualizacja:** 2026-01-29
 
 ---
 
@@ -252,6 +252,7 @@
 - ✅ File operations (copy, move, delete, mkdir, list, search)
 - ✅ Rollback manager
 - ✅ Windows Credential Manager integration
+- ✅ **Certificate store mode fix (2026-01-29)** - Fixed worker provisioning in service mode by using correct certificate store (LocalMachine for services, CurrentUser for debug mode)
 
 ### Wymagane Usprawnienia
 - ✅ **Admin Commands Support**
