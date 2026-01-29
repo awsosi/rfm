@@ -82,7 +82,8 @@ export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
         offset: offset.toString(),
         limit: limit.toString()
     });
-    return await apiRequest(`/api/files/list?${params}`);
+    const response = await apiRequest(`/api/files/list?${params}`);
+    return response.items || [];
 }
 
 /**
@@ -93,7 +94,8 @@ export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
  */
 export async function searchFiles(path, pattern) {
     const params = new URLSearchParams({ path, pattern });
-    return await apiRequest(`/api/files/search?${params}`);
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
 }
 
 /**

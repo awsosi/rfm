@@ -23,6 +23,11 @@ export function renderFileList(paneId, files, append = false) {
         tbody.innerHTML = '';
     }
 
+    // Ensure files is an array
+    if (!Array.isArray(files)) {
+        files = [];
+    }
+
     if (files.length === 0 && !append) {
         noFiles.classList.remove('hidden');
         return;
@@ -484,6 +489,11 @@ export function renderOperationQueue(operations, append = false) {
 
     if (!append) {
         tbody.innerHTML = '';
+    }
+
+    // Ensure operations is an array
+    if (!Array.isArray(operations)) {
+        operations = [];
     }
 
     if (operations.length === 0 && !append) {
