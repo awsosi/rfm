@@ -118,12 +118,6 @@ namespace FileManagerWorker
                 throw new ArgumentException("Path cannot be empty or null");
             }
 
-            // Check for path traversal attempts before processing
-            if (path.Contains(".."))
-            {
-                throw new ArgumentException($"Path contains invalid characters (path traversal attempt): {path}");
-            }
-
             // Check if path starts with valid prefix
             if (path.StartsWith("A:", StringComparison.OrdinalIgnoreCase))
             {
@@ -397,6 +391,49 @@ namespace FileManagerWorker
 
                 var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
+                // Create a list to hold all items
+                var allItems = new List<object>();
+
+                // Add ".." parent directory navigation if not at root
+                // Root is when path equals just the prefix (e.g., "A:", "B:", "C:")
+                bool isAtRoot = path.Length == 2 && path.EndsWith(":");
+                if (!isAtRoot && !recursive)
+                {
+                    // Calculate parent path
+                    var pathPart = path.Substring(2).TrimStart('/', '\\');
+                    string parentPath;
+
+                    if (string.IsNullOrEmpty(pathPart))
+                    {
+                        // Already at root
+                        parentPath = virtualPrefix;
+                    }
+                    else
+                    {
+                        var pathParts = pathPart.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (pathParts.Length > 1)
+                        {
+                            // Remove last part to get parent
+                            parentPath = virtualPrefix + "/" + string.Join("/", pathParts.Take(pathParts.Length - 1));
+                        }
+                        else
+                        {
+                            // Parent is root
+                            parentPath = virtualPrefix;
+                        }
+                    }
+
+                    allItems.Add(new
+                    {
+                        path = parentPath,
+                        name = "..",
+                        size = 0L,
+                        modified = DateTime.UtcNow.ToString("o"),
+                        type = "directory",
+                        is_directory = true
+                    });
+                }
+
                 var files = Directory.GetFiles(resolvedPath, "*", searchOption)
                     .Select(f => new
                     {
@@ -404,7 +441,8 @@ namespace FileManagerWorker
                         name = Path.GetFileName(f),
                         size = new FileInfo(f).Length,
                         modified = File.GetLastWriteTimeUtc(f).ToString("o"),
-                        type = "file"
+                        type = "file",
+                        is_directory = false
                     });
 
                 var directories = Directory.GetDirectories(resolvedPath, "*", searchOption)
@@ -414,10 +452,13 @@ namespace FileManagerWorker
                         name = Path.GetFileName(d),
                         size = 0L,
                         modified = Directory.GetLastWriteTimeUtc(d).ToString("o"),
-                        type = "directory"
+                        type = "directory",
+                        is_directory = true
                     });
 
-                var allItems = files.Concat(directories).ToList();
+                allItems.AddRange(files);
+                allItems.AddRange(directories);
+
                 var totalCount = allItems.Count;
 
                 // Apply pagination if limit > 0

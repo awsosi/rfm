@@ -2,9 +2,88 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** DATABASE SCHEMA FIXED ✅ - Missing Column Added via Migration
+> **Status:** FILE LISTING FIXED ✅ - Prefix Notation & Navigation Implemented
 >
 > **Ostatnia aktualizacja:** 2026-01-29
+
+---
+
+## 🔧 FILE LISTING FIX - Prefix Notation & Parent Directory Navigation (2026-01-29)
+
+### Issue
+After setting PathC, file listing operations failed with the following error:
+
+```
+System.ArgumentException: Path must start with A:, B:, or C: prefix. Got: \\HV2012R2\DaneFoto-test
+   at FileManagerWorker.FileOperations.ResolvePath(String path)
+   at FileManagerWorker.FileOperations.<ListAsync>d__25.MoveNext()
+```
+
+The UI was sending raw UNC paths instead of using the prefix notation (A:, B:, C:) that the worker expects.
+
+### Root Causes
+1. **UI initialization**: App initialized with path `/` instead of `A:`
+2. **Path normalization**: `normalizePath()` function didn't handle prefix notation
+3. **Missing navigation**: No `..` entry in directory listings to navigate to parent directories
+4. **Path validation**: Worker's `ResolvePath()` rejected paths without prefixes and blocked `..` even for legitimate navigation
+
+### ✅ Fixes Applied
+
+#### 1. Frontend Changes
+
+**File**: `frontend/js/app.js`
+- Changed initial path from `/` to `A:` for pane A and `B:` for pane B (lines 65, 71)
+- Updated initialization to use prefix notation (lines 130, 136-137)
+
+**File**: `frontend/js/utils.js`
+- Updated `normalizePath()` to handle prefix notation (A:, B:, C:)
+- Converts backslashes to forward slashes
+- Ensures all paths have a valid prefix
+- Updated `joinPath()` to preserve prefix notation
+
+**File**: `frontend/js/ui.js`
+- Updated `getCurrentPath()` to return appropriate prefix when path is empty (line 453)
+
+**File**: `frontend/pages/explorer.html`
+- Updated path input placeholder from `/path/to/directory` to `A:/path/to/directory` (line 40)
+
+#### 2. Worker Changes
+
+**File**: `workers/FileManagerWorker/FileOperations.cs`
+- **Removed path traversal block**: Removed the check that prevented `..` in paths (was at line 122)
+  - This check prevented legitimate navigation via `..` entries
+  - Security is maintained by `ValidatePath()` which ensures resolved paths stay within allowed boundaries
+- **Added `..` navigation**: Modified `ListAsync()` method to include `..` parent directory entry (lines 397-435)
+  - Only added when not at root level (root = just the prefix like `A:`)
+  - Correctly calculates parent path based on current location
+  - `..` entry includes `is_directory = true` flag for proper UI rendering
+- **Added `is_directory` flag**: All file and directory entries now include this flag for consistent UI handling
+
+### Implementation Details
+
+**Prefix Notation**:
+- `A:` = Root of Path A
+- `A:/folder` = Folder in Path A
+- `A:/folder/subfolder` = Subfolder in Path A
+- Same pattern for `B:` and `C:`
+
+**Parent Directory Navigation**:
+- At `A:/folder/subfolder`, clicking `..` navigates to `A:/folder`
+- At `A:/folder`, clicking `..` navigates to `A:` (root)
+- At `A:` (root), no `..` entry is shown (can't go above root)
+
+**Path Resolution Security**:
+- `ResolvePath()` extracts the path after the prefix and resolves it to actual file system path
+- `ValidatePath()` ensures the resolved full path stays within allowed boundaries
+- This two-step validation prevents path traversal attacks while allowing `..` in virtual paths
+
+### Testing Recommendations
+1. Verify file listing works at root level (`A:`)
+2. Navigate into subdirectories and verify path updates correctly
+3. Use `..` to navigate up levels
+4. Verify cannot navigate above root
+5. Test with all three prefixes (A:, B:, C:)
+6. Ensure all file operations (copy, move, delete) work with prefix notation
 
 ---
 

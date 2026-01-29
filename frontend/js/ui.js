@@ -450,7 +450,8 @@ export function enableOperationButtons() {
  */
 export function getCurrentPath(paneId) {
     const pathInput = document.getElementById(`path-input-${paneId}`);
-    return pathInput.value || '/';
+    const defaultPath = paneId === 'a' ? 'A:' : 'B:';
+    return pathInput.value || defaultPath;
 }
 
 /**

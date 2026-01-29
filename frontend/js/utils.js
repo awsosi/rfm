@@ -158,11 +158,26 @@ export function getFileName(path) {
  * @returns {string} Joined path
  */
 export function joinPath(...parts) {
-    return parts
+    if (parts.length === 0) return 'A:';
+
+    // Extract prefix from first part if present
+    const firstPart = parts[0] || '';
+    let prefix = 'A:';
+    let pathParts = parts;
+
+    if (/^[ABC]:/i.test(firstPart)) {
+        prefix = firstPart.substring(0, 2).toUpperCase();
+        pathParts = [firstPart.substring(2), ...parts.slice(1)];
+    }
+
+    const joined = pathParts
         .filter(part => part)
         .join('/')
+        .replace(/\\/g, '/')
         .replace(/\/+/g, '/')
-        .replace(/\/$/, '') || '/';
+        .replace(/\/$/, '');
+
+    return prefix + (joined ? '/' + joined.replace(/^\//, '') : '');
 }
 
 /**
@@ -171,8 +186,31 @@ export function joinPath(...parts) {
  * @returns {string} Normalized path
  */
 export function normalizePath(path) {
-    if (!path) return '/';
-    return path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    if (!path) return 'A:';
+
+    // If path is just a prefix (A:, B:, C:), return as is
+    if (/^[ABC]:$/i.test(path)) {
+        return path.toUpperCase();
+    }
+
+    // Ensure path has a prefix
+    if (!/^[ABC]:/i.test(path)) {
+        // If it starts with /, prepend A:
+        if (path.startsWith('/')) {
+            path = 'A:' + path;
+        } else {
+            path = 'A:/' + path;
+        }
+    }
+
+    // Normalize the path part after the prefix
+    const prefix = path.substring(0, 2).toUpperCase();
+    const pathPart = path.substring(2);
+
+    // Replace backslashes with forward slashes and remove redundant separators
+    const normalizedPath = pathPart.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+
+    return prefix + normalizedPath;
 }
 
 /**
