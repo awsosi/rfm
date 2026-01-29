@@ -286,6 +286,8 @@ async def update_worker(
         update_data["path_a_prefix"] = worker_data.path_a_prefix
     if worker_data.path_b_prefix is not None:
         update_data["path_b_prefix"] = worker_data.path_b_prefix
+    if worker_data.path_c_prefix is not None:
+        update_data["path_c_prefix"] = worker_data.path_c_prefix
 
     if update_data:
         stmt = (

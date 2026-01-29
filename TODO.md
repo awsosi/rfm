@@ -2454,3 +2454,169 @@ class WorkerResponse(BaseModel):
 ---
 
 *KISS principle achieved: Simple. Working. Maintainable. Searchable. Compatible. Secure. Scalable.*
+
+---
+
+## 🔧 WORKER CONTROL & PATH CONFIGURATION FIX (2026-01-29)
+
+### Issues Fixed
+
+1. **WorkerCommandResponse missing command_id**: Worker control commands (ping, get_status, reload_config) failed with `'WorkerCommandResponse' object has no attribute 'command_id'`
+2. **Directory listing 503 error**: PathA directory listing failed because list command was sending path in wrong format
+3. **Worker status not returned**: get_status command collected status data but didn't include it in response
+4. **PathC not configurable**: Workers had no path_c_prefix field in database/schemas
+5. **Path testing non-functional**: Test Paths button had no event handler implementation
+
+### ✅ Fixes Applied
+
+#### 1. Added command_id to WorkerCommandResponse Schema
+**File**: `backend/api/schemas.py`
+
+**Changes**:
+- Added `command_id: Optional[str] = None` field to WorkerCommandResponse
+
+**File**: `backend/api/services/worker_service.py`
+
+**Changes**:
+- Updated send_command to populate command_id: `command_id=str(completed_command.id)`
+
+#### 2. Fixed Directory Listing Command Format
+**File**: `backend/api/services/worker_service.py`
+
+**Changes**:
+- **Before**: `WorkerRequest(command="list", source_path=path, params={"offset": offset, "limit": limit})`
+- **After**: `WorkerRequest(command="list", params={"path": path, "offset": offset, "limit": limit})`
+- Also fixed search_files to use params: `{"path": path, "pattern": query, "recursive": recursive}`
+
+**Reason**: Worker's CommandHandler.HandleListAsync expects path in Parameters dictionary, not as SourcePath.
+
+#### 3. Fixed get_status to Return Status Data
+**File**: `workers/FileManagerWorker/CommandHandler.cs`
+
+**Changes**:
+```csharp
+// Before:
+return await Task.FromResult(CommandResponse.Success(cmdId, "Status retrieved successfully"));
+
+// After:
+var response = CommandResponse.Success(cmdId, "Status retrieved successfully");
+response.ErrorDetails = status;  // Include status data
+return await Task.FromResult(response);
+```
+
+**Reason**: Status dictionary was created but never included in response. ErrorDetails is used to pass additional data.
+
+#### 4. Added PathC Support
+**Files Modified**:
+- `backend/models.py`: Added `path_c_prefix = Column(String(500), nullable=True)` to Worker model
+- `backend/api/schemas.py`: Added `path_c_prefix` to WorkerUpdate and WorkerResponse schemas
+- `backend/api/routes/admin.py`: Added path_c_prefix handling in update_worker endpoint
+
+**Migration Created**: `backend/migrations/add_path_c_prefix.sql`
+```sql
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS path_c_prefix VARCHAR(500);
+COMMENT ON COLUMN workers.path_c_prefix IS 'Archive path prefix where PUSH operations move original directories';
+```
+
+#### 5. Implemented Path Testing
+**File**: `frontend/js/admin.js`
+
+**Added**:
+- Event listener for test-vf-paths-btn
+- testVfPaths() method to test PathB and PathC accessibility
+- Calls new `/api/admin/test-path` endpoint
+
+**File**: `backend/api/routes/admin_system.py`
+
+**Added**: `@router.post("/test-path")` endpoint
+- Accepts path and path_type
+- Gets active worker
+- Sends "info" command to check if path exists
+- Returns success/failure with details
+- Logs action to audit log
+
+### 🧪 Testing Verification
+
+**Worker Control Commands**:
+- ✅ ping - Returns "pong" with command_id
+- ✅ get_status - Returns worker status, metrics, and configuration
+- ✅ reload_config - Returns appropriate message
+
+**Directory Listing**:
+- ✅ PathA listing works (path passed in params)
+- ✅ Search works (uses path and pattern params)
+
+**PathC Configuration**:
+- ✅ PathC can be set via admin panel worker update
+- ✅ PathC appears in WorkerResponse
+- ✅ Worker model includes path_c_prefix column
+
+**Path Testing**:
+- ✅ Test Paths button triggers testVfPaths()
+- ✅ Backend endpoint tests path accessibility
+- ✅ Results shown to admin with success/failure
+- ✅ Audit log records test attempts
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple parameter passing (params dictionary vs separate fields)
+- Reused existing "info" command for path testing
+- Direct field addition without complex migrations
+
+✅ **DRY (Don't Repeat Yourself)**
+- Single test-path endpoint for all path types
+- Consistent error handling across all fixes
+- Reused WorkerService.send_command for path testing
+
+### 🔍 Related Components
+
+**Schemas Updated**:
+```python
+class WorkerCommandResponse(BaseModel):
+    status: str
+    message: str
+    command_id: Optional[str] = None  # ✅ Added
+    completion_time_ms: Optional[int] = None
+    file_count: Optional[int] = None
+    total_size_bytes: Optional[int] = None
+    error_details: Optional[dict[str, Any]] = None
+
+class WorkerUpdate(BaseModel):
+    status: Optional[WorkerStatus] = None
+    path_a_prefix: Optional[str] = None
+    path_b_prefix: Optional[str] = None
+    path_c_prefix: Optional[str] = None  # ✅ Added
+
+class WorkerResponse(BaseModel):
+    id: int
+    name: str
+    hostname: Optional[str]
+    path_a_prefix: Optional[str]
+    path_b_prefix: Optional[str]
+    path_c_prefix: Optional[str]  # ✅ Added
+    status: WorkerStatus
+    # ... other fields
+```
+
+**Worker Model Updated**:
+```python
+class Worker(Base):
+    # ...
+    path_a_prefix = Column(String(500), nullable=True)
+    path_b_prefix = Column(String(500), nullable=True)
+    path_c_prefix = Column(String(500), nullable=True)  # ✅ Added
+```
+
+**New Endpoints**:
+- `POST /api/admin/test-path` - Tests path accessibility via worker
+
+---
+
+**Branch:** claude/fix-worker-control-response-bSzfs
+**Status:** ✅ COMPLETE - All worker control and path configuration issues resolved
+**Last Updated:** 2026-01-29
+
+---
+
+*Fixes maintain KISS and DRY principles throughout the codebase.*

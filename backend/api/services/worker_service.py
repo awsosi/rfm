@@ -122,6 +122,7 @@ class WorkerService:
                 return WorkerCommandResponse(
                     status="success",
                     message=completed_command.response_message or "Command completed successfully",
+                    command_id=str(completed_command.id),
                     file_count=completed_command.response_data.get("file_count") if completed_command.response_data else None,
                     total_size_bytes=completed_command.response_data.get("total_size_bytes") if completed_command.response_data else None,
                     error_details=completed_command.response_data.get("error_details") if completed_command.response_data else None,
@@ -221,8 +222,7 @@ class WorkerService:
         """
         command = WorkerRequest(
             command="list",
-            source_path=path,
-            params={"offset": offset, "limit": limit},
+            params={"path": path, "offset": offset, "limit": limit},
         )
 
         return await self.send_command(worker, command, db)
@@ -250,8 +250,7 @@ class WorkerService:
         """
         command = WorkerRequest(
             command="search",
-            source_path=path,
-            params={"query": query, "recursive": recursive},
+            params={"path": path, "pattern": query, "recursive": recursive},
         )
 
         return await self.send_command(worker, command, db)

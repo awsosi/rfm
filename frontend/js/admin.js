@@ -90,6 +90,11 @@ export class AdminPanel {
             saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
         }
 
+        const testVfPathsBtn = document.getElementById('test-vf-paths-btn');
+        if (testVfPathsBtn) {
+            testVfPathsBtn.addEventListener('click', () => this.testVfPaths());
+        }
+
         // Logs
         const refreshLogsBtn = document.getElementById('refresh-logs-btn');
         if (refreshLogsBtn) {
@@ -586,6 +591,67 @@ export class AdminPanel {
         } catch (error) {
             console.error('Failed to save configuration:', error);
             showNotification(error.message || 'Failed to save configuration', 'error');
+        }
+    }
+
+    /**
+     * Test VF paths (PathB and PathC) accessibility
+     */
+    async testVfPaths() {
+        const pathB = document.getElementById('config-path-b')?.value;
+        const pathC = document.getElementById('config-path-c')?.value;
+
+        if (!pathB && !pathC) {
+            showNotification('Please enter PathB or PathC to test', 'warning');
+            return;
+        }
+
+        try {
+            showNotification('Testing paths...', 'info');
+
+            const results = {};
+
+            // Test PathB if provided
+            if (pathB) {
+                try {
+                    const result = await API.post('/api/admin/test-path', {
+                        path: pathB,
+                        path_type: 'PathB'
+                    });
+                    results.pathB = result;
+                } catch (error) {
+                    results.pathB = { success: false, error: error.message };
+                }
+            }
+
+            // Test PathC if provided
+            if (pathC) {
+                try {
+                    const result = await API.post('/api/admin/test-path', {
+                        path: pathC,
+                        path_type: 'PathC'
+                    });
+                    results.pathC = result;
+                } catch (error) {
+                    results.pathC = { success: false, error: error.message };
+                }
+            }
+
+            // Display results
+            let message = 'Path Test Results:\n\n';
+            if (results.pathB) {
+                message += `PathB (${pathB}): ${results.pathB.success ? '✓ Accessible' : '✗ Not accessible - ' + results.pathB.error}\n`;
+            }
+            if (results.pathC) {
+                message += `PathC (${pathC}): ${results.pathC.success ? '✓ Accessible' : '✗ Not accessible - ' + results.pathC.error}\n`;
+            }
+
+            const allSuccess = Object.values(results).every(r => r.success);
+            showNotification(message, allSuccess ? 'success' : 'error');
+
+        } catch (error) {
+            console.error('Failed to test paths:', error);
+            showNotification(error.message || 'Failed to test paths', 'error');
         }
     }
 
