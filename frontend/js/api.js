@@ -494,30 +494,3 @@ export async function resetPreferences() {
         method: 'DELETE'
     });
 }
-
-/**
- * API object with convenience methods for HTTP requests
- */
-export const API = {
-    async get(endpoint) {
-        return await apiRequest(endpoint, { method: 'GET' });
-    },
-
-    async post(endpoint, data = {}) {
-        return await apiRequest(endpoint, {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-    },
-
-    async put(endpoint, data = {}) {
-        return await apiRequest(endpoint, {
-            method: 'PUT',
-            body: JSON.stringify(data)
-        });
-    },
-
-    async delete(endpoint) {
-        return await apiRequest(endpoint, { method: 'DELETE' });
-    }
-};
