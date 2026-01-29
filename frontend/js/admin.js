@@ -9,6 +9,7 @@
  */
 
 import { API } from './api.js';
+import { getCurrentUser } from './auth.js';
 import { showNotification, formatDate } from './utils.js';
 
 export class AdminPanel {
@@ -171,21 +172,37 @@ export class AdminPanel {
             if (loadingIndicator) loadingIndicator.classList.remove('hidden');
 
             const users = await API.get('/api/admin/users');
+            const currentUser = getCurrentUser();
+
+            // Count active admins
+            const activeAdminCount = users.filter(u => u.role === 'ADMIN' && u.is_active).length;
 
             if (tableBody) {
-                tableBody.innerHTML = users.map(user => `
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${escapeHtml(user.username)}</td>
-                        <td><span class="badge badge-${user.role.toLowerCase()}">${user.role}</span></td>
-                        <td><span class="badge ${user.is_active ? 'badge-success' : 'badge-danger'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
-                        <td>${formatDate(user.created_at)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary" onclick="adminPanel.editUser(${user.id})">Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="adminPanel.deleteUser(${user.id}, '${escapeHtml(user.username)}')">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
+                tableBody.innerHTML = users.map(user => {
+                    // Disable delete button if:
+                    // 1. It's the current user, OR
+                    // 2. It's the last active admin
+                    const isCurrentUser = currentUser && user.id === currentUser.id;
+                    const isLastAdmin = user.role === 'ADMIN' && user.is_active && activeAdminCount <= 1;
+                    const canDelete = !isCurrentUser && !isLastAdmin;
+                    const deleteButtonDisabled = canDelete ? '' : 'disabled';
+                    const deleteButtonTitle = isCurrentUser ? 'Cannot delete your own account' :
+                                             isLastAdmin ? 'Cannot delete the last admin user' : '';
+
+                    return `
+                        <tr>
+                            <td>${user.id}</td>
+                            <td>${escapeHtml(user.username)}</td>
+                            <td><span class="badge badge-${user.role.toLowerCase()}">${user.role}</span></td>
+                            <td><span class="badge ${user.is_active ? 'badge-success' : 'badge-danger'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                            <td>${formatDate(user.created_at)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary" onclick="adminPanel.editUser(${user.id})">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="adminPanel.deleteUser(${user.id}, '${escapeHtml(user.username)}')" ${deleteButtonDisabled} title="${deleteButtonTitle}">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
         } catch (error) {
             console.error('Failed to load users:', error);
