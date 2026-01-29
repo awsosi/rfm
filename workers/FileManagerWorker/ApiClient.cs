@@ -63,7 +63,11 @@ namespace FileManagerWorker
         {
             try
             {
-                Logger.Info("Registering worker with Central API...");
+                Logger.Info("========================================================================");
+                Logger.Info("Attempting worker registration with Central API...");
+                Logger.Info("  API URL: {0}", _apiUrl);
+                Logger.Info("  Hostname: {0}", Environment.MachineName);
+                Logger.Info("========================================================================");
 
                 var publicKeyPem = _certManager.ExportPublicKeyAsPem(_clientCertificate);
                 var workerName = Environment.MachineName;
@@ -82,26 +86,83 @@ namespace FileManagerWorker
                 var json = JsonConvert.SerializeObject(registrationData);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
+                Logger.Debug("Sending registration request...");
                 var response = await _httpClient.PostAsync($"{_apiUrl}/api/workers/register", content);
 
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    Logger.Info("Worker registered successfully: {0}", responseContent);
+                    Logger.Info("========================================================================");
+                    Logger.Info("✓ Worker registered successfully!");
+                    Logger.Info("========================================================================");
+                    Logger.Info("Response: {0}", responseContent);
+                    Logger.Info("");
+                    Logger.Info("IMPORTANT: Worker status is PENDING - awaiting admin approval");
+                    Logger.Info("Admin must approve this worker at: /pages/admin.html -> Workers tab");
+                    Logger.Info("========================================================================");
                     _isRegistered = true;
                     return true;
                 }
                 else
                 {
-                    Logger.Error("Worker registration failed: {0} - {1}", response.StatusCode, await response.Content.ReadAsStringAsync());
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Logger.Error("========================================================================");
+                    Logger.Error("✗ Worker registration FAILED");
+                    Logger.Error("========================================================================");
+                    Logger.Error("  Status Code: {0}", response.StatusCode);
+                    Logger.Error("  Response: {0}", errorContent);
+                    Logger.Error("  API URL: {0}", _apiUrl);
+                    Logger.Error("");
+                    Logger.Error("DIAGNOSIS:");
+                    if (response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        Logger.Error("  - 403 Forbidden: Worker may be blocked or certificate rejected");
+                    }
+                    else if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        Logger.Error("  - 401 Unauthorized: Authentication failed");
+                    }
+                    else if (response.StatusCode == HttpStatusCode.BadRequest)
+                    {
+                        Logger.Error("  - 400 Bad Request: Invalid registration data format");
+                    }
+                    else
+                    {
+                        Logger.Error("  - HTTP error occurred during registration");
+                    }
+                    Logger.Error("");
+                    Logger.Error("POSSIBLE CAUSES:");
+                    Logger.Error("  1. Wrong API URL configured");
+                    Logger.Error("  2. API server is rejecting the request");
+                    Logger.Error("  3. Network connectivity issues");
+                    Logger.Error("  4. Certificate validation problems");
+                    Logger.Error("========================================================================");
                     return false;
                 }
             }
 			catch (HttpRequestException ex) when (ex.InnerException is SocketException sockEx && sockEx.SocketErrorCode == SocketError.ConnectionRefused)
 			{
-				Logger.Warn("Central API offline ({APIUrl}): {Message}. Retrying...", _apiUrl, ex.Message);
+                Logger.Warn("========================================================================");
+                Logger.Warn("Central API is offline or unreachable");
+                Logger.Warn("========================================================================");
+                Logger.Warn("  API URL: {0}", _apiUrl);
+                Logger.Warn("  Error: Connection refused");
+                Logger.Warn("  Detail: {0}", ex.Message);
+                Logger.Warn("");
+                Logger.Warn("The worker will retry registration during next poll cycle.");
+                Logger.Warn("========================================================================");
 				return false;
 			}
+            catch (Exception ex)
+            {
+                Logger.Error("========================================================================");
+                Logger.Error("✗ Worker registration exception");
+                Logger.Error("========================================================================");
+                Logger.Error(ex, "Unexpected error during registration");
+                Logger.Error("  API URL: {0}", _apiUrl);
+                Logger.Error("========================================================================");
+                return false;
+            }
 		}
 
         /// <summary>
