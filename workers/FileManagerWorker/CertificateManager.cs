@@ -137,7 +137,9 @@ namespace FileManagerWorker
 					var pfxBytes = certificate.Export(X509ContentType.Pfx);
 
 					// Use appropriate key storage based on StoreMode
-					var keyStorageFlags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet;
+					// Note: PersistKeySet is removed to avoid permission issues with Network Service
+					// The certificate will be persisted when added to the Windows Certificate Store
+					var keyStorageFlags = X509KeyStorageFlags.Exportable;
 					if (StoreMode == CertStoreMode.LocalMachine)
 					{
 						keyStorageFlags |= X509KeyStorageFlags.MachineKeySet;

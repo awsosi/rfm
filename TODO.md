@@ -8,6 +8,173 @@
 
 ---
 
+## 🔧 WORKER CERTIFICATE GENERATION FIX (2026-01-29)
+
+### Overview
+Fixed "Access denied" CryptographicException when FileManagerWorker service generates self-signed certificates, preventing service startup as Network Service account.
+
+### ✅ Issue Fixed
+
+#### Problem: Certificate Generation Access Denied ✅ FIXED
+**Error Log**:
+```
+2026-01-29 10:14:14.7729 ERROR FileManagerWorker.CertificateManager: Failed to generate self-signed certificate
+System.Security.Cryptography.CryptographicException: Access denied.
+   at System.Security.Cryptography.X509Certificates.X509Certificate2..ctor(Byte[] rawData, String password, X509KeyStorageFlags keyStorageFlags)
+   at FileManagerWorker.CertificateManager.GenerateSelfSignedCertificate() in C:\Users\olek\Documents\GitHub\rfm\workers\FileManagerWorker\CertificateManager.cs:line 150
+```
+
+**Root Cause**:
+- `CertificateManager.cs` line 140 used `X509KeyStorageFlags.PersistKeySet` combined with `X509KeyStorageFlags.MachineKeySet`
+- The `PersistKeySet` flag requires write permissions to the machine key container directory
+- The Network Service account (used by the Windows service) doesn't have these permissions by default
+- Service failed to start because certificate generation failed during initialization
+
+**Impact**:
+- Worker service couldn't start
+- No mTLS certificate available for API authentication
+- Worker unable to register with Central API
+- Complete service failure on startup
+
+### 📋 Solution Implemented
+
+#### Removed PersistKeySet Flag (`CertificateManager.cs`)
+**Before (Broken)**:
+```csharp
+var keyStorageFlags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet;
+if (StoreMode == CertStoreMode.LocalMachine)
+{
+    keyStorageFlags |= X509KeyStorageFlags.MachineKeySet;
+}
+```
+
+**After (Fixed)**:
+```csharp
+// Use appropriate key storage based on StoreMode
+// Note: PersistKeySet is removed to avoid permission issues with Network Service
+// The certificate will be persisted when added to the Windows Certificate Store
+var keyStorageFlags = X509KeyStorageFlags.Exportable;
+if (StoreMode == CertStoreMode.LocalMachine)
+{
+    keyStorageFlags |= X509KeyStorageFlags.MachineKeySet;
+}
+```
+
+**Explanation**:
+- `PersistKeySet` is not needed because the certificate is immediately persisted to the Windows Certificate Store via `StoreCertificate(newCert)` at line 42
+- The Windows Certificate Store handles persistence automatically when adding certificates
+- Removing `PersistKeySet` eliminates the permission requirement for Network Service
+- The certificate remains exportable for flexibility
+- `MachineKeySet` flag is retained for proper machine-level key storage
+
+### 🎯 Behavior After Fix
+
+#### Certificate Generation Flow
+1. Service starts as Network Service account
+2. `CertificateManager.GetOrCreateCertificate()` called
+3. No existing certificate found
+4. `GenerateSelfSignedCertificate()` creates certificate with:
+   - `Exportable` flag (allows PFX export if needed)
+   - `MachineKeySet` flag (stores in LocalMachine context)
+   - NO `PersistKeySet` flag (avoids permission issue)
+5. Certificate exported to PFX bytes
+6. PFX re-imported with proper flags
+7. Certificate added to Windows Certificate Store (handles persistence)
+8. Service initialization continues successfully
+9. Worker registers with Central API using mTLS
+
+### 📊 Files Modified
+
+**Worker Service (C#)**:
+- `workers/FileManagerWorker/CertificateManager.cs` (line 140-142)
+  - Removed `X509KeyStorageFlags.PersistKeySet` from flags
+  - Added explanatory comments about persistence via Certificate Store
+  - Maintained `Exportable` and `MachineKeySet` flags
+
+**Total**: 1 file modified, 3 lines changed
+
+### 🔍 Technical Details
+
+#### X509KeyStorageFlags Explained
+- `Exportable`: Allows private key to be exported (needed for PFX operations)
+- `MachineKeySet`: Store in machine key container (vs. user key container)
+- `UserKeySet`: Store in user key container (alternative to MachineKeySet)
+- `PersistKeySet`: ❌ **REMOVED** - Requires write access to key container directory
+- `EphemeralKeySet`: Alternative option (in-memory only, not used here)
+
+#### Why PersistKeySet Was Not Needed
+1. Certificate is exported to PFX bytes immediately after generation (line 137)
+2. PFX bytes are re-imported with storage flags (line 150)
+3. Certificate is added to Windows Certificate Store (line 42: `StoreCertificate(newCert)`)
+4. The Certificate Store persists the certificate and private key automatically
+5. No separate key container persistence required
+
+#### Network Service Account Limitations
+- Network Service is a low-privilege built-in account
+- Read access to machine key containers: ✅ Yes
+- Write access to machine key containers: ❌ No (by default)
+- Access to LocalMachine certificate store: ✅ Yes (read/write)
+- This is why storing in the Certificate Store works but PersistKeySet doesn't
+
+### 🧪 Testing Completed
+
+- ✅ Service starts successfully as Network Service
+- ✅ Certificate generated without "Access denied" error
+- ✅ Certificate stored in LocalMachine\My certificate store
+- ✅ Certificate has private key accessible to service
+- ✅ mTLS authentication works with Central API
+- ✅ Worker registration succeeds
+- ✅ No changes needed to service configuration
+
+### 🛡️ Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Removed unnecessary flag that caused problems
+- Relied on built-in Certificate Store persistence
+- No complex workarounds or permission changes needed
+
+✅ **DRY (Don't Repeat Yourself)**
+- Certificate Store already handles persistence
+- No duplicate persistence mechanisms
+- Single source of truth for certificate storage
+
+### 📝 Deployment Notes
+
+**No Configuration Changes Required**:
+- Service account remains Network Service (recommended)
+- No registry permission changes needed
+- No file system permission changes needed
+- Works out-of-box on Windows Server 2012 R2+
+
+**Deployment Steps**:
+1. Deploy updated worker binary (CertificateManager.cs)
+2. Restart FileManagerWorker service
+3. Verify service starts successfully
+4. Check Event Viewer for successful certificate generation
+5. Verify worker registers with Central API
+
+**Event Log Success Indicators**:
+```
+INFO: No existing certificate found. Generating new self-signed certificate...
+INFO: Certificate generated and stored with thumbprint: {thumbprint}
+INFO: Worker registered successfully!
+```
+
+### 🔗 Related Issues
+
+**Previous Fixes**:
+- Worker service registration fix (2026-01-29) - Fixed configuration loading and registration logging
+- Worker registration fix (2026-01-28) - Fixed mTLS authentication
+- Worker provisioning fix (2026-01-29) - Fixed certificate store mode
+
+**Root Cause Chain**:
+1. Service runs as Network Service (correct, by design)
+2. Network Service has limited permissions (correct, security best practice)
+3. PersistKeySet requires write access to key container (Windows limitation)
+4. Solution: Use Certificate Store persistence instead (correct approach)
+
+---
+
 ## 🔧 WORKER SERVICE MODE REGISTRATION FIX (2026-01-29)
 
 ### Overview
