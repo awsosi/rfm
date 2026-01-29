@@ -62,13 +62,13 @@ import { normalizePath, joinPath, debounce } from './utils.js';
 const state = {
     panes: {
         a: {
-            currentPath: '/',
+            currentPath: 'A:',
             files: [],
             offset: 0,
             isSearching: false
         },
         b: {
-            currentPath: '/',
+            currentPath: 'B:',
             files: [],
             offset: 0,
             isSearching: false
@@ -127,14 +127,14 @@ async function init() {
 
     if (isVFRedesign) {
         // Initialize single pane (Path A only)
-        await loadDirectory('a', '/');
+        await loadDirectory('a', 'A:');
 
         // Load operation history
         await loadOperationHistory();
     } else {
         // Initialize both panes (legacy dual-pane)
-        await loadDirectory('a', '/');
-        await loadDirectory('b', '/');
+        await loadDirectory('a', 'A:');
+        await loadDirectory('b', 'B:');
     }
 
     // Connect WebSocket for real-time updates
