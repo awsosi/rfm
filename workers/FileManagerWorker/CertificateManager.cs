@@ -15,7 +15,7 @@ namespace FileManagerWorker
         private const string CertificateFriendlyName = "FileManagerWorker Client Certificate";
 
 		public enum CertStoreMode { CurrentUser, LocalMachine }
-		public CertStoreMode StoreMode { get; set; } = CertStoreMode.LocalMachine;  // Domyï¿½lnie LocalMachine dla service
+		public CertStoreMode StoreMode { get; set; } = CertStoreMode.LocalMachine;  // Domyœlnie LocalMachine dla service
 
 		private X509Store GetStore(StoreName name, OpenFlags flags) =>
 			new(name, StoreMode == CertStoreMode.CurrentUser ? StoreLocation.CurrentUser : StoreLocation.LocalMachine);
@@ -135,19 +135,8 @@ namespace FileManagerWorker
 
 					// Export PFX z kluczem prywatnym i zaimportuj z flagami
 					var pfxBytes = certificate.Export(X509ContentType.Pfx);
-
-					// Use appropriate key storage based on StoreMode
-					var keyStorageFlags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet;
-					if (StoreMode == CertStoreMode.LocalMachine)
-					{
-						keyStorageFlags |= X509KeyStorageFlags.MachineKeySet;
-					}
-					else
-					{
-						keyStorageFlags |= X509KeyStorageFlags.UserKeySet;
-					}
-
-					return new X509Certificate2(pfxBytes, (string)null, keyStorageFlags);
+					return new X509Certificate2(pfxBytes, (string)null,
+						X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
                 }
             }
             catch (Exception ex)
