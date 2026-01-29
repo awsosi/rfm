@@ -16,6 +16,8 @@ namespace FileManagerWorker
         private string _pathAPrefix;
         private string _pathBPrefix;
         private string _pathCPrefix;
+        private string _sambaUsername;
+        private string _sambaPassword;
 
         /// <summary>
         /// Path A prefix - can be updated by admin
@@ -56,11 +58,54 @@ namespace FileManagerWorker
             }
         }
 
-        public FileOperations(string pathAPrefix, string pathBPrefix, string pathCPrefix)
+        public FileOperations(string pathAPrefix, string pathBPrefix, string pathCPrefix, string sambaUsername = null, string sambaPassword = null)
         {
             _pathAPrefix = pathAPrefix;
             _pathBPrefix = pathBPrefix;
             _pathCPrefix = pathCPrefix;
+            _sambaUsername = sambaUsername;
+            _sambaPassword = sambaPassword;
+
+            if (!string.IsNullOrWhiteSpace(_sambaUsername))
+            {
+                Logger.Info("File operations will use impersonation with user: {0}", _sambaUsername);
+            }
+            else
+            {
+                Logger.Info("File operations will use Network Service account permissions");
+            }
+        }
+
+        /// <summary>
+        /// Execute action with samba impersonation if credentials are configured
+        /// </summary>
+        private T ExecuteWithImpersonation<T>(Func<T> action)
+        {
+            if (!string.IsNullOrWhiteSpace(_sambaUsername))
+            {
+                return WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+            }
+            else
+            {
+                // No impersonation - use current process identity (Network Service)
+                return action();
+            }
+        }
+
+        /// <summary>
+        /// Execute action with samba impersonation if credentials are configured (void version)
+        /// </summary>
+        private void ExecuteWithImpersonation(Action action)
+        {
+            if (!string.IsNullOrWhiteSpace(_sambaUsername))
+            {
+                WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+            }
+            else
+            {
+                // No impersonation - use current process identity (Network Service)
+                action();
+            }
         }
 
         /// <summary>

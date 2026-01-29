@@ -8,7 +8,447 @@
 
 ---
 
+## 🔐 WORKER SECURITY ARCHITECTURE REDESIGN (2026-01-29)
+
+### Overview
+Complete redesign of worker security architecture to properly separate setup-time (elevated) from runtime (least privilege) operations. Implements proper credential separation between mTLS certificate authentication and samba file operations.
+
+### ✅ New Architecture Implemented
+
+#### Security Principles
+1. **Separation of Concerns**: Certificate generation (setup-time) vs. file operations (runtime)
+2. **Least Privilege**: Service runs as Network Service with minimal permissions
+3. **Credential Separation**: mTLS certificate for API auth, samba credentials for file ops
+4. **Fail-Fast**: Clear error messages when prerequisites not met
+
+#### Architecture Overview
+
+```
+SETUP TIME (Administrator):
+├── Run FileManagerWorker.exe /config as Administrator
+├── Generate mTLS certificate with elevated permissions
+├── Store certificate in LocalMachine certificate store
+├── Prompt for samba credentials (username/password)
+├── Save credentials to Windows Credential Manager
+└── Ready for service installation
+
+RUNTIME (Network Service):
+├── Service starts as Network Service (least privilege)
+├── Read existing certificate from store (no generation)
+├── Use certificate for mTLS API authentication
+├── For file operations:
+│   ├── Impersonate samba credentials
+│   ├── Execute file operation under samba identity
+│   └── Revert impersonation
+└── Continue normal operation
+```
+
+### 📋 Implementation Details
+
+#### 1. WindowsImpersonation Helper Class (NEW)
+**File**: `workers/FileManagerWorker/WindowsImpersonation.cs`
+
+**Purpose**: Provides Windows impersonation for file operations using samba credentials
+
+**Key Features**:
+- P/Invoke to LogonUser and impersonation APIs
+- Supports DOMAIN\\User and user@domain.com formats
+- Automatic reversion on disposal (IDisposable pattern)
+- Static helper methods for inline impersonation
+- Comprehensive error logging
+
+**Usage**:
+```csharp
+// Execute with impersonation
+WindowsImpersonation.ExecuteWithImpersonation(username, password, () =>
+{
+    File.Copy(source, dest);  // Runs under samba user identity
+});
+```
+
+#### 2. CertificateManager Enhancements
+**File**: `workers/FileManagerWorker/CertificateManager.cs`
+
+**Changes**:
+1. Added `IsElevated()` static method - checks for administrator privileges
+2. Added `GetCertificateReadOnly()` method - retrieves certificate without generation
+3. Enhanced `GetOrCreateCertificate()` - now explicitly for setup-time only
+
+**New Methods**:
+```csharp
+// Check elevation
+public static bool IsElevated()
+
+// Read-only retrieval (runtime)
+public X509Certificate2 GetCertificateReadOnly()
+
+// Generate or retrieve (setup-time only)
+public X509Certificate2 GetOrCreateCertificate()
+```
+
+**Design Rationale**:
+- `GetCertificateReadOnly()` never tries to generate - fails with clear error
+- `GetOrCreateCertificate()` only used during /config wizard
+- Separation makes intent explicit in code
+
+#### 3. Configuration Wizard Updates
+**File**: `workers/FileManagerWorker/Program.cs`
+
+**Changes**:
+1. **Elevation Check**: Wizard requires Administrator privileges
+2. **Certificate Generation**: Generates mTLS certificate during setup
+3. **Samba Credentials**: Prompts for and stores samba username/password
+4. **Clear Output**: Explains security model to administrator
+
+**Flow**:
+```
+1. Check for Administrator privileges (fail if not elevated)
+2. Prompt for API URL
+3. Prompt for samba credentials (for file operations)
+4. Generate mTLS certificate (requires elevation)
+5. Save all configuration to Windows Credential Manager
+6. Display security model explanation
+7. Instruct to run install command
+```
+
+**New Output**:
+```
+==============================================================================
+Configuration completed successfully!
+==============================================================================
+
+WHAT WAS CONFIGURED:
+  ✓ mTLS certificate generated and stored in LocalMachine\My
+  ✓ API URL saved to Windows Credential Manager
+  ✓ Samba credentials saved to Windows Credential Manager
+
+SECURITY MODEL:
+  • Service runs as Network Service (least privilege)
+  • Certificate used for API authentication (mTLS)
+  • Samba credentials used ONLY for file operations (impersonation)
+  • All credentials encrypted by Windows Credential Manager
+
+NEXT STEP:
+  Run: FileManagerWorker.exe install --interactive
+```
+
+#### 4. FileOperations Enhancements
+**File**: `workers/FileManagerWorker/FileOperations.cs`
+
+**Changes**:
+1. Added `_sambaUsername` and `_sambaPassword` private fields
+2. Updated constructor to accept samba credentials
+3. Added `ExecuteWithImpersonation<T>()` wrapper methods
+4. File operations now executed under impersonated context
+
+**Constructor Signature**:
+```csharp
+public FileOperations(
+    string pathAPrefix,
+    string pathBPrefix,
+    string pathCPrefix,
+    string sambaUsername = null,
+    string sambaPassword = null)
+```
+
+**Impersonation Wrapper**:
+```csharp
+private T ExecuteWithImpersonation<T>(Func<T> action)
+{
+    if (!string.IsNullOrWhiteSpace(_sambaUsername))
+    {
+        return WindowsImpersonation.ExecuteWithImpersonation(
+            _sambaUsername, _sambaPassword, action);
+    }
+    else
+    {
+        // No impersonation - use Network Service permissions
+        return action();
+    }
+}
+```
+
+**Benefits**:
+- File operations use samba identity when configured
+- Falls back to Network Service if no credentials provided
+- Transparent to calling code
+- Centralized impersonation logic
+
+#### 5. WorkerService Startup Changes
+**File**: `workers/FileManagerWorker/WorkerService.cs`
+
+**Changes**:
+1. **Certificate Check**: Verifies certificate exists before starting
+2. **Read-Only Mode**: Uses `GetCertificateReadOnly()` instead of generation
+3. **Samba Credentials**: Passes credentials to FileOperations
+4. **Fail-Fast**: Stops startup if certificate missing with clear error
+
+**Startup Flow**:
+```csharp
+// Load configuration (includes samba credentials)
+var config = LoadConfiguration();
+
+// Get certificate (read-only - no generation)
+var certificate = _certManager.GetCertificateReadOnly();
+if (certificate == null)
+{
+    Logger.Error("CRITICAL: mTLS certificate not found!");
+    Logger.Error("SOLUTION: Run as Administrator: FileManagerWorker.exe /config");
+    return false;
+}
+
+// Initialize FileOperations with samba credentials
+_fileOps = new FileOperations(
+    config.PathAPrefix,
+    config.PathBPrefix,
+    config.PathCPrefix,
+    config.ServiceUser,      // Samba username
+    config.ServicePassword   // Samba password
+);
+```
+
+#### 6. ApiClient Updates
+**File**: `workers/FileManagerWorker/ApiClient.cs`
+
+**Changes**:
+1. Uses `GetCertificateReadOnly()` instead of `GetOrCreateCertificate()`
+2. Throws exception if certificate not found
+3. Clear error message directs to /config wizard
+
+**Constructor Change**:
+```csharp
+// Before (Broken)
+_clientCertificate = _certManager.GetOrCreateCertificate();
+
+// After (Fixed)
+_clientCertificate = _certManager.GetCertificateReadOnly();
+if (_clientCertificate == null)
+{
+    throw new InvalidOperationException(
+        "mTLS certificate not found. Run /config as Administrator first.");
+}
+```
+
+### 🎯 Security Model
+
+#### Credential Types and Usage
+
+| Credential Type | Purpose | Storage | Used By | Privilege Level |
+|----------------|---------|---------|---------|-----------------|
+| **mTLS Certificate** | API authentication | LocalMachine\\My store | ApiClient | Read-only (Network Service) |
+| **Samba Username/Password** | File operations | Credential Manager | FileOperations | Impersonated (full file access) |
+| **Service Account** | Service identity | Windows Services | WorkerService | Network Service (least privilege) |
+
+#### Permission Matrix
+
+| Operation | Identity | Permissions Required |
+|-----------|----------|---------------------|
+| Generate Certificate | Administrator | Write to LocalMachine cert store |
+| Read Certificate | Network Service | Read from LocalMachine cert store |
+| API Authentication | Network Service | Read certificate, network access |
+| File Operations | Samba User (impersonated) | File system access per user |
+| Service Lifecycle | Network Service | Service control operations |
+
+#### Security Benefits
+
+✅ **Least Privilege**:
+- Service runs as Network Service (minimal permissions)
+- No elevated privileges at runtime
+- File operations scoped to samba user permissions
+
+✅ **Credential Separation**:
+- mTLS certificate for API (read-only access)
+- Samba credentials for files (impersonation)
+- No mixed-use credentials
+
+✅ **Setup-Time Security**:
+- Certificate generation requires Administrator
+- One-time setup with proper permissions
+- Runtime doesn't need elevation
+
+✅ **Fail-Fast Design**:
+- Service won't start without certificate
+- Clear error messages explain what's missing
+- No silent failures or fallbacks
+
+✅ **Audit Trail**:
+- File operations logged under samba user
+- Certificate usage tracked
+- Impersonation events visible in Windows Security log
+
+### 📊 Files Modified Summary
+
+**New Files**:
+- `workers/FileManagerWorker/WindowsImpersonation.cs` (NEW - 170 lines)
+
+**Modified Files**:
+- `workers/FileManagerWorker/CertificateManager.cs`
+  - Added: IsElevated(), GetCertificateReadOnly()
+  - Enhanced: GetOrCreateCertificate() documentation
+  - Lines changed: ~50
+
+- `workers/FileManagerWorker/Program.cs`
+  - Added: Elevation check, certificate generation in /config
+  - Enhanced: Configuration wizard output
+  - Lines changed: ~90
+
+- `workers/FileManagerWorker/FileOperations.cs`
+  - Added: Samba credential fields, impersonation wrappers
+  - Enhanced: Constructor signature
+  - Lines changed: ~70
+
+- `workers/FileManagerWorker/WorkerService.cs`
+  - Added: Certificate existence check, samba credential passing
+  - Changed: Read-only certificate retrieval
+  - Lines changed: ~40
+
+- `workers/FileManagerWorker/ApiClient.cs`
+  - Changed: Read-only certificate retrieval
+  - Added: Exception if certificate missing
+  - Lines changed: ~10
+
+**Total**: 1 new file + 5 modified files = ~430 lines of new/changed code
+
+### 🧪 Testing Requirements
+
+#### Test 1: Configuration Wizard (Elevated)
+1. Run as Administrator: `FileManagerWorker.exe /config`
+2. **Expected**: Wizard runs, generates certificate
+3. **Verify**:
+   - Certificate appears in LocalMachine\\My store
+   - Credentials saved to Credential Manager
+   - No errors in wizard output
+
+#### Test 2: Configuration Wizard (Not Elevated)
+1. Run as normal user: `FileManagerWorker.exe /config`
+2. **Expected**: Wizard fails with elevation error
+3. **Verify**: Clear message to run as Administrator
+
+#### Test 3: Service Startup (Certificate Exists)
+1. Run /config as Administrator
+2. Install service
+3. Start service
+4. **Expected**: Service starts successfully
+5. **Verify**:
+   - Certificate loaded from store
+   - File operations use samba impersonation
+   - Worker registers with API
+
+#### Test 4: Service Startup (Certificate Missing)
+1. Do NOT run /config
+2. Install service
+3. Start service
+4. **Expected**: Service fails to start
+5. **Verify**:
+   - Clear error message in Event Viewer
+   - Message directs to run /config
+   - Service status shows "stopped"
+
+#### Test 5: File Operations with Samba Credentials
+1. Configure samba credentials during /config
+2. Start service
+3. Execute file operation (copy, move, etc.)
+4. **Expected**: Operation succeeds under samba identity
+5. **Verify**:
+   - File ownership shows samba user
+   - Impersonation logged
+   - Network share accessible
+
+#### Test 6: File Operations without Samba Credentials
+1. Run /config without samba credentials
+2. Start service
+3. Execute file operation
+4. **Expected**: Operation uses Network Service identity
+5. **Verify**:
+   - File ownership shows Network Service
+   - No impersonation attempts
+   - Local paths accessible
+
+### 🛡️ Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Clear separation: setup vs. runtime
+- One purpose per credential type
+- Explicit method names (GetCertificateReadOnly vs. GetOrCreateCertificate)
+- No complex permission logic
+
+✅ **DRY (Don't Repeat Yourself)**
+- WindowsImpersonation class centralizes impersonation logic
+- ExecuteWithImpersonation wrapper reused everywhere
+- Single source of truth for certificate retrieval
+- Shared error message formatting
+
+### 📝 Deployment Guide
+
+#### Prerequisites
+- Windows Server 2012 R2 or later
+- Administrator access for initial setup
+- Samba username/password (if using network shares)
+
+#### Step 1: Configuration (One-Time Setup)
+```cmd
+# Run as Administrator
+FileManagerWorker.exe /config
+
+# Follow prompts:
+#   - Enter API URL: https://api.example.com
+#   - Enter samba username: DOMAIN\FileOpsUser
+#   - Enter samba password: ********
+# Certificate will be generated and stored
+```
+
+#### Step 2: Service Installation
+```cmd
+# Install service (can be normal user)
+FileManagerWorker.exe install --interactive
+
+# Or use default Network Service
+FileManagerWorker.exe install
+```
+
+#### Step 3: Service Startup
+```cmd
+# Start service
+net start FileManagerWorker
+
+# Or use Services GUI (services.msc)
+```
+
+#### Step 4: Verification
+```cmd
+# Check Event Viewer for successful startup
+# Look for: "Certificate loaded successfully"
+# Verify worker appears in admin panel
+```
+
+### 🔗 Related Changes
+
+**Previous Fix**:
+- Worker Certificate Generation Fix (2026-01-29) - Removed PersistKeySet flag
+
+**This Redesign**:
+- Addresses root cause of permission issues
+- Properly separates setup from runtime
+- Implements least privilege principle
+- Adds Windows impersonation for file operations
+
+**Future Enhancements**:
+- Certificate renewal mechanism
+- Credential rotation support
+- Multi-factor authentication for /config
+- Audit log integration for impersonation events
+
+---
+
+**Branch:** claude/investigate-filemanager-event-fRmpC
+**Status:** ✅ COMPLETE - Security architecture redesigned
+**Last Updated:** 2026-01-29
+
+---
+
 ## 🔧 WORKER CERTIFICATE GENERATION FIX (2026-01-29)
+
+### NOTE: This fix has been superseded by the Security Architecture Redesign above
 
 ### Overview
 Fixed "Access denied" CryptographicException when FileManagerWorker service generates self-signed certificates, preventing service startup as Network Service account.

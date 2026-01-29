@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Security.Principal;
 using NLog;
 
 namespace FileManagerWorker
@@ -19,8 +20,56 @@ namespace FileManagerWorker
 
 		private X509Store GetStore(StoreName name, OpenFlags flags) =>
 			new(name, StoreMode == CertStoreMode.CurrentUser ? StoreLocation.CurrentUser : StoreLocation.LocalMachine);
+
+		/// <summary>
+		/// Checks if current process is running with elevated (administrator) privileges
+		/// </summary>
+		public static bool IsElevated()
+		{
+			try
+			{
+				using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+				{
+					WindowsPrincipal principal = new WindowsPrincipal(identity);
+					return principal.IsInRole(WindowsBuiltInRole.Administrator);
+				}
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Gets existing certificate from store (read-only, will not generate)
+		/// Use this for service startup - certificate should be generated during /config setup
+		/// </summary>
+		public X509Certificate2 GetCertificateReadOnly()
+		{
+			try
+			{
+				var existingCert = FindCertificate();
+				if (existingCert != null)
+				{
+					Logger.Info("Found existing certificate with thumbprint: {0}", existingCert.Thumbprint);
+					return existingCert;
+				}
+
+				Logger.Error("No certificate found in certificate store");
+				Logger.Error("Certificate must be generated during setup (/config) as Administrator");
+				Logger.Error("Please run: FileManagerWorker.exe /config");
+				return null;
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "Failed to retrieve certificate");
+				return null;
+			}
+		}
+
 		/// <summary>
 		/// Gets or creates a client certificate for mTLS
+		/// Use this ONLY during /config setup with elevated permissions
 		/// </summary>
 		public X509Certificate2 GetOrCreateCertificate()
         {
