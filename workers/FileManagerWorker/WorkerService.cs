@@ -266,10 +266,34 @@ namespace FileManagerWorker
                     Logger.Warn("Using API URL from App.config (DEPRECATED - please use /config to save securely)");
                 }
 
+                // Validate API URL is configured (CRITICAL: don't use defaults that will fail silently)
+                if (string.IsNullOrEmpty(apiUrl))
+                {
+                    Logger.Error("========================================================================");
+                    Logger.Error("CRITICAL: API URL not configured!");
+                    Logger.Error("========================================================================");
+                    Logger.Error("The service cannot start without a valid API URL.");
+                    Logger.Error("");
+                    Logger.Error("DIAGNOSIS:");
+                    Logger.Error("  - API URL not found in Windows Credential Manager");
+                    Logger.Error("  - API URL not found in App.config");
+                    Logger.Error("");
+                    Logger.Error("POSSIBLE CAUSES:");
+                    Logger.Error("  1. Configuration wizard was not run: FileManagerWorker.exe /config");
+                    Logger.Error("  2. Service account cannot access Windows Credential Manager");
+                    Logger.Error("  3. Credentials were saved under different user account");
+                    Logger.Error("");
+                    Logger.Error("SOLUTION:");
+                    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
+                    Logger.Error("  Then reinstall service: FileManagerWorker.exe install");
+                    Logger.Error("========================================================================");
+                    return null;
+                }
+
                 // Load non-sensitive settings from App.config
                 var config = new ServiceConfiguration
                 {
-                    ApiUrl = apiUrl ?? "https://localhost:5001",
+                    ApiUrl = apiUrl,
                     ServiceUser = serviceUser,
                     ServicePassword = servicePassword,
                     PathAPrefix = ConfigurationManager.AppSettings["PathAPrefix"] ?? @"C:\PathA",
@@ -279,7 +303,9 @@ namespace FileManagerWorker
                     UseMtls = bool.Parse(ConfigurationManager.AppSettings["UseMtls"] ?? "true")
                 };
 
+                Logger.Info("========================================================================");
                 Logger.Info("Configuration loaded successfully:");
+                Logger.Info("========================================================================");
                 Logger.Info("  API URL: {0}", config.ApiUrl);
                 Logger.Info("  Service User: {0}", string.IsNullOrWhiteSpace(config.ServiceUser) ? "Network Service" : config.ServiceUser);
                 Logger.Info("  Path A Prefix: {0}", config.PathAPrefix);
@@ -287,13 +313,9 @@ namespace FileManagerWorker
                 Logger.Info("  Path C Prefix: {0}", config.PathCPrefix);
                 Logger.Info("  Polling Interval: {0}s", config.PollingIntervalSeconds);
                 Logger.Info("  Use mTLS: {0}", config.UseMtls);
-                Logger.Info("  Credential Source: {0}", string.IsNullOrEmpty(apiUrl) ? "App.config (INSECURE)" : "Windows Credential Manager (SECURE)");
-
-                if (string.IsNullOrEmpty(config.ApiUrl))
-                {
-                    Logger.Error("API URL not configured. Please run: FileManagerWorker.exe /config");
-                    return null;
-                }
+                Logger.Info("  Current User Context: {0}", Environment.UserName);
+                Logger.Info("  Machine Name: {0}", Environment.MachineName);
+                Logger.Info("========================================================================");
 
                 return config;
             }

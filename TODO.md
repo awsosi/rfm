@@ -8,6 +8,303 @@
 
 ---
 
+## 🔧 WORKER SERVICE MODE REGISTRATION FIX (2026-01-29)
+
+### Overview
+Fixed critical issue where worker service would start successfully but fail to register with the Central API, making it invisible in the admin panel. The service was using a default localhost API URL when configuration loading failed, causing silent registration failures.
+
+### ✅ Issue Fixed
+
+#### Problem: Worker Starts But Never Registers ✅ FIXED
+**Symptoms**:
+- Windows service starts successfully (no errors reported)
+- Worker never appears in `/pages/admin.html -> Workers` tab
+- No pending worker approvals in admin panel
+- Service appears to be running but does nothing
+
+**Root Cause**:
+1. **Default API URL Bypass**: `WorkerService.cs` line 272 set `ApiUrl = apiUrl ?? "https://localhost:5001"`, which provided a default value even when configuration loading failed
+2. **Ineffective Null Check**: The null check at line 292 never triggered because ApiUrl was always set to the default localhost value
+3. **Silent Failure**: Worker attempted registration with `https://localhost:5001`, which failed, but service continued running
+4. **Credential Access**: Service account (LocalSystem/NetworkService) may not have access to Windows Credential Manager credentials saved by the user who ran `/config`
+
+**Impact**:
+- Service appeared healthy but was completely non-functional
+- No visibility into the actual problem (why registration failed)
+- Users couldn't diagnose the issue without deep code inspection
+- Wasted time troubleshooting when service "works" but does nothing
+
+### 📋 Solution Implemented
+
+#### 1. Removed Default API URL (`WorkerService.cs`)
+**Before (Broken)**:
+```csharp
+var config = new ServiceConfiguration
+{
+    ApiUrl = apiUrl ?? "https://localhost:5001",  // BAD: Always provides a value
+    ...
+};
+
+if (string.IsNullOrEmpty(config.ApiUrl))  // NEVER TRIGGERS
+{
+    Logger.Error("API URL not configured...");
+    return null;
+}
+```
+
+**After (Fixed)**:
+```csharp
+// Validate API URL is configured (CRITICAL: don't use defaults that will fail silently)
+if (string.IsNullOrEmpty(apiUrl))
+{
+    Logger.Error("========================================================================");
+    Logger.Error("CRITICAL: API URL not configured!");
+    Logger.Error("========================================================================");
+    Logger.Error("The service cannot start without a valid API URL.");
+    Logger.Error("");
+    Logger.Error("DIAGNOSIS:");
+    Logger.Error("  - API URL not found in Windows Credential Manager");
+    Logger.Error("  - API URL not found in App.config");
+    Logger.Error("");
+    Logger.Error("POSSIBLE CAUSES:");
+    Logger.Error("  1. Configuration wizard was not run: FileManagerWorker.exe /config");
+    Logger.Error("  2. Service account cannot access Windows Credential Manager");
+    Logger.Error("  3. Credentials were saved under different user account");
+    Logger.Error("");
+    Logger.Error("SOLUTION:");
+    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
+    Logger.Error("  Then reinstall service: FileManagerWorker.exe install");
+    Logger.Error("========================================================================");
+    return null;
+}
+
+var config = new ServiceConfiguration
+{
+    ApiUrl = apiUrl,  // GOOD: No default value
+    ...
+};
+```
+
+#### 2. Enhanced Configuration Logging (`WorkerService.cs`)
+**Added**:
+- Clear visual separators for configuration logs
+- Current user context logging (helps diagnose credential access issues)
+- Machine name logging for correlation
+- Better formatting for troubleshooting
+
+**Output Example**:
+```
+========================================================================
+Configuration loaded successfully:
+========================================================================
+  API URL: https://api.example.com
+  Service User: Network Service
+  Path A Prefix: C:\PathA
+  Path B Prefix: C:\PathB
+  Path C Prefix: C:\PathC
+  Polling Interval: 5s
+  Use mTLS: True
+  Current User Context: SYSTEM
+  Machine Name: SERVER01
+========================================================================
+```
+
+#### 3. Detailed Registration Error Logging (`ApiClient.cs`)
+**Before (Minimal)**:
+```csharp
+Logger.Info("Registering worker with Central API...");
+// ... registration attempt ...
+if (response.IsSuccessStatusCode)
+{
+    Logger.Info("Worker registered successfully: {0}", responseContent);
+}
+else
+{
+    Logger.Error("Worker registration failed: {0} - {1}", response.StatusCode, errorContent);
+}
+```
+
+**After (Comprehensive)**:
+```csharp
+Logger.Info("========================================================================");
+Logger.Info("Attempting worker registration with Central API...");
+Logger.Info("  API URL: {0}", _apiUrl);
+Logger.Info("  Hostname: {0}", Environment.MachineName);
+Logger.Info("========================================================================");
+
+// ... registration attempt ...
+
+if (response.IsSuccessStatusCode)
+{
+    Logger.Info("========================================================================");
+    Logger.Info("✓ Worker registered successfully!");
+    Logger.Info("========================================================================");
+    Logger.Info("Response: {0}", responseContent);
+    Logger.Info("");
+    Logger.Info("IMPORTANT: Worker status is PENDING - awaiting admin approval");
+    Logger.Info("Admin must approve this worker at: /pages/admin.html -> Workers tab");
+    Logger.Info("========================================================================");
+}
+else
+{
+    Logger.Error("========================================================================");
+    Logger.Error("✗ Worker registration FAILED");
+    Logger.Error("========================================================================");
+    Logger.Error("  Status Code: {0}", response.StatusCode);
+    Logger.Error("  Response: {0}", errorContent);
+    Logger.Error("  API URL: {0}", _apiUrl);
+    Logger.Error("");
+    Logger.Error("DIAGNOSIS:");
+    if (response.StatusCode == HttpStatusCode.Forbidden)
+        Logger.Error("  - 403 Forbidden: Worker may be blocked or certificate rejected");
+    else if (response.StatusCode == HttpStatusCode.Unauthorized)
+        Logger.Error("  - 401 Unauthorized: Authentication failed");
+    else if (response.StatusCode == HttpStatusCode.BadRequest)
+        Logger.Error("  - 400 Bad Request: Invalid registration data format");
+    else
+        Logger.Error("  - HTTP error occurred during registration");
+    Logger.Error("");
+    Logger.Error("POSSIBLE CAUSES:");
+    Logger.Error("  1. Wrong API URL configured");
+    Logger.Error("  2. API server is rejecting the request");
+    Logger.Error("  3. Network connectivity issues");
+    Logger.Error("  4. Certificate validation problems");
+    Logger.Error("========================================================================");
+}
+```
+
+#### 4. Improved Exception Handling (`ApiClient.cs`)
+**Added**:
+- Catch-all exception handler for registration
+- Better connection refused error messages
+- Clear explanation that retries will occur
+
+**Example Output (Connection Refused)**:
+```
+========================================================================
+Central API is offline or unreachable
+========================================================================
+  API URL: https://api.example.com
+  Error: Connection refused
+  Detail: No connection could be made because the target machine actively refused it
+
+The worker will retry registration during next poll cycle.
+========================================================================
+```
+
+### 🎯 Behavior After Fix
+
+#### Scenario 1: Configuration Not Loaded
+**Before**: Service starts, tries localhost:5001, fails silently
+**After**: Service FAILS TO START with detailed error message explaining exactly what's wrong and how to fix it
+
+#### Scenario 2: Wrong API URL
+**Before**: Service starts, registration fails silently, no worker in admin panel
+**After**: Service starts, registration fails with detailed error showing API URL used, status code, and troubleshooting steps
+
+#### Scenario 3: API Offline
+**Before**: Generic connection error
+**After**: Clear "API offline" message with URL, retry information, and formatted output
+
+#### Scenario 4: Successful Registration
+**Before**: Brief success message
+**After**: Detailed success message reminding admin to approve worker in admin panel
+
+### 📊 Files Modified
+
+**Worker Service (C#)**:
+- `workers/FileManagerWorker/WorkerService.cs` (lines 269-318)
+  - Removed default API URL value
+  - Added configuration validation BEFORE creating ServiceConfiguration
+  - Enhanced logging with visual separators
+  - Added user context and machine name logging
+
+- `workers/FileManagerWorker/ApiClient.cs` (lines 62-166)
+  - Added comprehensive registration logging
+  - Added detailed error diagnosis by HTTP status code
+  - Added exception handler for unexpected errors
+  - Improved connection refused error messages
+
+**Total**: 2 files modified, ~100 lines changed
+
+### 🔍 Testing Recommendations
+
+#### Test 1: No Configuration
+1. DO NOT run `/config`
+2. Install and start service
+3. **Expected**: Service fails to start with clear error message
+4. **Verify**: Event Viewer shows detailed error about missing configuration
+
+#### Test 2: Wrong API URL
+1. Run `/config` with incorrect URL (e.g., `https://wrong.example.com`)
+2. Start service
+3. **Expected**: Service starts, registration fails with detailed error
+4. **Verify**: Logs show registration failure with URL, status code, diagnosis
+
+#### Test 3: API Offline
+1. Configure correct API URL
+2. Stop API server
+3. Start worker service
+4. **Expected**: Service starts, shows "API offline" message, will retry
+5. **Verify**: Logs show connection refused error with retry information
+
+#### Test 4: Successful Registration
+1. Configure correct API URL
+2. Ensure API is running
+3. Start worker service
+4. **Expected**: Service starts, registration succeeds, shows approval reminder
+5. **Verify**: Worker appears in admin panel "Pending Worker Approvals" table
+
+### 🛡️ Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Removed unnecessary default value that masked problems
+- Clear, straightforward error messages
+- No complex retry logic - just fail fast with good errors
+
+✅ **DRY (Don't Repeat Yourself)**
+- Centralized error logging format (separator lines)
+- Reused status code diagnosis logic
+- Consistent formatting across all error messages
+
+### 📝 User Impact
+
+**Before Fix**:
+1. User runs `/config`, enters API URL
+2. User installs service
+3. Service starts successfully (green light in Services.msc)
+4. User waits... nothing happens
+5. User checks admin panel... no worker
+6. User has NO IDEA what's wrong
+7. User wastes hours troubleshooting
+
+**After Fix**:
+1. User runs `/config`, enters API URL
+2. User installs service
+3. Service starts (or fails with clear error if config issue)
+4. User checks logs and immediately sees:
+   - What API URL is being used
+   - Whether registration succeeded
+   - If it failed, why it failed (wrong URL, API offline, etc.)
+   - Exactly what to do next (approve in admin panel)
+5. User can diagnose and fix problem in minutes
+
+### 🔗 Related Documentation
+
+**Deployment Guide**: `workers/README-INSTALLER.md`
+**Previous Fixes**:
+- Worker registration fix (2026-01-28) - Fixed mTLS authentication
+- Admin panel fix (2026-01-29) - Fixed worker display in UI
+- Worker provisioning fix (2026-01-29) - Fixed certificate store mode
+
+---
+
+**Branch:** claude/fix-worker-registration-Yxmsy
+**Status:** ✅ COMPLETE - Worker service mode registration fixed
+**Last Updated:** 2026-01-29
+
+---
+
 ## ✅ VF REDESIGN - IMPLEMENTATION COMPLETE
 
 ### Overview
