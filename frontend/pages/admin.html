@@ -675,6 +675,7 @@
                             <div><strong>Hostname:</strong> ${worker.hostname || 'N/A'}</div>
                             <div><strong>Path A:</strong> ${worker.path_a_prefix || 'Not set'}</div>
                             <div><strong>Path B:</strong> ${worker.path_b_prefix || 'Not set'}</div>
+                            <div><strong>Path C:</strong> ${worker.path_c_prefix || 'Not set'}</div>
                             <div><strong>Last Heartbeat:</strong> ${worker.last_heartbeat ? formatDate(worker.last_heartbeat) : 'Never'}</div>
                         </div>
                         <div class="worker-control-actions">
@@ -719,8 +720,9 @@
         window.provisionWorkerDialog = async function(workerId) {
             const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
             const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
+            const pathC = prompt('Enter new Path C prefix (leave empty to keep current):');
 
-            if (!pathA && !pathB) {
+            if (!pathA && !pathB && !pathC) {
                 alert('No changes specified');
                 return;
             }
@@ -728,6 +730,7 @@
             const config = {};
             if (pathA) config.path_a_prefix = pathA;
             if (pathB) config.path_b_prefix = pathB;
+            if (pathC) config.path_c_prefix = pathC;
 
             const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
             resultDiv.innerHTML = '<span class="loading">Provisioning worker...</span>';
@@ -901,7 +904,8 @@
                         <td>${formatDate(worker.last_heartbeat)}</td>
                         <td>
                             <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
-                            B: ${escapeHtml(worker.path_b_prefix || 'Not set')}</small>
+                            B: ${escapeHtml(worker.path_b_prefix || 'Not set')}<br>
+                            C: ${escapeHtml(worker.path_c_prefix || 'Not set')}</small>
                         </td>
                         <td>
                             <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.id}">Remove</button>

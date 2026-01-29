@@ -328,6 +328,8 @@ async def provision_worker(
         update_data["path_a_prefix"] = provision_data.config.path_a_prefix
     if provision_data.config.path_b_prefix:
         update_data["path_b_prefix"] = provision_data.config.path_b_prefix
+    if provision_data.config.path_c_prefix:
+        update_data["path_c_prefix"] = provision_data.config.path_c_prefix
 
     if update_data:
         stmt = update(Worker).where(Worker.id == worker_id).values(**update_data)
