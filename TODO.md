@@ -1251,4 +1251,186 @@ This fix ensures worker compatibility with the pull-based command architecture i
 
 ---
 
+## 🔧 ADMIN PANEL WORKER REGISTRATION FIX (2026-01-29)
+
+### Overview
+Fixed critical bugs in admin panel workers section that prevented proper worker ID display and worker approval functionality.
+
+### ✅ Issues Fixed
+
+#### Issue 1: Worker ID Showing "undefined" ✅ FIXED
+**Problem**: Worker table displayed "undefined" in Worker ID column instead of actual worker IDs.
+
+**Root Cause**: Frontend JavaScript used `worker.worker_id` field which doesn't exist in the WorkerResponse schema. The correct field is `worker.id`.
+
+**Solution**: Updated all references from `worker.worker_id` to `worker.id` in admin.html.
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 898, 907, 921, 925, 926)
+
+#### Issue 2: Status Filter Case Sensitivity ✅ FIXED
+**Problem**: Worker status comparison used lowercase 'pending' but backend returns uppercase 'PENDING', causing pending workers to appear in active workers table.
+
+**Root Cause**: Status enum values are uppercase (WorkerStatus.PENDING) but frontend filter used lowercase string comparison.
+
+**Solution**: Made status comparison case-insensitive using `.toUpperCase()` with null safety.
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 892-893)
+
+**Changes**:
+```javascript
+// Before (Broken)
+const activeWorkers = workers.filter(w => w.status !== 'pending');
+const pendingWorkers = workers.filter(w => w.status === 'pending');
+
+// After (Fixed)
+const activeWorkers = workers.filter(w => w.status?.toUpperCase() !== 'PENDING');
+const pendingWorkers = workers.filter(w => w.status?.toUpperCase() === 'PENDING');
+```
+
+#### Issue 3: Capabilities Column Mismatch ✅ FIXED
+**Problem**: Table header showed "Capabilities" but displayed path prefixes. Worker schema doesn't include a capabilities field.
+
+**Root Cause**: WorkerResponse schema includes `path_a_prefix` and `path_b_prefix` but not `capabilities`. Frontend tried to display non-existent field.
+
+**Solution**: Updated Capabilities column to properly display path prefixes with labels.
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 902-905)
+
+**Changes**:
+```html
+<!-- Before (Broken) -->
+<td>${worker.capabilities ? worker.capabilities.join(', ') : 'N/A'}</td>
+
+<!-- After (Fixed) -->
+<td>
+    <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
+    B: ${escapeHtml(worker.path_b_prefix || 'Not set')}</small>
+</td>
+```
+
+#### Issue 4: Missing Reject Endpoint ✅ FIXED
+**Problem**: Reject worker button called `/api/admin/workers/{id}/reject` endpoint which doesn't exist, causing 404 errors.
+
+**Root Cause**: Backend has DELETE endpoint for removing workers but no separate reject endpoint. The rejectWorker() function called a non-existent endpoint.
+
+**Solution**: Changed rejectWorker() to use existing DELETE endpoint (rejecting = deleting pending worker).
+
+**Files Modified**:
+- `frontend/js/api.js` (lines 328-332)
+
+**Changes**:
+```javascript
+// Before (Broken)
+export async function rejectWorker(workerId) {
+    return await apiRequest(`/api/admin/workers/${workerId}/reject`, {
+        method: 'POST'
+    });
+}
+
+// After (Fixed)
+export async function rejectWorker(workerId) {
+    return await apiRequest(`/api/admin/workers/${workerId}`, {
+        method: 'DELETE'
+    });
+}
+```
+
+### 📊 Files Modified Summary
+
+**Frontend (HTML)**:
+- `frontend/pages/admin.html` - Fixed worker ID references, status comparison, and capabilities display
+
+**Frontend (JavaScript)**:
+- `frontend/js/api.js` - Fixed rejectWorker endpoint
+
+**Total**: 2 files modified, ~15 lines changed
+
+### 🎯 Impact
+
+**Before Fix**:
+- ❌ Worker ID showed "undefined"
+- ❌ Pending workers appeared in active workers table
+- ❌ Capabilities column showed "N/A" or tried to display non-existent data
+- ❌ Reject button caused 404 errors
+- ❌ No way to confirm worker registration from admin panel
+
+**After Fix**:
+- ✅ Worker ID displays correctly (numeric ID)
+- ✅ Pending workers appear only in "Pending Worker Approvals" table
+- ✅ Capabilities column shows path prefixes (A: and B:)
+- ✅ Reject button works (deletes pending worker)
+- ✅ Admin can approve/reject worker registrations
+
+### 🔄 Worker Approval Flow (After Fix)
+
+1. Worker registers via POST /api/workers/register
+2. Worker created with status: PENDING
+3. Worker appears in "Pending Worker Approvals" table with:
+   - Worker ID: {numeric_id}
+   - Hostname: {hostname}
+   - Requested: {timestamp}
+   - Actions: [Approve] [Reject] buttons
+4. Admin clicks Approve:
+   - POST /api/admin/workers/{id}/approve
+   - Worker status changed to ACTIVE
+   - Worker moves to active workers table
+5. Admin clicks Reject:
+   - DELETE /api/admin/workers/{id}
+   - Worker removed from database
+
+### 🧪 Testing Completed
+
+- ✅ Worker ID displays numeric value instead of "undefined"
+- ✅ Pending workers appear in correct table
+- ✅ Active workers appear in correct table
+- ✅ Path prefixes display correctly in Capabilities column
+- ✅ Approve button changes status to ACTIVE
+- ✅ Reject button deletes pending worker
+- ✅ Status badges show correct colors
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple field mapping (worker.id not worker.worker_id)
+- Reused existing DELETE endpoint for reject
+- Clear, straightforward status filtering
+
+✅ **DRY (Don't Repeat Yourself)**
+- Single loadWorkers() function handles both tables
+- Reused escapeHtml() and formatDate() utilities
+- Consistent worker ID usage across all references
+
+### 🔍 Related Components
+
+**Backend API Endpoints** (No changes required):
+- `GET /api/admin/workers` - Lists all workers (✅ Working)
+- `POST /api/admin/workers/{id}/approve` - Approves pending worker (✅ Working)
+- `DELETE /api/admin/workers/{id}` - Deletes/rejects worker (✅ Working)
+
+**Worker Schema** (`backend/api/schemas.py`):
+```python
+class WorkerResponse(BaseModel):
+    id: int                          # ✅ Fixed to use this field
+    name: str
+    hostname: Optional[str]
+    path_a_prefix: Optional[str]     # ✅ Now displayed properly
+    path_b_prefix: Optional[str]     # ✅ Now displayed properly
+    status: WorkerStatus             # ✅ Case-insensitive comparison added
+    version: Optional[str]
+    last_heartbeat: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+```
+
+---
+
+**Branch:** claude/fix-worker-registration-M8lqL
+**Status:** ✅ COMPLETE - Admin panel worker registration fixed
+**Last Updated:** 2026-01-29
+
+---
+
 *KISS principle achieved: Simple. Working. Maintainable. Searchable. Compatible. Secure. Scalable.*

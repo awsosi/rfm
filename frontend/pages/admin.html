@@ -889,19 +889,22 @@
             try {
                 const workers = await getWorkers();
 
-                const activeWorkers = workers.filter(w => w.status !== 'pending');
-                const pendingWorkers = workers.filter(w => w.status === 'pending');
+                const activeWorkers = workers.filter(w => w.status?.toUpperCase() !== 'PENDING');
+                const pendingWorkers = workers.filter(w => w.status?.toUpperCase() === 'PENDING');
 
                 activeWorkers.forEach(worker => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td>${worker.worker_id}</td>
+                        <td>${worker.id}</td>
                         <td>${worker.hostname}</td>
                         <td><span class="status-badge status-${worker.status}">${worker.status}</span></td>
                         <td>${formatDate(worker.last_heartbeat)}</td>
-                        <td>${worker.capabilities ? worker.capabilities.join(', ') : 'N/A'}</td>
                         <td>
-                            <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.worker_id}">Remove</button>
+                            <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
+                            B: ${escapeHtml(worker.path_b_prefix || 'Not set')}</small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.id}">Remove</button>
                         </td>
                     `;
                     tbody.appendChild(row);
@@ -915,12 +918,12 @@
                     pendingWorkers.forEach(worker => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
-                            <td>${worker.worker_id}</td>
+                            <td>${worker.id}</td>
                             <td>${worker.hostname}</td>
                             <td>${formatDate(worker.created_at)}</td>
                             <td>
-                                <button class="btn btn-sm btn-primary approve-worker-btn" data-id="${worker.worker_id}">Approve</button>
-                                <button class="btn btn-sm btn-danger reject-worker-btn" data-id="${worker.worker_id}">Reject</button>
+                                <button class="btn btn-sm btn-primary approve-worker-btn" data-id="${worker.id}">Approve</button>
+                                <button class="btn btn-sm btn-danger reject-worker-btn" data-id="${worker.id}">Reject</button>
                             </td>
                         `;
                         pendingTbody.appendChild(row);

@@ -326,8 +326,8 @@ export async function approveWorker(workerId) {
  * @returns {Promise<Object>}
  */
 export async function rejectWorker(workerId) {
-    return await apiRequest(`/api/admin/workers/${workerId}/reject`, {
-        method: 'POST'
+    return await apiRequest(`/api/admin/workers/${workerId}`, {
+        method: 'DELETE'
     });
 }
 
