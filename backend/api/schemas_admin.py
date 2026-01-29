@@ -63,6 +63,7 @@ class WorkerConfigRequest(BaseModel):
     """Worker configuration to provision."""
     path_a_prefix: Optional[str] = None
     path_b_prefix: Optional[str] = None
+    path_c_prefix: Optional[str] = None
     polling_interval_seconds: Optional[int] = Field(None, ge=1, le=300)
     max_concurrent_operations: Optional[int] = Field(None, ge=1, le=10)
     enable_verbose_logging: Optional[bool] = None

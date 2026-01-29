@@ -113,29 +113,32 @@ namespace FileManagerWorker
         /// </summary>
         private string ResolvePath(string path)
         {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("Path cannot be empty or null");
+            }
+
             // Check for path traversal attempts before processing
-            if (path.Contains("..") || path.Contains("//") || path.Contains("\\\\"))
+            if (path.Contains(".."))
             {
                 throw new ArgumentException($"Path contains invalid characters (path traversal attempt): {path}");
             }
 
-            // Check for absolute paths or network paths
-            if (Path.IsPathRooted(path.Substring(2)) || path.Contains(":") && !path.StartsWith("A:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("B:", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException($"Absolute paths and network paths are not allowed: {path}");
-            }
-
+            // Check if path starts with valid prefix
             if (path.StartsWith("A:", StringComparison.OrdinalIgnoreCase))
             {
-                return Path.Combine(_pathAPrefix, path.Substring(2).TrimStart('\\', '/'));
+                var relativePath = path.Length > 2 ? path.Substring(2).TrimStart('\\', '/') : string.Empty;
+                return Path.Combine(_pathAPrefix, relativePath);
             }
             else if (path.StartsWith("B:", StringComparison.OrdinalIgnoreCase))
             {
-                return Path.Combine(_pathBPrefix, path.Substring(2).TrimStart('\\', '/'));
+                var relativePath = path.Length > 2 ? path.Substring(2).TrimStart('\\', '/') : string.Empty;
+                return Path.Combine(_pathBPrefix, relativePath);
             }
             else if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
             {
-                return Path.Combine(_pathCPrefix, path.Substring(2).TrimStart('\\', '/'));
+                var relativePath = path.Length > 2 ? path.Substring(2).TrimStart('\\', '/') : string.Empty;
+                return Path.Combine(_pathCPrefix, relativePath);
             }
             else
             {
@@ -362,6 +365,29 @@ namespace FileManagerWorker
 
             Logger.Info("Listing {0} (recursive: {1}, offset: {2}, limit: {3})", resolvedPath, recursive, offset, limit);
 
+            // Determine which prefix to use for relative path construction
+            string prefixToRemove;
+            string virtualPrefix;
+            if (path.StartsWith("A:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathAPrefix;
+                virtualPrefix = "A:";
+            }
+            else if (path.StartsWith("B:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathBPrefix;
+                virtualPrefix = "B:";
+            }
+            else if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathCPrefix;
+                virtualPrefix = "C:";
+            }
+            else
+            {
+                throw new ArgumentException($"Invalid path prefix: {path}");
+            }
+
             var result = await Task.Run(() =>
             {
                 if (!Directory.Exists(resolvedPath))
@@ -374,7 +400,7 @@ namespace FileManagerWorker
                 var files = Directory.GetFiles(resolvedPath, "*", searchOption)
                     .Select(f => new
                     {
-                        path = f.Substring(_pathAPrefix.Length).TrimStart('\\', '/'),
+                        path = virtualPrefix + "/" + f.Substring(prefixToRemove.Length).TrimStart('\\', '/'),
                         name = Path.GetFileName(f),
                         size = new FileInfo(f).Length,
                         modified = File.GetLastWriteTimeUtc(f).ToString("o"),
@@ -384,7 +410,7 @@ namespace FileManagerWorker
                 var directories = Directory.GetDirectories(resolvedPath, "*", searchOption)
                     .Select(d => new
                     {
-                        path = d.Substring(_pathAPrefix.Length).TrimStart('\\', '/'),
+                        path = virtualPrefix + "/" + d.Substring(prefixToRemove.Length).TrimStart('\\', '/'),
                         name = Path.GetFileName(d),
                         size = 0L,
                         modified = Directory.GetLastWriteTimeUtc(d).ToString("o"),
@@ -422,6 +448,29 @@ namespace FileManagerWorker
 
             Logger.Info("Searching in {0} for pattern '{1}' (recursive: {2})", resolvedPath, pattern, recursive);
 
+            // Determine which prefix to use for relative path construction
+            string prefixToRemove;
+            string virtualPrefix;
+            if (path.StartsWith("A:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathAPrefix;
+                virtualPrefix = "A:";
+            }
+            else if (path.StartsWith("B:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathBPrefix;
+                virtualPrefix = "B:";
+            }
+            else if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+            {
+                prefixToRemove = _pathCPrefix;
+                virtualPrefix = "C:";
+            }
+            else
+            {
+                throw new ArgumentException($"Invalid path prefix: {path}");
+            }
+
             var result = await Task.Run(() =>
             {
                 if (!Directory.Exists(resolvedPath))
@@ -434,7 +483,7 @@ namespace FileManagerWorker
                 var files = Directory.GetFiles(resolvedPath, pattern, searchOption)
                     .Select(f => new
                     {
-                        path = f.Substring(_pathAPrefix.Length).TrimStart('\\', '/'),
+                        path = virtualPrefix + "/" + f.Substring(prefixToRemove.Length).TrimStart('\\', '/'),
                         name = Path.GetFileName(f),
                         size = new FileInfo(f).Length,
                         modified = File.GetLastWriteTimeUtc(f).ToString("o")
