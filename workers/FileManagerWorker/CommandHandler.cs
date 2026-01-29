@@ -459,7 +459,9 @@ namespace FileManagerWorker
 
                 status["config"] = config;
 
-                return await Task.FromResult(CommandResponse.Success(cmdId, "Status retrieved successfully"));
+                var response = CommandResponse.Success(cmdId, "Status retrieved successfully");
+                response.ErrorDetails = status;
+                return await Task.FromResult(response);
             }
             catch (Exception ex)
             {

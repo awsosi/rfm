@@ -163,7 +163,7 @@ class Worker(Base):
     """
     Worker model representing Windows service workers.
 
-    Each worker has path prefixes for paths A and B, and uses
+    Each worker has path prefixes for paths A, B, and C (archive), and uses
     public key authentication for secure communication.
     """
     __tablename__ = "workers"
@@ -172,9 +172,10 @@ class Worker(Base):
     name = Column(String(200), unique=True, nullable=False, index=True)
     hostname = Column(String(255), nullable=True)
 
-    # Path prefixes for dual-pane operations
+    # Path prefixes for dual-pane operations and archive
     path_a_prefix = Column(String(500), nullable=True)
     path_b_prefix = Column(String(500), nullable=True)
+    path_c_prefix = Column(String(500), nullable=True)
 
     # Public key for authentication (PEM format)
     public_key = Column(Text, nullable=False)

@@ -414,6 +414,92 @@ async def send_worker_command(
         )
 
 
+@router.post("/test-path")
+async def test_path(
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """Test if a path is accessible by an active worker."""
+    body = await request.json()
+    path = body.get("path")
+    path_type = body.get("path_type", "Unknown")
+
+    if not path:
+        raise HTTPException(status_code=400, detail="Path is required")
+
+    # Get any active worker
+    stmt = select(Worker).where(Worker.status == WorkerStatus.ACTIVE).limit(1)
+    result = await db.execute(stmt)
+    worker = result.scalar_one_or_none()
+
+    if not worker:
+        raise HTTPException(
+            status_code=503,
+            detail="No active workers available to test path"
+        )
+
+    # Send info command to check if path exists
+    worker_service = WorkerService(settings)
+
+    try:
+        from api.schemas import WorkerRequest
+
+        command = WorkerRequest(
+            command="info",
+            params={"path": path}
+        )
+
+        response = await worker_service.send_command(worker, command, db)
+
+        # Audit log
+        await AuditLogger.log_admin_action(
+            user_id=current_user.id,
+            action="test_path",
+            target="system",
+            details={
+                "path": path,
+                "path_type": path_type,
+                "worker_id": worker.id,
+                "success": response.status == "success",
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        return {
+            "success": response.status == "success",
+            "message": response.message,
+            "path": path,
+            "path_type": path_type,
+            "worker": worker.name,
+        }
+
+    except Exception as exc:
+        await AuditLogger.log_admin_action(
+            user_id=current_user.id,
+            action="test_path",
+            target="system",
+            details={
+                "path": path,
+                "path_type": path_type,
+                "worker_id": worker.id,
+                "success": False,
+                "error": str(exc),
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        return {
+            "success": False,
+            "error": str(exc),
+            "path": path,
+            "path_type": path_type,
+        }
+
+
 # =============================================================================
 # System Monitoring & Statistics
 # =============================================================================

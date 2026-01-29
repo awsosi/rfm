@@ -109,6 +109,7 @@ class WorkerUpdate(BaseModel):
     status: Optional[WorkerStatus] = None
     path_a_prefix: Optional[str] = Field(None, max_length=500)
     path_b_prefix: Optional[str] = Field(None, max_length=500)
+    path_c_prefix: Optional[str] = Field(None, max_length=500)
 
 
 class WorkerResponse(BaseModel):
@@ -121,6 +122,7 @@ class WorkerResponse(BaseModel):
     hostname: Optional[str]
     path_a_prefix: Optional[str]
     path_b_prefix: Optional[str]
+    path_c_prefix: Optional[str]
     status: WorkerStatus
     version: Optional[str]
     last_heartbeat: Optional[datetime]
@@ -479,6 +481,7 @@ class WorkerCommandResponse(BaseModel):
 
     status: str = Field(..., description="Status: success, failed")
     message: str = ""
+    command_id: Optional[str] = None
     completion_time_ms: Optional[int] = None
     file_count: Optional[int] = None
     total_size_bytes: Optional[int] = None
