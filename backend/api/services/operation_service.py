@@ -592,11 +592,28 @@ class OperationService:
         Raises:
             OperationError: If PATH_B or PATH_C not configured or operation fails
         """
-        # Validate PATH_B and PATH_C are configured
-        if not self.settings.path_b:
-            raise OperationError("PATH_B not configured. Contact administrator.")
-        if not self.settings.path_c:
-            raise OperationError("PATH_C not configured. Contact administrator.")
+        # Get worker and validate PATH_B and PATH_C are configured
+        # Configuration hierarchy: worker-specific -> global settings
+        worker = await get_worker_by_id(worker_id, db)
+        if not worker:
+            raise OperationError(f"Worker {worker_id} not found")
+
+        # Use worker-specific path_b_prefix or fall back to global settings
+        # Note: settings.path_b is used as fallback for VF redesign PUSH operations
+        path_b = worker.path_b_prefix or self.settings.path_b or self.settings.global_path_b_prefix
+        if not path_b:
+            raise OperationError(
+                f"PATH_B not configured for worker '{worker.name}'. "
+                "Configure in Admin Panel -> System -> Worker Configuration or set PATH_B/GLOBAL_PATH_B_PREFIX in .env."
+            )
+
+        # Use worker-specific path_c_prefix or fall back to global settings
+        path_c = worker.path_c_prefix or self.settings.path_c
+        if not path_c:
+            raise OperationError(
+                f"PATH_C not configured for worker '{worker.name}'. "
+                "Configure in Admin Panel -> System -> Worker Configuration or set PATH_C in .env."
+            )
 
         # Extract directory name from source path
         import os
