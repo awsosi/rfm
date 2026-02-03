@@ -248,47 +248,29 @@ namespace FileManagerWorker
         {
             try
             {
-                // Load sensitive data from Windows Credential Manager
+                // Load sensitive data from secure storage (DPAPI with LocalMachine scope)
                 string apiUrl = null;
                 string serviceUser = null;
                 string servicePassword = null;
 
                 try
                 {
-                    // Load API URL from Credential Manager
-                    using (var cred = new Credential { Target = "FileManagerWorker_ApiUrl" })
+                    // Try to load from secure storage
+                    if (SecureConfigStorage.LoadConfiguration(out apiUrl, out serviceUser, out servicePassword))
                     {
-                        if (cred.Load())
-                        {
-                            apiUrl = cred.Password;
-                            Logger.Info("API URL loaded from Windows Credential Manager");
-                        }
+                        Logger.Info("Configuration loaded from secure storage: {0}", SecureConfigStorage.GetConfigFilePath());
                     }
-
-                    // Load Service User from Credential Manager
-                    using (var cred = new Credential { Target = "FileManagerWorker_ServiceUser" })
+                    else
                     {
-                        if (cred.Load())
-                        {
-                            serviceUser = cred.Password;
-                        }
-                    }
-
-                    // Load Service Password from Credential Manager
-                    using (var cred = new Credential { Target = "FileManagerWorker_ServicePassword" })
-                    {
-                        if (cred.Load())
-                        {
-                            servicePassword = cred.Password;
-                        }
+                        Logger.Warn("Configuration not found in secure storage, falling back to App.config");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "Failed to load credentials from Windows Credential Manager, falling back to App.config");
+                    Logger.Warn(ex, "Failed to load configuration from secure storage, falling back to App.config");
                 }
 
-                // Fallback to App.config if Credential Manager is not available (backward compatibility)
+                // Fallback to App.config if secure storage is not available (backward compatibility)
                 if (string.IsNullOrEmpty(apiUrl))
                 {
                     apiUrl = ConfigurationManager.AppSettings["ApiUrl"];
@@ -304,17 +286,16 @@ namespace FileManagerWorker
                     Logger.Error("The service cannot start without a valid API URL.");
                     Logger.Error("");
                     Logger.Error("DIAGNOSIS:");
-                    Logger.Error("  - API URL not found in Windows Credential Manager");
+                    Logger.Error("  - API URL not found in secure storage: {0}", SecureConfigStorage.GetConfigFilePath());
                     Logger.Error("  - API URL not found in App.config");
                     Logger.Error("");
                     Logger.Error("POSSIBLE CAUSES:");
                     Logger.Error("  1. Configuration wizard was not run: FileManagerWorker.exe /config");
-                    Logger.Error("  2. Service account cannot access Windows Credential Manager");
-                    Logger.Error("  3. Credentials were saved under different user account");
+                    Logger.Error("  2. Configuration file doesn't exist or is corrupted");
                     Logger.Error("");
                     Logger.Error("SOLUTION:");
                     Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
-                    Logger.Error("  Then reinstall service: FileManagerWorker.exe install");
+                    Logger.Error("  Then restart service: net stop FileManagerWorker && net start FileManagerWorker");
                     Logger.Error("========================================================================");
                     return null;
                 }

@@ -197,20 +197,20 @@ namespace FileManagerWorker
                 Console.WriteLine($"  Subject: {certificate.Subject}");
                 Console.WriteLine($"  Valid from: {certificate.NotBefore:yyyy-MM-dd} to {certificate.NotAfter:yyyy-MM-dd}");
 
-                // Save to Windows Credential Manager AND App.config
+                // Save to secure storage using DPAPI
                 Console.WriteLine();
                 Console.WriteLine("--- Saving Configuration ---");
-                if (!SaveToCredentialManager(apiUrl, serviceUser, servicePassword))
+                if (!SecureConfigStorage.SaveConfiguration(apiUrl, serviceUser, servicePassword))
                 {
-                    Console.WriteLine("ERROR: Failed to save configuration to Windows Credential Manager");
+                    Console.WriteLine("ERROR: Failed to save configuration to secure storage");
                     return 1;
                 }
 
-                // Also save API URL to App.config as fallback (in case Network Service can't access Credential Manager)
+                // Also save API URL to App.config as fallback
                 if (!UpdateAppConfig(apiUrl))
                 {
-                    Console.WriteLine("WARNING: Failed to update App.config, but Credential Manager was saved successfully");
-                    // Don't fail - Credential Manager is primary storage
+                    Console.WriteLine("WARNING: Failed to update App.config, but secure storage was saved successfully");
+                    // Don't fail - Secure storage is primary
                 }
 
                 Console.WriteLine();
@@ -220,14 +220,16 @@ namespace FileManagerWorker
                 Console.WriteLine();
                 Console.WriteLine("WHAT WAS CONFIGURED:");
                 Console.WriteLine($"  ✓ mTLS certificate generated and stored in LocalMachine\\My");
-                Console.WriteLine($"  ✓ API URL saved to Windows Credential Manager");
-                Console.WriteLine($"  ✓ Samba credentials saved to Windows Credential Manager");
+                Console.WriteLine($"  ✓ Configuration saved to: {SecureConfigStorage.GetConfigFilePath()}");
+                Console.WriteLine($"  ✓ API URL encrypted and stored");
+                Console.WriteLine($"  ✓ Samba credentials encrypted and stored");
                 Console.WriteLine();
                 Console.WriteLine("SECURITY MODEL:");
                 Console.WriteLine("  • Service runs as Network Service (least privilege)");
                 Console.WriteLine("  • Certificate used for API authentication (mTLS)");
                 Console.WriteLine("  • Samba credentials used ONLY for file operations (impersonation)");
-                Console.WriteLine("  • All credentials encrypted by Windows Credential Manager");
+                Console.WriteLine("  • All credentials encrypted by Windows DPAPI (LocalMachine scope)");
+                Console.WriteLine("  • Network Service account CAN access these encrypted credentials");
                 Console.WriteLine();
                 Console.WriteLine("NEXT STEP:");
                 Console.WriteLine("  Run: FileManagerWorker.exe install --interactive");
@@ -399,20 +401,23 @@ namespace FileManagerWorker
                 Console.WriteLine("==============================================================================");
                 Console.WriteLine();
 
-                // Verify configuration exists in Credential Manager
-                if (!LoadFromCredentialManager(out string apiUrl, out string serviceUser, out string servicePassword))
+                // Verify configuration exists in secure storage
+                if (!SecureConfigStorage.LoadConfiguration(out string apiUrl, out string serviceUser, out string servicePassword))
                 {
-                    Console.WriteLine("ERROR: Configuration not found in Windows Credential Manager");
+                    Console.WriteLine("ERROR: Configuration not found in secure storage");
                     Console.WriteLine();
                     Console.WriteLine("Please run the configuration wizard first:");
                     Console.WriteLine("  FileManagerWorker.exe /config");
                     Console.WriteLine();
+                    Console.WriteLine($"Expected configuration at: {SecureConfigStorage.GetConfigFilePath()}");
+                    Console.WriteLine();
                     return 1;
                 }
 
-                Console.WriteLine("Configuration loaded from Windows Credential Manager:");
+                Console.WriteLine("Configuration loaded from secure storage:");
+                Console.WriteLine($"  Config file: {SecureConfigStorage.GetConfigFilePath()}");
                 Console.WriteLine($"  API URL: {apiUrl}");
-                Console.WriteLine($"  Service User: {(string.IsNullOrWhiteSpace(serviceUser) ? "Network Service (default)" : serviceUser)}");
+                Console.WriteLine($"  Samba User: {(string.IsNullOrWhiteSpace(serviceUser) ? "(none - will use Network Service permissions)" : serviceUser)}");
                 Console.WriteLine();
                 Console.WriteLine("Installing service...");
                 Console.WriteLine();

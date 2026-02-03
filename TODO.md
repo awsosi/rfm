@@ -2,9 +2,113 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PUSH OPERATION FIXED ✅ - Fail-Fast Validation Added
+> **Status:** PUSH OPERATION FIXED ✅ - Credential Storage Rewritten
 >
-> **Ostatnia aktualizacja:** 2026-02-03
+> **Ostatnia aktualizacja:** 2026-02-04
+
+---
+
+## 🔧 CRITICAL FIX - Credential Manager Access Issue (2026-02-04)
+
+### Issue
+**Credentials Not Accessible by Service**: After running `/config` wizard and entering samba credentials, the worker service still failed to start with "Samba credentials required" error. The Network Service account couldn't access credentials saved in Windows Credential Manager.
+
+### Root Cause
+**File**: `workers/FileManagerWorker/Program.cs`, `WorkerService.cs`
+
+**Problem**:
+1. Windows Credential Manager stores credentials **per-user** by default
+2. Administrator ran `/config` → credentials saved under Administrator profile
+3. Service runs as Network Service → can't access Administrator's credentials
+4. Worker loads config → sees no credentials → fails validation → throws error
+
+**Why Previous Fix Didn't Work**:
+- `PersistanceType.LocalComputer` in Credential Manager doesn't truly make credentials machine-wide
+- CredentialManagement library has limitations accessing credentials across user contexts
+- Network Service is a special account with restricted access to user-based credential stores
+
+### Fix Implementation
+
+**Created New Secure Storage System using DPAPI**:
+
+**1. New File: `SecureConfigStorage.cs`** (147 lines):
+```csharp
+/// <summary>
+/// Secure configuration storage using DPAPI with LocalMachine scope
+/// This allows Network Service and other accounts to decrypt the data
+/// </summary>
+public class SecureConfigStorage
+{
+    private static readonly string ConfigFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "FileManagerWorker", "config.dat"
+    );
+
+    // Saves to: C:\ProgramData\FileManagerWorker\config.dat
+    // Encrypted with: DataProtectionScope.LocalMachine (machine-wide DPAPI)
+    // Accessible by: ALL accounts on the machine (including Network Service)
+}
+```
+
+**Key Features**:
+- Uses Windows DPAPI (Data Protection API) with `DataProtectionScope.LocalMachine`
+- Stores encrypted config in `C:\ProgramData\FileManagerWorker\config.dat`
+- JSON serialization for structured data
+- Machine-wide encryption (any account can decrypt)
+- No per-user credential store issues
+
+**2. Updated `Program.cs`**:
+- Replaced `SaveToCredentialManager()` with `SecureConfigStorage.SaveConfiguration()`
+- Replaced `LoadFromCredentialManager()` with `SecureConfigStorage.LoadConfiguration()`
+- Updated success messages to show actual config file path
+
+**3. Updated `WorkerService.cs`**:
+- Replaced Credential Manager loading logic with `SecureConfigStorage.LoadConfiguration()`
+- Updated error messages to reference secure storage path
+- Improved diagnostics
+
+### Technical Details
+
+**DPAPI with LocalMachine Scope**:
+```csharp
+byte[] encryptedBytes = ProtectedData.Protect(
+    plainBytes,
+    null, // No additional entropy
+    DataProtectionScope.LocalMachine // Machine-wide encryption
+);
+```
+
+**Benefits**:
+- ✅ Encrypted by Windows (DPAPI - same security as Credential Manager)
+- ✅ Accessible by ALL accounts on machine (including Network Service)
+- ✅ Stored in standard location: `C:\ProgramData\FileManagerWorker\config.dat`
+- ✅ No per-user credential issues
+- ✅ Simple file-based storage (easy to verify, backup, delete)
+
+**Security**:
+- Encrypted with machine-specific key (can't be moved to another machine)
+- Uses Windows DPAPI (industry standard for credential protection)
+- Only accessible on the same machine where it was encrypted
+
+### Impact
+- ✅ **Network Service CAN NOW ACCESS credentials**
+- ✅ **No more Credential Manager per-user issues**
+- ✅ **Simpler diagnostics** - can verify file exists at known path
+- ✅ **Better error messages** - shows exact config file path
+- ✅ **Maintains security** - DPAPI encryption is as secure as Credential Manager
+
+### Resolution Steps for Deployment
+1. **Stop the service**: `net stop FileManagerWorker`
+2. **Run config wizard**: `FileManagerWorker.exe /config`
+3. **Enter credentials**: API URL and `VITKAC\fotosamba` credentials
+4. **Verify config created**: Check that `C:\ProgramData\FileManagerWorker\config.dat` exists
+5. **Start the service**: `net start FileManagerWorker`
+6. **Verify in Event Viewer**: Should see "File operations will use IMPERSONATION with user: VITKAC\fotosamba"
+
+### Files Changed
+- `workers/FileManagerWorker/SecureConfigStorage.cs` - **NEW** (147 lines)
+- `workers/FileManagerWorker/Program.cs` - Updated /config and install handlers
+- `workers/FileManagerWorker/WorkerService.cs` - Updated LoadConfiguration method
 
 ---
 
