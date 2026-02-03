@@ -242,10 +242,11 @@ async def get_worker_config(
             detail=f"Worker '{worker_id}' not found"
         )
 
-    # Return configuration
+    # Return configuration with fallback hierarchy:
+    # worker-specific config -> global settings
     return WorkerConfigResponse(
-        path_a_prefix=worker.path_a_prefix,
-        path_b_prefix=worker.path_b_prefix,
-        path_c_prefix=worker.path_c_prefix,
+        path_a_prefix=worker.path_a_prefix or settings.global_path_a_prefix,
+        path_b_prefix=worker.path_b_prefix or settings.global_path_b_prefix,
+        path_c_prefix=worker.path_c_prefix or settings.path_c,
         polling_interval_seconds=5,
     )
