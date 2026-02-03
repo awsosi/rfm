@@ -65,13 +65,17 @@ const state = {
             currentPath: 'A:',
             files: [],
             offset: 0,
-            isSearching: false
+            isSearching: false,
+            sortBy: 'modified',
+            sortOrder: 'desc'
         },
         b: {
             currentPath: 'B:',
             files: [],
             offset: 0,
-            isSearching: false
+            isSearching: false,
+            sortBy: 'modified',
+            sortOrder: 'desc'
         }
     },
     operations: new Map(),
@@ -84,7 +88,9 @@ const state = {
             status: null,
             type: null
         },
-        searchQuery: null
+        searchQuery: null,
+        sortBy: 'timestamp',
+        sortOrder: 'desc'
     },
     // VF Redesign: Worker ID (for single worker operations)
     workerId: 1 // Default to first worker, can be updated from settings
@@ -268,6 +274,78 @@ function setupPaneControls(paneId) {
     document.getElementById(`load-more-${paneId}`).addEventListener('click', async () => {
         await loadMoreFiles(paneId);
     });
+
+    // Column sorting
+    setupColumnSorting(paneId);
+}
+
+/**
+ * Setup column sorting for file list
+ * @param {string} paneId - Pane ID
+ */
+function setupColumnSorting(paneId) {
+    const fileList = document.getElementById(`file-list-${paneId}`);
+    if (!fileList) return;
+
+    const sortableHeaders = fileList.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(header => {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', () => {
+            const sortBy = header.dataset.sortBy;
+            handleColumnSort(paneId, sortBy);
+        });
+    });
+}
+
+/**
+ * Handle column sort
+ * @param {string} paneId - Pane ID
+ * @param {string} sortBy - Column to sort by
+ */
+function handleColumnSort(paneId, sortBy) {
+    const pane = state.panes[paneId];
+
+    // Toggle sort order if clicking same column
+    if (pane.sortBy === sortBy) {
+        pane.sortOrder = pane.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        pane.sortBy = sortBy;
+        pane.sortOrder = 'asc';
+    }
+
+    // Re-sort and re-render files
+    const sortedFiles = sortFiles(pane.files, pane.sortBy, pane.sortOrder);
+    renderFileList(paneId, sortedFiles, false);
+    markDirectoryRows(paneId);
+
+    // Update sort arrows in header
+    updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
+}
+
+/**
+ * Update sort arrows in table header
+ * @param {string} paneId - Pane ID
+ * @param {string} sortBy - Current sort column
+ * @param {string} sortOrder - Current sort order
+ */
+function updateSortArrows(paneId, sortBy, sortOrder) {
+    const fileList = document.getElementById(`file-list-${paneId}`);
+    if (!fileList) return;
+
+    const headers = fileList.querySelectorAll('th.sortable');
+    headers.forEach(header => {
+        const arrow = header.querySelector('.sort-arrow');
+        if (!arrow) return;
+
+        if (header.dataset.sortBy === sortBy) {
+            header.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            header.classList.remove(sortOrder === 'asc' ? 'sorted-desc' : 'sorted-asc');
+            arrow.textContent = sortOrder === 'asc' ? '▲' : '▼';
+        } else {
+            header.classList.remove('sorted-asc', 'sorted-desc');
+            arrow.textContent = '';
+        }
+    });
 }
 
 /**
@@ -318,21 +396,119 @@ async function loadDirectory(paneId, path) {
     state.panes[paneId].offset = 0;
 
     try {
-        const files = await listFiles(normalizedPath, 0, 50);
+        let files = await listFiles(normalizedPath, 0, 50, state.workerId);
+
+        // Filter out any ".." entries that might come from the backend
+        files = files.filter(file => file.name !== '..' && !file.is_parent_dir);
+
+        // Add parent directory (..) if not at root
+        const isRoot = normalizedPath === 'A:' || normalizedPath === 'B:' ||
+                       normalizedPath === 'A:/' || normalizedPath === 'B:/';
+
+        if (!isRoot) {
+            const parentPath = getParentPath(normalizedPath);
+            files = [
+                {
+                    name: '..',
+                    path: parentPath,
+                    is_directory: true,
+                    size_bytes: 0,
+                    modified_at: null,
+                    is_parent_dir: true
+                },
+                ...files
+            ];
+        }
 
         state.panes[paneId].currentPath = normalizedPath;
         state.panes[paneId].files = files;
         state.panes[paneId].offset = files.length;
 
         setCurrentPath(paneId, normalizedPath);
-        renderFileList(paneId, files, false);
+
+        // Sort files using current sort settings
+        const pane = state.panes[paneId];
+        const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
+        renderFileList(paneId, sortedFiles, false);
         markDirectoryRows(paneId); // Apply directory styling for VF redesign
+
+        // Update sort arrows in header
+        updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
 
     } catch (error) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
         showError(`Failed to load directory: ${error.message}`);
         hideLoading(paneId);
     }
+}
+
+/**
+ * Get parent directory path
+ * @param {string} path - Current path
+ * @returns {string} Parent path
+ */
+function getParentPath(path) {
+    // Remove trailing slash if present
+    let cleanPath = path.replace(/\/$/, '');
+
+    // Split by / and remove last segment
+    const parts = cleanPath.split('/');
+
+    if (parts.length <= 1) {
+        // Already at root (e.g., 'A:' or 'B:')
+        return cleanPath;
+    }
+
+    // Remove last part
+    parts.pop();
+
+    // If only drive letter remains, return it
+    if (parts.length === 1) {
+        return parts[0];
+    }
+
+    return parts.join('/');
+}
+
+/**
+ * Sort files by column
+ * @param {Array} files - Files array
+ * @param {string} sortBy - Sort column (name, size, modified)
+ * @param {string} sortOrder - Sort order (asc, desc)
+ * @returns {Array} Sorted files
+ */
+function sortFiles(files, sortBy, sortOrder) {
+    const sorted = [...files];
+
+    // Separate parent directory (..) from other files
+    const parentDir = sorted.find(f => f.is_parent_dir);
+    const regularFiles = sorted.filter(f => !f.is_parent_dir);
+
+    regularFiles.sort((a, b) => {
+        let comparison = 0;
+
+        switch (sortBy) {
+            case 'name':
+                comparison = a.name.localeCompare(b.name);
+                break;
+            case 'size':
+                // Directories come first when sorting by size
+                if (a.is_directory && !b.is_directory) return -1;
+                if (!a.is_directory && b.is_directory) return 1;
+                comparison = (a.size_bytes || 0) - (b.size_bytes || 0);
+                break;
+            case 'modified':
+                const aTime = a.modified_at ? new Date(a.modified_at).getTime() : 0;
+                const bTime = b.modified_at ? new Date(b.modified_at).getTime() : 0;
+                comparison = aTime - bTime;
+                break;
+        }
+
+        return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    // Parent directory always comes first
+    return parentDir ? [parentDir, ...regularFiles] : regularFiles;
 }
 
 /**
@@ -389,10 +565,25 @@ async function handleSearch(paneId) {
     state.panes[paneId].isSearching = true;
 
     try {
-        const files = await searchFiles(currentPath, pattern);
+        // Pass workerId explicitly to search function
+        let files = await searchFiles(currentPath, pattern, state.workerId);
+
+        // VF Redesign: Filter to show only directories
+        const isVFRedesign = document.body.classList.contains('vf-redesign');
+        if (isVFRedesign) {
+            files = files.filter(file => file.is_directory);
+        }
 
         state.panes[paneId].files = files;
-        renderFileList(paneId, files, false);
+
+        // Apply current sorting to search results
+        const pane = state.panes[paneId];
+        const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
+        renderFileList(paneId, sortedFiles, false);
+        markDirectoryRows(paneId);
+
+        // Update sort arrows
+        updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
 
     } catch (error) {
         console.error(`Error searching files in pane ${paneId}:`, error);
@@ -970,6 +1161,116 @@ function setupVFRedesignControls() {
             }
         });
     }
+
+    // Operation History column sorting
+    setupOperationQueueSorting();
+}
+
+/**
+ * Setup column sorting for operation history table
+ */
+function setupOperationQueueSorting() {
+    const queueTable = document.getElementById('queue-table');
+    if (!queueTable) return;
+
+    const sortableHeaders = queueTable.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(header => {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', () => {
+            const sortBy = header.dataset.sortBy;
+            handleOperationQueueSort(sortBy);
+        });
+    });
+}
+
+/**
+ * Handle operation queue column sort
+ * @param {string} sortBy - Column to sort by
+ */
+function handleOperationQueueSort(sortBy) {
+    const queue = state.operationQueue;
+
+    // Toggle sort order if clicking same column
+    if (queue.sortBy === sortBy) {
+        queue.sortOrder = queue.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        queue.sortBy = sortBy;
+        queue.sortOrder = 'asc';
+    }
+
+    // Re-sort and re-render operations
+    const sortedOps = sortOperations(queue.operations, queue.sortBy, queue.sortOrder);
+    renderOperationQueue(sortedOps, false);
+
+    // Update sort arrows in header
+    updateOperationQueueSortArrows(queue.sortBy, queue.sortOrder);
+}
+
+/**
+ * Sort operations by column
+ * @param {Array} operations - Operations array
+ * @param {string} sortBy - Sort column
+ * @param {string} sortOrder - Sort order (asc, desc)
+ * @returns {Array} Sorted operations
+ */
+function sortOperations(operations, sortBy, sortOrder) {
+    const sorted = [...operations];
+
+    sorted.sort((a, b) => {
+        let comparison = 0;
+
+        switch (sortBy) {
+            case 'id':
+                comparison = (a.id || 0) - (b.id || 0);
+                break;
+            case 'type':
+                comparison = (a.operation_type || '').localeCompare(b.operation_type || '');
+                break;
+            case 'status':
+                comparison = (a.status || '').localeCompare(b.status || '');
+                break;
+            case 'directory':
+                comparison = (a.original_path || '').localeCompare(b.original_path || '');
+                break;
+            case 'user':
+                comparison = (a.username || '').localeCompare(b.username || '');
+                break;
+            case 'timestamp':
+                const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+                comparison = aTime - bTime;
+                break;
+        }
+
+        return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+}
+
+/**
+ * Update sort arrows in operation queue table header
+ * @param {string} sortBy - Current sort column
+ * @param {string} sortOrder - Current sort order
+ */
+function updateOperationQueueSortArrows(sortBy, sortOrder) {
+    const queueTable = document.getElementById('queue-table');
+    if (!queueTable) return;
+
+    const headers = queueTable.querySelectorAll('th.sortable');
+    headers.forEach(header => {
+        const arrow = header.querySelector('.sort-arrow');
+        if (!arrow) return;
+
+        if (header.dataset.sortBy === sortBy) {
+            header.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            header.classList.remove(sortOrder === 'asc' ? 'sorted-desc' : 'sorted-asc');
+            arrow.textContent = sortOrder === 'asc' ? '▲' : '▼';
+        } else {
+            header.classList.remove('sorted-asc', 'sorted-desc');
+            arrow.textContent = '';
+        }
+    });
 }
 
 /**
@@ -1014,7 +1315,13 @@ async function loadOperationHistory(append = false) {
             state.operationQueue.offset = operations.length;
         }
 
-        renderOperationQueue(operations, append);
+        // Sort operations using current sort settings
+        const queue = state.operationQueue;
+        const sortedOps = sortOperations(queue.operations, queue.sortBy, queue.sortOrder);
+        renderOperationQueue(sortedOps, append);
+
+        // Update sort arrows in header
+        updateOperationQueueSortArrows(queue.sortBy, queue.sortOrder);
 
         // Show/hide load more button
         const loadMoreBtn = document.getElementById('load-more-queue');

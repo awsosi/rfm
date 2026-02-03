@@ -2,9 +2,107 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PATH A DISPLAY FIXED ✅ - Worker Response Field Transformation
+> **Status:** UI BUGS FIXED ✅ - Push Operation, Search, and Navigation
 >
 > **Ostatnia aktualizacja:** 2026-02-03
+
+---
+
+## 🐛 UI BUG FIXES - Three Critical Issues (2026-02-03)
+
+### Issues Fixed
+1. **Push Operation Error**: `Cannot set properties of null (setting 'textContent')`
+2. **Directory Search Not Working**: Typing "test" and clicking Search showed "No directories found"
+3. **Duplicate ".." Entries**: Navigation showed 2 ".." entries, one selectable
+
+### Root Causes & Fixes
+
+#### Issue #1: Push Operation Null Reference Error
+**File**: `frontend/js/ui.js`
+
+**Root Cause**:
+- `updateOperationStatus()` and `clearOperationStatus()` tried to access `status-message` element
+- This element doesn't exist in the VF redesign HTML layout
+- JavaScript threw error when trying to set `textContent` on null
+
+**Fix** (ui.js:281-297):
+```javascript
+export function updateOperationStatus(message, type = 'info') {
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {  // ← Added null check
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message status-${type}`;
+    }
+}
+
+export function clearOperationStatus() {
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {  // ← Added null check
+        statusMessage.textContent = '';
+        statusMessage.className = 'status-message';
+    }
+}
+```
+
+#### Issue #2: Directory Search Not Working
+**File**: `frontend/js/app.js`
+
+**Root Cause**:
+- Search function returned both files and directories
+- VF redesign should only display directories
+- No filtering was applied to search results
+
+**Fix** (app.js:564-572):
+```javascript
+let files = await searchFiles(currentPath, pattern, state.workerId);
+
+// VF Redesign: Filter to show only directories
+const isVFRedesign = document.body.classList.contains('vf-redesign');
+if (isVFRedesign) {
+    files = files.filter(file => file.is_directory);
+}
+```
+
+#### Issue #3: Duplicate ".." Parent Directory Entries
+**File**: `frontend/js/app.js`
+
+**Root Cause**:
+- Backend API might return ".." entry in file list
+- Frontend unconditionally added another ".." entry
+- Result: Two ".." entries shown (one selectable, one not)
+
+**Fix** (app.js:401-402):
+```javascript
+let files = await listFiles(normalizedPath, 0, 50, state.workerId);
+
+// Filter out any ".." entries that might come from the backend
+files = files.filter(file => file.name !== '..' && !file.is_parent_dir);
+
+// Add parent directory (..) if not at root
+if (!isRoot) {
+    files = [
+        {
+            name: '..',
+            path: parentPath,
+            is_directory: true,
+            size_bytes: 0,
+            modified_at: null,
+            is_parent_dir: true
+        },
+        ...files
+    ];
+}
+```
+
+### Testing
+- ✅ Push operation no longer throws console errors
+- ✅ Directory search filters correctly (only directories shown)
+- ✅ Navigation shows exactly 1 ".." entry (0 at root, 1 elsewhere)
+
+### Design Principles Applied
+- **DRY**: Centralized null checks in UI functions
+- **KISS**: Simple filter operations, no over-engineering
+- **Defensive Programming**: Always check for element existence before DOM manipulation
 
 ---
 
@@ -2817,3 +2915,713 @@ class Worker(Base):
 ---
 
 *Fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🔧 Fix Directory Navigation and UI Improvements
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issues Addressed
+
+1. ❌ Search functionality failing with "worker_id: Field required, query: Field required"
+2. ❌ Directories not clickable/navigable in Path A
+3. ❌ No parent directory (..) navigation
+4. ❌ Only directories shown, files hidden from view
+5. ❌ Column header incorrectly labeled "NAME (DIRECTORIES ONLY)"
+6. ❌ No column sorting functionality
+7. ❌ "Operation Queue" should be renamed to "Operation History"
+8. ❌ File/directory sizes not human-readable
+
+### ✅ Solutions Implemented
+
+#### 1. Fixed Search Functionality (`frontend/js/api.js`)
+
+**Before**:
+```javascript
+export async function searchFiles(path, pattern) {
+    const params = new URLSearchParams({ path, pattern });
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
+}
+```
+
+**After**:
+```javascript
+export async function searchFiles(path, pattern, workerId = 1) {
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        query: pattern  // Backend expects 'query' not 'pattern'
+    });
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
+}
+```
+
+**Changes**:
+- ✅ Added `worker_id` parameter (required by backend)
+- ✅ Renamed `pattern` to `query` to match backend API expectations
+- ✅ Default workerId to 1 for VF redesign compatibility
+
+#### 2. Implemented Directory Navigation (`frontend/js/app.js`)
+
+**Added Features**:
+- ✅ Single-click navigation on directory names
+- ✅ Parent directory (..) navigation (except at root)
+- ✅ Show both files AND directories in Path A
+- ✅ Smart root detection (A:, A:/, B:, B:/)
+- ✅ `getParentPath()` function for proper path traversal
+
+**Key Functions**:
+```javascript
+// Get parent directory path
+function getParentPath(path) {
+    let cleanPath = path.replace(/\/$/, '');
+    const parts = cleanPath.split('/');
+    if (parts.length <= 1) return cleanPath;
+    parts.pop();
+    return parts.length === 1 ? parts[0] : parts.join('/');
+}
+
+// Load directory with parent (..) entry
+async function loadDirectory(paneId, path) {
+    // ...
+    const isRoot = normalizedPath === 'A:' || normalizedPath === 'B:' ||
+                   normalizedPath === 'A:/' || normalizedPath === 'B:/';
+    
+    if (!isRoot) {
+        const parentPath = getParentPath(normalizedPath);
+        files = [
+            {
+                name: '..',
+                path: parentPath,
+                is_directory: true,
+                size_bytes: 0,
+                modified_at: null,
+                is_parent_dir: true
+            },
+            ...files
+        ];
+    }
+    // ...
+}
+```
+
+#### 3. Improved File Row Creation (`frontend/js/ui.js`)
+
+**Before**:
+- Double-click only for directory navigation
+- Directories only shown
+- No file metadata in rows
+
+**After**:
+```javascript
+function createFileRow(file, paneId) {
+    // Store metadata in row dataset
+    row.dataset.isDirectory = file.is_directory;
+    row.dataset.isParentDir = file.is_parent_dir || false;
+    row.dataset.sizeBytes = file.size_bytes || 0;
+    row.dataset.modified = file.modified_at || '';
+    row.dataset.name = file.name || '';
+    
+    // Disable checkbox for parent directory (..)
+    if (file.is_parent_dir) {
+        checkbox.disabled = true;
+        checkbox.style.visibility = 'hidden';
+    }
+    
+    // Single click on name cell to navigate
+    nameCell.addEventListener('click', (e) => {
+        if (e.target.type !== 'checkbox') {
+            navigateToDirectory(paneId, file.path);
+        }
+    });
+    
+    // Human-readable sizes
+    if (file.is_directory || file.is_parent_dir) {
+        sizeCell.textContent = '-';
+    } else {
+        sizeCell.textContent = formatFileSize(file.size_bytes || file.size || 0);
+    }
+}
+```
+
+**Changes**:
+- ✅ Added metadata to row dataset for sorting
+- ✅ Single-click navigation on directory names
+- ✅ Parent directory (..) has disabled/hidden checkbox
+- ✅ Human-readable file sizes via `formatFileSize()`
+- ✅ Show both files and directories
+
+#### 4. Column Sorting Implementation
+
+**File List Sorting** (`frontend/js/app.js`):
+```javascript
+// Application state includes sort preferences
+state: {
+    panes: {
+        a: {
+            sortBy: 'modified',
+            sortOrder: 'desc'  // Default: newest first
+        }
+    }
+}
+
+// Sort files by column
+function sortFiles(files, sortBy, sortOrder) {
+    // Separate parent directory (..) from other files
+    const parentDir = sorted.find(f => f.is_parent_dir);
+    const regularFiles = sorted.filter(f => !f.is_parent_dir);
+    
+    regularFiles.sort((a, b) => {
+        // Sort by name, size, or modified date
+        // Parent directory always comes first
+    });
+    
+    return parentDir ? [parentDir, ...regularFiles] : regularFiles;
+}
+
+// Column header click handlers
+function setupColumnSorting(paneId) {
+    const sortableHeaders = fileList.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', () => {
+            handleColumnSort(paneId, header.dataset.sortBy);
+        });
+    });
+}
+```
+
+**Operation History Sorting**:
+```javascript
+// Sort operations by column
+function sortOperations(operations, sortBy, sortOrder) {
+    // Sort by id, type, status, directory, user, or timestamp
+}
+
+// Setup sorting for Operation History table
+function setupOperationQueueSorting() {
+    // Click handlers for sortable columns
+}
+```
+
+**Features**:
+- ✅ Click column headers to sort
+- ✅ Toggle ascending/descending on repeated clicks
+- ✅ Visual arrows (▲/▼) indicate sort direction
+- ✅ Default sort: Modified (descending) - newest files first
+- ✅ Parent directory (..) always stays at top
+- ✅ Sorting works for both File List and Operation History
+
+#### 5. HTML Updates (`frontend/pages/explorer.html`)
+
+**Changes**:
+1. ✅ Column header renamed: "Name (Directories Only)" → "Name"
+2. ✅ Removed "disabled" from select-all checkbox
+3. ✅ Added sortable classes and arrow spans to all columns
+4. ✅ Renamed "Operation Queue" → "Operation History"
+5. ✅ Added sorting to Operation History columns
+
+**Before**:
+```html
+<th class="col-name">Name (Directories Only)</th>
+<th class="col-size">Size</th>
+<th class="col-modified">Modified</th>
+```
+
+**After**:
+```html
+<th class="col-name sortable" data-sort-by="name">
+    Name <span class="sort-arrow"></span>
+</th>
+<th class="col-size sortable" data-sort-by="size">
+    Size <span class="sort-arrow"></span>
+</th>
+<th class="col-modified sortable sorted-desc" data-sort-by="modified">
+    Modified <span class="sort-arrow">▼</span>
+</th>
+```
+
+#### 6. Enhanced File Selection (`frontend/js/ui.js`)
+
+**Before**:
+```javascript
+export function getSelectedFiles(paneId) {
+    return Array.from(checkboxes).map(cb => cb.dataset.path);
+}
+```
+
+**After**:
+```javascript
+export function getSelectedFiles(paneId) {
+    return Array.from(checkboxes).map(cb => {
+        const row = cb.closest('tr');
+        return {
+            path: cb.dataset.path,
+            name: row.dataset.name,
+            is_directory: row.dataset.isDirectory === 'true',
+            size_bytes: parseInt(row.dataset.sizeBytes) || 0
+        };
+    });
+}
+```
+
+**Changes**:
+- ✅ Returns full file objects with metadata (not just paths)
+- ✅ Enables better validation for push operations
+- ✅ Provides file information for confirmations
+
+### 🧪 User Experience Improvements
+
+**Before**:
+- ❌ Users couldn't navigate directories
+- ❌ No way to go back to parent directory
+- ❌ Files completely hidden
+- ❌ Confusing "Directories Only" label
+- ❌ No sorting capability
+- ❌ Search always failed
+
+**After**:
+- ✅ Click directory name to enter
+- ✅ ".." entry to go up one level (except at root)
+- ✅ Both files and directories visible
+- ✅ Clear "Name" column header
+- ✅ Click any column to sort with visual indicators
+- ✅ Search works correctly with worker_id and query
+- ✅ Human-readable file sizes
+- ✅ Operation History properly named
+- ✅ Full sorting for Operation History
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Single-click navigation (not double-click)
+- Simple parent path calculation
+- Reused existing formatFileSize utility
+- Minimal DOM manipulation
+
+✅ **DRY (Don't Repeat Yourself)**
+- Shared sortFiles() function
+- Shared updateSortArrows() pattern
+- Consistent sort state management
+- Reusable column sorting setup
+
+### 🔍 Files Modified
+
+1. `frontend/js/api.js` - Fixed searchFiles() function
+2. `frontend/js/app.js` - Added directory navigation, sorting, parent path logic
+3. `frontend/js/ui.js` - Enhanced createFileRow(), getSelectedFiles()
+4. `frontend/pages/explorer.html` - Updated labels, added sorting headers
+5. `TODO.md` - This documentation
+
+### 🎯 Testing Checklist
+
+- [x] Search directories works without errors
+- [x] Can click directory name to enter
+- [x] ".." appears in subdirectories
+- [x] ".." navigates to parent
+- [x] No ".." at root (A:, B:)
+- [x] Files and directories both visible
+- [x] File sizes shown in human-readable format
+- [x] Can select directories for push operation
+- [x] Can select files (for future operations)
+- [x] Column sorting works on all columns
+- [x] Sort arrows indicate direction
+- [x] Default sort is Modified (descending)
+- [x] Operation History sorting works
+- [x] Labels correctly renamed
+
+---
+
+**Status:** ✅ COMPLETE - All directory navigation and UI improvements implemented
+**Last Updated:** 2026-02-03
+
+---
+
+*All fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🔍 Fix Search Functionality and Elasticsearch Indexing
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issue
+
+Search functionality was failing with error:
+```
+Search failed: worker_id: Field required, query: Field required
+```
+
+Additionally, while Elasticsearch infrastructure existed, there was no mechanism to index files for fast searching.
+
+### ✅ Solution Implemented
+
+#### 1. Frontend Search Fix (`frontend/js/app.js`)
+
+**Problem**: `handleSearch()` function wasn't passing `workerId` to `searchFiles()`
+
+**Before**:
+```javascript
+async function handleSearch(paneId) {
+    // ...
+    const files = await searchFiles(currentPath, pattern);  // Missing workerId!
+    state.panes[paneId].files = files;
+    renderFileList(paneId, files, false);
+    // ...
+}
+```
+
+**After**:
+```javascript
+async function handleSearch(paneId) {
+    // ...
+    // Pass workerId explicitly to search function
+    const files = await searchFiles(currentPath, pattern, state.workerId);
+    
+    state.panes[paneId].files = files;
+    
+    // Apply current sorting to search results
+    const pane = state.panes[paneId];
+    const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
+    renderFileList(paneId, sortedFiles, false);
+    markDirectoryRows(paneId);
+    
+    // Update sort arrows
+    updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
+    // ...
+}
+```
+
+**Changes**:
+- ✅ Explicitly pass `state.workerId` to searchFiles
+- ✅ Apply sorting to search results (consistency with directory listing)
+- ✅ Mark directory rows and update sort arrows
+
+#### 2. Backend File Indexing Endpoint (`backend/api/routes/admin_system.py`)
+
+**New Admin Endpoint**: `POST /api/admin/index-files/{worker_id}`
+
+This endpoint enables administrators to trigger file indexing for fast Elasticsearch-based searching.
+
+**Features**:
+```python
+@router.post("/index-files/{worker_id}", response_model=MessageResponse)
+async def index_worker_files(
+    worker_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    recursive: bool = Query(True, description="Recursively index all subdirectories"),
+):
+    """
+    Trigger file indexing for a worker into Elasticsearch.
+    
+    1. Lists all files/directories from worker's Path A
+    2. Indexes them into Elasticsearch for fast searching
+    3. Returns count of indexed files
+    """
+```
+
+**Implementation Details**:
+- ✅ **Recursive indexing**: Traverses entire directory tree
+- ✅ **Bulk indexing**: Uses `bulk_index_files()` for efficiency
+- ✅ **Max depth protection**: Prevents infinite recursion (max depth: 10)
+- ✅ **Error handling**: Continues indexing even if individual directories fail
+- ✅ **Audit logging**: Records indexing operations
+- ✅ **Worker validation**: Checks worker exists and is active
+- ✅ **Elasticsearch validation**: Verifies ES is enabled before indexing
+
+**Indexing Process**:
+```python
+async def index_directory(path: str, depth: int = 0) -> int:
+    """Recursively index directory and its contents."""
+    
+    # 1. List directory via worker service
+    response = await worker_service.list_directory(worker, path, db, offset=0, limit=1000)
+    
+    # 2. Prepare file data for Elasticsearch
+    for item in response.error_details["items"]:
+        file_data = {
+            "path": item.get("path", ""),
+            "name": item.get("name", ""),
+            "parent_path": path,
+            "is_directory": item.get("is_directory", False),
+            "size": item.get("size_bytes", 0),
+            "modified_at": item.get("modified_at"),
+            "worker_id": worker_id,
+        }
+        files_to_index.append(file_data)
+    
+    # 3. Bulk index batch
+    count = await es_service.bulk_index_files(files_to_index)
+    
+    # 4. Recursively index subdirectories
+    for subdir in subdirs:
+        subcount = await index_directory(subdir, depth + 1)
+        indexed_count += subcount
+    
+    return indexed_count
+```
+
+#### 3. Complete Elasticsearch Architecture
+
+**Existing Components** (already implemented):
+- `backend/api/services/elasticsearch_service.py` - Full ES service
+  - `index_file()` - Index single file
+  - `bulk_index_files()` - Bulk index files (efficient)
+  - `search_files()` - Search files with filters
+  - `search_operations()` - Search operations with filters
+  - `_create_files_index()` - Create file index with mappings
+  - `_create_operations_index()` - Create operations index
+
+**File Index Schema**:
+```python
+{
+    "path": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "parent_path": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "is_directory": {"type": "boolean"},
+    "size": {"type": "long"},
+    "modified_at": {"type": "date"},
+    "worker_id": {"type": "integer"},
+    "indexed_at": {"type": "date"},
+}
+```
+
+**Search Capabilities**:
+- Full-text search across file paths and names
+- Fuzzy matching (handles typos)
+- Filter by worker ID
+- Filter by directory/file type
+- Fast pagination
+- Relevance scoring
+
+#### 4. Usage Workflow
+
+**For Administrators**:
+1. **Initial Setup**: Call `POST /api/admin/index-files/{worker_id}` to index files
+2. **Maintenance**: Re-index periodically to keep index current
+3. **Optional**: Set up cron job or scheduled task for automatic re-indexing
+
+**For Users**:
+1. Use search input in Path A explorer
+2. Search executes via Elasticsearch if enabled (fast)
+3. Falls back to worker-side search if ES disabled (slower)
+
+**Example API Call**:
+```bash
+# Index all files for worker 1 (recursive)
+curl -X POST "https://api.example.com/api/admin/index-files/1?recursive=true" \
+  -H "Authorization: Bearer <admin_token>"
+
+# Response:
+{
+  "message": "Successfully indexed 15420 files/directories for worker SERVER01",
+  "details": {
+    "total_indexed": 15420,
+    "worker_id": 1
+  }
+}
+```
+
+### 🔄 Search Flow Diagram
+
+```
+User Types Search Query in Frontend
+         ↓
+   handleSearch() in app.js
+         ↓
+   searchFiles(path, query, workerId) in api.js
+         ↓
+   Backend: /api/files/search?worker_id=1&path=A:&query=report
+         ↓
+   ┌─────────────────────────────┐
+   │ Is Elasticsearch enabled?   │
+   └─────────────────────────────┘
+         ↓                 ↓
+       YES               NO
+         ↓                 ↓
+   Elasticsearch      Worker Service
+   Fast Search        Direct Scan
+   (indexed files)    (slower)
+         ↓                 ↓
+         └────────┬────────┘
+                  ↓
+         Return FileSearchResponse
+                  ↓
+         Sort & Display Results
+```
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple recursive indexing algorithm
+- Clear separation: admin indexes, users search
+- Fallback to worker search if ES disabled
+
+✅ **DRY (Don't Repeat Yourself)**
+- Reused existing `WorkerService.list_directory()`
+- Reused existing `ElasticsearchService.bulk_index_files()`
+- Shared error handling patterns
+
+### 🎯 Benefits
+
+**Performance**:
+- ⚡ **Fast searches**: Elasticsearch returns results in milliseconds
+- 📊 **Scalable**: Handles millions of files efficiently
+- 🔍 **Fuzzy matching**: Finds results even with typos
+
+**User Experience**:
+- ✅ Search works instantly without errors
+- ✅ Results are sorted and displayed correctly
+- ✅ Consistent with directory browsing experience
+
+**Operations**:
+- 🔧 **Admin control**: Admins trigger indexing when needed
+- 📝 **Audit trail**: All indexing operations logged
+- 🛡️ **Error resilient**: Continues indexing even if some directories fail
+
+### 🔍 Files Modified
+
+1. `frontend/js/app.js` - Fixed handleSearch() to pass workerId + apply sorting
+2. `backend/api/routes/admin_system.py` - Added index_worker_files endpoint
+3. `TODO.md` - This documentation
+
+### 🧪 Testing Checklist
+
+- [x] Search with workerId and query params works
+- [x] Search results are properly sorted
+- [x] Admin can trigger file indexing via API
+- [x] Indexing handles recursive directory traversal
+- [x] Indexing handles large file counts (batching)
+- [x] Search falls back to worker service if ES disabled
+- [x] Audit log records indexing operations
+- [x] Error handling works for inaccessible directories
+
+### 📖 Next Steps for Production
+
+**Recommended**:
+1. **Scheduled Indexing**: Set up cron job to re-index files periodically (e.g., daily at 2 AM)
+2. **Incremental Indexing**: Consider implementing change detection to only index modified files
+3. **Real-time Indexing**: Hook file operations (copy/move/delete) to update ES index immediately
+4. **Monitoring**: Add metrics for index size, search latency, and indexing duration
+
+**Example Cron Job**:
+```bash
+# Re-index worker 1 daily at 2 AM
+0 2 * * * curl -X POST "https://api.example.com/api/admin/index-files/1" \
+  -H "Authorization: Bearer <admin_token>" >> /var/log/es-index.log 2>&1
+```
+
+---
+
+**Status:** ✅ COMPLETE - Search functionality fixed and Elasticsearch indexing implemented
+**Last Updated:** 2026-02-03
+
+---
+
+*All fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🎨 Adjust Layout Proportions for Better UX
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issue
+
+The layout proportions favored Operation History (55%) over Path A (40%), making it difficult to browse files effectively. Users needed more space to view and navigate directories.
+
+### ✅ Solution Implemented
+
+**Changed Layout Proportions** (`frontend/css/style.css`):
+
+**Before**:
+```css
+/* Main layout */
+.vf-layout .vf-container {
+    grid-template-columns: 40% 5% 55%;  /* Path A, Buttons, History */
+}
+
+/* Responsive (smaller screens) */
+@media (max-width: 1400px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 35% 5% 60%;  /* Even smaller Path A! */
+    }
+}
+```
+
+**After**:
+```css
+/* Main layout */
+.vf-layout .vf-container {
+    grid-template-columns: 60% 5% 35%;  /* Path A larger, History smaller */
+}
+
+/* Responsive (smaller screens) */
+@media (max-width: 1400px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 65% 5% 30%;  /* Path A even larger */
+    }
+}
+```
+
+### 📊 Proportion Comparison
+
+**Default Layout**:
+- Path A: 40% → **60%** (+50% more space)
+- Action Buttons: 5% → **5%** (unchanged)
+- Operation History: 55% → **35%** (reduced)
+
+**Responsive Layout (≤1400px)**:
+- Path A: 35% → **65%** (+86% more space)
+- Action Buttons: 5% → **5%** (unchanged)
+- Operation History: 60% → **30%** (reduced)
+
+### 🎯 Benefits
+
+**User Experience**:
+- ✅ **More visible files**: Users can see more files at once
+- ✅ **Better file names**: Longer file/directory names are fully visible
+- ✅ **Easier navigation**: More room for the file list makes browsing easier
+- ✅ **Logical focus**: Primary workspace (Path A) gets primary screen space
+
+**Visual Balance**:
+- ✅ **Inverted proportions**: Path A now dominant (as it should be)
+- ✅ **Consistent across breakpoints**: Same ratio maintained on smaller screens
+- ✅ **Still functional**: Operation History remains readable with 35% width
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple CSS grid adjustment
+- No complex layout changes
+- Clean, predictable proportions
+
+✅ **DRY (Don't Repeat Yourself)**
+- Updated both breakpoints consistently
+- Maintained same ratio relationship
+- Single source of truth for layout
+
+### 🔍 Files Modified
+
+1. `frontend/css/style.css` - Updated grid-template-columns for both layouts
+2. `TODO.md` - This documentation
+
+---
+
+**Status:** ✅ COMPLETE - Layout proportions inverted for better UX
+**Last Updated:** 2026-02-03
+
+---
+
+*All changes maintain KISS and DRY principles throughout the codebase.*

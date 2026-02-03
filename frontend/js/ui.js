@@ -58,12 +58,23 @@ export function renderFileList(paneId, files, append = false) {
 function createFileRow(file, paneId) {
     const row = document.createElement('tr');
     row.dataset.path = file.path;
-    row.dataset.isDir = file.is_directory;
+    row.dataset.isDirectory = file.is_directory;
+    row.dataset.isParentDir = file.is_parent_dir || false;
+    row.dataset.sizeBytes = file.size_bytes || 0;
+    row.dataset.modified = file.modified_at || '';
+    row.dataset.name = file.name || '';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'file-checkbox';
     checkbox.dataset.path = file.path;
+    checkbox.dataset.isDirectory = file.is_directory;
+
+    // Disable checkbox for parent directory (..)
+    if (file.is_parent_dir) {
+        checkbox.disabled = true;
+        checkbox.style.visibility = 'hidden';
+    }
 
     const checkboxCell = document.createElement('td');
     checkboxCell.appendChild(checkbox);
@@ -80,21 +91,32 @@ function createFileRow(file, paneId) {
     nameCell.appendChild(nameSpan);
 
     const sizeCell = document.createElement('td');
-    sizeCell.textContent = file.is_directory ? '-' : formatFileSize(file.size);
+    // Show human-readable size for files, '-' for directories
+    if (file.is_directory || file.is_parent_dir) {
+        sizeCell.textContent = '-';
+    } else {
+        sizeCell.textContent = formatFileSize(file.size_bytes || file.size || 0);
+    }
 
     const modifiedCell = document.createElement('td');
-    modifiedCell.textContent = formatDate(file.modified);
+    modifiedCell.textContent = file.modified_at ? formatDate(file.modified_at) : '-';
 
     row.appendChild(checkboxCell);
     row.appendChild(nameCell);
     row.appendChild(sizeCell);
     row.appendChild(modifiedCell);
 
-    // Add click handler for navigation
+    // Make directories clickable (single click on name cell to navigate)
     if (file.is_directory) {
         row.style.cursor = 'pointer';
-        row.addEventListener('dblclick', () => {
-            navigateToDirectory(paneId, file.path);
+        nameCell.style.cursor = 'pointer';
+
+        // Single click on name cell to navigate
+        nameCell.addEventListener('click', (e) => {
+            // Don't navigate if clicking checkbox
+            if (e.target.type !== 'checkbox') {
+                navigateToDirectory(paneId, file.path);
+            }
         });
     }
 
@@ -104,14 +126,28 @@ function createFileRow(file, paneId) {
         showContextMenu(e.clientX, e.clientY, file, paneId);
     });
 
-    // Add row selection
+    // Add row selection (only for non-directory rows or when not clicking on name)
     row.addEventListener('click', (e) => {
-        if (e.target.type !== 'checkbox') {
-            checkbox.checked = !checkbox.checked;
-            row.classList.toggle('selected', checkbox.checked);
-        } else {
-            row.classList.toggle('selected', checkbox.checked);
+        // Don't toggle checkbox if:
+        // 1. Already clicking checkbox
+        // 2. Clicking on name cell of a directory (navigation)
+        // 3. Row is parent directory
+        if (file.is_parent_dir) {
+            return;
         }
+
+        if (e.target.type !== 'checkbox' && !e.target.closest('td:nth-child(2)')) {
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Update row selection visual state
+        row.classList.toggle('selected', checkbox.checked);
+    });
+
+    // Also handle checkbox change events
+    checkbox.addEventListener('change', () => {
+        row.classList.toggle('selected', checkbox.checked);
     });
 
     return row;
@@ -155,11 +191,19 @@ export function hideLoading(paneId) {
 /**
  * Get selected files in pane
  * @param {string} paneId - Pane ID
- * @returns {Array<string>} Array of selected file paths
+ * @returns {Array<Object>} Array of selected file objects with metadata
  */
 export function getSelectedFiles(paneId) {
     const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox:checked`);
-    return Array.from(checkboxes).map(cb => cb.dataset.path);
+    return Array.from(checkboxes).map(cb => {
+        const row = cb.closest('tr');
+        return {
+            path: cb.dataset.path,
+            name: row.dataset.name,
+            is_directory: row.dataset.isDirectory === 'true',
+            size_bytes: parseInt(row.dataset.sizeBytes) || 0
+        };
+    });
 }
 
 /**
@@ -236,8 +280,10 @@ function handleContextMenuAction(action, file, paneId) {
  */
 export function updateOperationStatus(message, type = 'info') {
     const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message status-${type}`;
+    if (statusMessage) {
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message status-${type}`;
+    }
 }
 
 /**
@@ -245,8 +291,10 @@ export function updateOperationStatus(message, type = 'info') {
  */
 export function clearOperationStatus() {
     const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = '';
-    statusMessage.className = 'status-message';
+    if (statusMessage) {
+        statusMessage.textContent = '';
+        statusMessage.className = 'status-message';
+    }
 }
 
 /**
