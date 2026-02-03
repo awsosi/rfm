@@ -121,8 +121,14 @@ Configuration is stored in `App.config`:
 ### Path Mapping
 
 Commands use virtual drive prefixes:
-- `A:\path\to\file` → `C:\PathA\path\to\file`
-- `B:\path\to\file` → `C:\PathB\path\to\file`
+- `A:\path\to\file` → `C:\PathA\path\to\file` (source directory)
+- `B:\path\to\file` → `C:\PathB\path\to\file` (destination directory)
+- `C:\path\to\file` → `C:\PathC\path\to\file` (archive directory)
+
+**Example for PUSH operation:**
+- Source: `A:/photos/2024` → resolves to PathAPrefix + `/photos/2024`
+- Destination: `B:/photos/2024` → resolves to PathBPrefix + `/photos/2024`
+- Archive: `C:/photos/2024` → resolves to PathCPrefix + `/photos/2024`
 
 ## Usage
 
@@ -301,8 +307,25 @@ If an operation fails:
 - Service account should have minimal necessary permissions
 - Certificate private key is protected by Windows Certificate Store
 - All communication uses HTTPS with mTLS
+- Samba credentials stored securely in Windows Credential Manager (encrypted by OS)
+- **Impersonation**: All file operations use samba credentials via Windows impersonation
 - No credentials or sensitive data stored on disk (except in Windows Certificate Store)
-- All operations are scoped to configured path prefixes (PathA, PathB)
+- All operations are scoped to configured path prefixes (PathA, PathB, PathC)
+
+### Credential Usage Model
+
+The worker uses a two-tier security model:
+
+1. **Service Account** (Network Service):
+   - Used to run the worker service process
+   - Handles API communication and service lifecycle
+   - Minimal permissions required
+
+2. **Samba Account** (configured during `/config`):
+   - Used for all file system operations via Windows impersonation
+   - Requires read/write permissions on network shares
+   - Credentials stored in Windows Credential Manager
+   - Example: `VITKAC\fotosamba` with full control on shares
 
 ## Architecture
 
