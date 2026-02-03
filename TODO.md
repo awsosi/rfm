@@ -2,33 +2,62 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PATH A DISPLAY FIXED ✅ - Field Name Mismatch Resolved
+> **Status:** PATH A DISPLAY FIXED ✅ - Worker Response Field Transformation
 >
 > **Ostatnia aktualizacja:** 2026-02-03
 
 ---
 
-## 🔧 PATH A DISPLAY FIX - size_bytes Field Mismatch (2026-02-03)
+## 🔧 PATH A DISPLAY FIX - Two Critical Bugs (2026-02-03)
 
 ### Issue
-Nothing showed up in Path A pane despite the `test` directory existing at the specified path. Worker logs showed:
-- Command executed successfully
-- 1 item found
-- Response sent with "success" status
+Path A pane remained empty despite worker successfully executing list command. Logs showed:
+- Worker: "List completed: 1 items (total: 1)"
+- API: Command completed successfully (200 OK)
+- Frontend: Empty file list
 
-But API returned 503 Service Unavailable to the client.
+### Root Cause #1: Worker Not Sending Result Data ⚠️ **CRITICAL**
+**File**: `workers/FileManagerWorker/CommandHandler.cs`
 
-### Root Cause
-AttributeError in `/api/files/list` endpoint when indexing files to Elasticsearch:
-- Line 178 in `backend/api/app.py` accessed `item.size`
-- FileInfo schema (defined in `backend/api/schemas.py`) only has `size_bytes` field
-- Exception caused 503 response, preventing files from displaying
+The worker was **discarding the actual file list data**:
+- `HandleListAsync` (line 331): Called `ListAsync()` to get items, but only sent back file count
+- `HandleSearchAsync` (line 367): Called `SearchAsync()` to get results, but only sent back count
+- The `CommandResponse.Success()` factory method only accepts `fileCount` and `totalSizeBytes`
+- The actual items/results array was thrown away completely
 
-### ✅ Fix Applied
-**File**: `backend/api/app.py` (line 178)
-- Changed `"size": item.size,` to `"size": item.size_bytes,`
-- Matches FileInfo schema definition
-- Resolves AttributeError and 503 response
+**Why logs were misleading**: Worker logged "1 items" before discarding the data, making it appear the worker was functioning correctly.
+
+### Root Cause #2: Field Name Mismatch (API Side)
+Even if data were sent, the API couldn't parse it:
+- **Worker sends**: `size` and `modified` fields
+- **FileInfo schema expects**: `size_bytes` and `modified_at` fields
+- Pydantic validation would fail silently, resulting in empty items array
+
+### ✅ Fixes Applied
+
+**1. Worker Fix** (CommandHandler.cs lines 328-338, 364-374):
+```csharp
+var response = CommandResponse.Success(cmdId, message, fileCount);
+response.ErrorDetails = result;  // Include full data (items, total, etc.)
+return response;
+```
+
+**2. API Fix** (backend/api/app.py lines 156-167, 267-277):
+```python
+# Transform worker response format to FileInfo format
+for item in response.error_details["items"]:
+    if "size" in item: item["size_bytes"] = item.pop("size")
+    if "modified" in item: item["modified_at"] = item.pop("modified")
+    items.append(FileInfo(**item))
+```
+
+### Verification
+- ✅ Worker includes result data in ErrorDetails
+- ✅ API transforms field names for compatibility
+- ✅ Copy operations properly return file_count/total_size
+- ✅ PUSH operations use B:/C: prefix notation
+- Operations will show in history with metadata
+- Revert operations use archived data from Path C
 
 ---
 

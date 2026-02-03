@@ -328,7 +328,14 @@ namespace FileManagerWorker
             try
             {
                 var result = await _fileOps.ListAsync(path, recursive, offset, limit);
-                return CommandResponse.Success(cmdId, "List completed successfully", result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null);
+                var response = CommandResponse.Success(
+                    cmdId,
+                    "List completed successfully",
+                    result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null
+                );
+                // Include the full result data (items, total, offset, limit) in ErrorDetails
+                response.ErrorDetails = result;
+                return response;
             }
             catch (Exception ex)
             {
@@ -357,7 +364,14 @@ namespace FileManagerWorker
             try
             {
                 var result = await _fileOps.SearchAsync(path, pattern, recursive);
-                return CommandResponse.Success(cmdId, "Search completed successfully", result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null);
+                var response = CommandResponse.Success(
+                    cmdId,
+                    "Search completed successfully",
+                    result.ContainsKey("count") ? Convert.ToInt32(result["count"]) : (int?)null
+                );
+                // Include the full result data (results, total, count) in ErrorDetails
+                response.ErrorDetails = result;
+                return response;
             }
             catch (Exception ex)
             {
