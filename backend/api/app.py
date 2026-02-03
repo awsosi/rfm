@@ -175,7 +175,7 @@ async def list_directory(
                         "name": item.name,
                         "parent_path": path,
                         "is_directory": item.is_directory,
-                        "size": item.size,
+                        "size": item.size_bytes,
                         "modified_at": item.modified_at.isoformat() if item.modified_at else None,
                         "worker_id": worker_id,
                     })
