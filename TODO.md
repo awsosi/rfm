@@ -2,9 +2,42 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** UI BUGS FIXED ✅ - Push Operation, Search, and Navigation
+> **Status:** PUSH OPERATION FIXED ✅ - File Impersonation Added
 >
 > **Ostatnia aktualizacja:** 2026-02-03
+
+---
+
+## 🔧 PUSH OPERATION FIX - Impersonation Missing (2026-02-03)
+
+### Issue Fixed
+**Push Operation Access Denied Error**: PUSH operations failed with "Access to the path is denied" despite correct permissions
+
+### Root Cause
+**File**: `workers/FileManagerWorker/FileOperations.cs`
+
+**Problem**:
+- FileOperations class had impersonation configured with samba credentials (VITKAC\fotosamba)
+- ExecuteWithImpersonation wrapper methods were defined but NEVER called
+- All file operations (Copy, Move, Delete, Mkdir, List, Search, GetInfo) ran under worker service account
+- Service account lacked permissions on network shares
+
+**Fix**:
+Wrapped ALL file system operations with ExecuteWithImpersonation:
+
+1. **CopyAsync** (line 173): Wrapped File.Copy and Directory operations with impersonation
+2. **CopyDirectorySync** (line 221): Converted from async to sync for impersonation compatibility
+3. **MoveAsync** (line 250): Wrapped File.Move and Directory.Move with impersonation
+4. **DeleteAsync** (line 293): Wrapped File.Delete and Directory.Delete with impersonation
+5. **MkdirAsync** (line 330): Wrapped Directory.CreateDirectory with impersonation
+6. **ListAsync** (line 355): Wrapped Directory.GetFiles/GetDirectories with impersonation
+7. **SearchAsync** (line 485): Wrapped Directory.GetFiles search with impersonation
+8. **GetInfoAsync** (line 550): Wrapped FileInfo/DirectoryInfo access with impersonation
+
+**Impact**:
+- PUSH operations now use configured VITKAC\fotosamba account credentials
+- All network share operations execute with proper permissions
+- Access denied errors eliminated for authorized operations
 
 ---
 
