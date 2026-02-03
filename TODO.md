@@ -3430,3 +3430,100 @@ User Types Search Query in Frontend
 ---
 
 *All fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🎨 Adjust Layout Proportions for Better UX
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issue
+
+The layout proportions favored Operation History (55%) over Path A (40%), making it difficult to browse files effectively. Users needed more space to view and navigate directories.
+
+### ✅ Solution Implemented
+
+**Changed Layout Proportions** (`frontend/css/style.css`):
+
+**Before**:
+```css
+/* Main layout */
+.vf-layout .vf-container {
+    grid-template-columns: 40% 5% 55%;  /* Path A, Buttons, History */
+}
+
+/* Responsive (smaller screens) */
+@media (max-width: 1400px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 35% 5% 60%;  /* Even smaller Path A! */
+    }
+}
+```
+
+**After**:
+```css
+/* Main layout */
+.vf-layout .vf-container {
+    grid-template-columns: 60% 5% 35%;  /* Path A larger, History smaller */
+}
+
+/* Responsive (smaller screens) */
+@media (max-width: 1400px) {
+    .vf-layout .vf-container {
+        grid-template-columns: 65% 5% 30%;  /* Path A even larger */
+    }
+}
+```
+
+### 📊 Proportion Comparison
+
+**Default Layout**:
+- Path A: 40% → **60%** (+50% more space)
+- Action Buttons: 5% → **5%** (unchanged)
+- Operation History: 55% → **35%** (reduced)
+
+**Responsive Layout (≤1400px)**:
+- Path A: 35% → **65%** (+86% more space)
+- Action Buttons: 5% → **5%** (unchanged)
+- Operation History: 60% → **30%** (reduced)
+
+### 🎯 Benefits
+
+**User Experience**:
+- ✅ **More visible files**: Users can see more files at once
+- ✅ **Better file names**: Longer file/directory names are fully visible
+- ✅ **Easier navigation**: More room for the file list makes browsing easier
+- ✅ **Logical focus**: Primary workspace (Path A) gets primary screen space
+
+**Visual Balance**:
+- ✅ **Inverted proportions**: Path A now dominant (as it should be)
+- ✅ **Consistent across breakpoints**: Same ratio maintained on smaller screens
+- ✅ **Still functional**: Operation History remains readable with 35% width
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple CSS grid adjustment
+- No complex layout changes
+- Clean, predictable proportions
+
+✅ **DRY (Don't Repeat Yourself)**
+- Updated both breakpoints consistently
+- Maintained same ratio relationship
+- Single source of truth for layout
+
+### 🔍 Files Modified
+
+1. `frontend/css/style.css` - Updated grid-template-columns for both layouts
+2. `TODO.md` - This documentation
+
+---
+
+**Status:** ✅ COMPLETE - Layout proportions inverted for better UX
+**Last Updated:** 2026-02-03
+
+---
+
+*All changes maintain KISS and DRY principles throughout the codebase.*
