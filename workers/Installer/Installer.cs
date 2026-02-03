@@ -487,6 +487,7 @@ namespace FileManagerWorkerInstaller
     <add key=""ServicePassword"" value=""{EncryptPassword(servicePass)}"" />
     <add key=""PathAPrefix"" value=""C:\PathA"" />
     <add key=""PathBPrefix"" value=""C:\PathB"" />
+    <add key=""PathCPrefix"" value=""C:\PathC"" />
     <add key=""PollingIntervalSeconds"" value=""5"" />
     <add key=""UseMtls"" value=""true"" />
   </appSettings>

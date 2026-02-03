@@ -78,7 +78,7 @@ FileManagerWorker.exe /install /url https://api.example.com /user "DOMAIN\Servic
 
 2. **Configure App.config** (optional)
    - Edit `App.config` before installation to set default paths
-   - Set `PathAPrefix` and `PathBPrefix` for virtual drive mappings
+   - Set `PathAPrefix`, `PathBPrefix` and `PathCPrefix` for virtual drive mappings
 
 3. **Install Service**
    ```cmd
@@ -108,6 +108,7 @@ Configuration is stored in `App.config`:
   <!-- Path Prefixes for A: and B: virtual drives -->
   <add key="PathAPrefix" value="C:\PathA" />
   <add key="PathBPrefix" value="C:\PathB" />
+  <add key="PathCPrefix" value="C:\PathC" />
 
   <!-- Polling interval in seconds -->
   <add key="PollingIntervalSeconds" value="5" />
