@@ -66,14 +66,60 @@ namespace FileManagerWorker
             _sambaUsername = sambaUsername;
             _sambaPassword = sambaPassword;
 
+            // Validate that credentials are provided for network shares
+            var networkPaths = new List<string>();
+            if (IsNetworkPath(pathAPrefix)) networkPaths.Add($"PathA: {pathAPrefix}");
+            if (IsNetworkPath(pathBPrefix)) networkPaths.Add($"PathB: {pathBPrefix}");
+            if (IsNetworkPath(pathCPrefix)) networkPaths.Add($"PathC: {pathCPrefix}");
+
+            if (networkPaths.Count > 0 && string.IsNullOrWhiteSpace(_sambaUsername))
+            {
+                Logger.Error("========================================================================");
+                Logger.Error("CRITICAL: Network share access requires samba credentials!");
+                Logger.Error("========================================================================");
+                Logger.Error("The following paths are network shares:");
+                foreach (var path in networkPaths)
+                {
+                    Logger.Error("  - {0}", path);
+                }
+                Logger.Error("");
+                Logger.Error("Network Service account cannot access network shares by default.");
+                Logger.Error("");
+                Logger.Error("SOLUTION:");
+                Logger.Error("  1. Stop the service");
+                Logger.Error("  2. Run as Administrator: FileManagerWorker.exe /config");
+                Logger.Error("  3. Enter samba credentials (e.g., DOMAIN\\username)");
+                Logger.Error("  4. Restart the service");
+                Logger.Error("========================================================================");
+                throw new InvalidOperationException(
+                    $"Samba credentials required for network share access. " +
+                    $"Run 'FileManagerWorker.exe /config' to configure credentials.");
+            }
+
             if (!string.IsNullOrWhiteSpace(_sambaUsername))
             {
-                Logger.Info("File operations will use impersonation with user: {0}", _sambaUsername);
+                Logger.Info("========================================================================");
+                Logger.Info("File operations will use IMPERSONATION with user: {0}", _sambaUsername);
+                Logger.Info("========================================================================");
             }
             else
             {
                 Logger.Info("File operations will use Network Service account permissions");
             }
+        }
+
+        /// <summary>
+        /// Checks if a path is a network share (UNC path)
+        /// </summary>
+        private bool IsNetworkPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            // UNC paths start with \\
+            return path.StartsWith(@"\\") || path.StartsWith("//");
         }
 
         /// <summary>
@@ -83,11 +129,35 @@ namespace FileManagerWorker
         {
             if (!string.IsNullOrWhiteSpace(_sambaUsername))
             {
-                return WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+                Logger.Debug("Executing with impersonation as user: {0}", _sambaUsername);
+                try
+                {
+                    return WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Logger.Error("========================================================================");
+                    Logger.Error("Impersonation failed for user: {0}", _sambaUsername);
+                    Logger.Error("========================================================================");
+                    Logger.Error("Error: {0}", ex.Message);
+                    Logger.Error("");
+                    Logger.Error("Possible causes:");
+                    Logger.Error("  1. Invalid samba credentials");
+                    Logger.Error("  2. Account is disabled or locked");
+                    Logger.Error("  3. Password has expired");
+                    Logger.Error("  4. Domain controller unreachable");
+                    Logger.Error("");
+                    Logger.Error("SOLUTION:");
+                    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
+                    Logger.Error("  Verify and re-enter samba credentials");
+                    Logger.Error("========================================================================");
+                    throw;
+                }
             }
             else
             {
                 // No impersonation - use current process identity (Network Service)
+                Logger.Debug("Executing without impersonation (using Network Service account)");
                 return action();
             }
         }
@@ -99,11 +169,35 @@ namespace FileManagerWorker
         {
             if (!string.IsNullOrWhiteSpace(_sambaUsername))
             {
-                WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+                Logger.Debug("Executing with impersonation as user: {0}", _sambaUsername);
+                try
+                {
+                    WindowsImpersonation.ExecuteWithImpersonation(_sambaUsername, _sambaPassword, action);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Logger.Error("========================================================================");
+                    Logger.Error("Impersonation failed for user: {0}", _sambaUsername);
+                    Logger.Error("========================================================================");
+                    Logger.Error("Error: {0}", ex.Message);
+                    Logger.Error("");
+                    Logger.Error("Possible causes:");
+                    Logger.Error("  1. Invalid samba credentials");
+                    Logger.Error("  2. Account is disabled or locked");
+                    Logger.Error("  3. Password has expired");
+                    Logger.Error("  4. Domain controller unreachable");
+                    Logger.Error("");
+                    Logger.Error("SOLUTION:");
+                    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
+                    Logger.Error("  Verify and re-enter samba credentials");
+                    Logger.Error("========================================================================");
+                    throw;
+                }
             }
             else
             {
                 // No impersonation - use current process identity (Network Service)
+                Logger.Debug("Executing without impersonation (using Network Service account)");
                 action();
             }
         }
