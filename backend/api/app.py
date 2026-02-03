@@ -156,9 +156,17 @@ async def list_directory(
         # Parse response into FileInfo objects
         items = []
         if response.error_details and "items" in response.error_details:
-            items = [FileInfo(**item) for item in response.error_details["items"]]
+            # Transform worker response format to FileInfo format
+            for item in response.error_details["items"]:
+                # Convert 'size' to 'size_bytes' for backward compatibility
+                if "size" in item and "size_bytes" not in item:
+                    item["size_bytes"] = item.pop("size")
+                # Convert 'modified' to 'modified_at' for backward compatibility
+                if "modified" in item and "modified_at" not in item:
+                    item["modified_at"] = item.pop("modified")
+                items.append(FileInfo(**item))
 
-        total_count = response.file_count or len(items)
+        total_count = response.error_details.get("total") if response.error_details else len(items)
 
         # Index files in Elasticsearch in background (non-blocking)
         try:
@@ -258,7 +266,15 @@ async def search_files(
 
             results = []
             if response.error_details and "results" in response.error_details:
-                results = [FileInfo(**item) for item in response.error_details["results"]]
+                # Transform worker response format to FileInfo format
+                for item in response.error_details["results"]:
+                    # Convert 'size' to 'size_bytes' for backward compatibility
+                    if "size" in item and "size_bytes" not in item:
+                        item["size_bytes"] = item.pop("size")
+                    # Convert 'modified' to 'modified_at' for backward compatibility
+                    if "modified" in item and "modified_at" not in item:
+                        item["modified_at"] = item.pop("modified")
+                    results.append(FileInfo(**item))
 
             return FileSearchResponse(
                 query=query,
