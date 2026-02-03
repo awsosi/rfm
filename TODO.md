@@ -2,9 +2,33 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** FILE LISTING FIXED ✅ - Prefix Notation & Navigation Implemented
+> **Status:** PATH A DISPLAY FIXED ✅ - Field Name Mismatch Resolved
 >
-> **Ostatnia aktualizacja:** 2026-01-29
+> **Ostatnia aktualizacja:** 2026-02-03
+
+---
+
+## 🔧 PATH A DISPLAY FIX - size_bytes Field Mismatch (2026-02-03)
+
+### Issue
+Nothing showed up in Path A pane despite the `test` directory existing at the specified path. Worker logs showed:
+- Command executed successfully
+- 1 item found
+- Response sent with "success" status
+
+But API returned 503 Service Unavailable to the client.
+
+### Root Cause
+AttributeError in `/api/files/list` endpoint when indexing files to Elasticsearch:
+- Line 178 in `backend/api/app.py` accessed `item.size`
+- FileInfo schema (defined in `backend/api/schemas.py`) only has `size_bytes` field
+- Exception caused 503 response, preventing files from displaying
+
+### ✅ Fix Applied
+**File**: `backend/api/app.py` (line 178)
+- Changed `"size": item.size,` to `"size": item.size_bytes,`
+- Matches FileInfo schema definition
+- Resolves AttributeError and 503 response
 
 ---
 
