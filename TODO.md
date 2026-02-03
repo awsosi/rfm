@@ -8,33 +8,56 @@
 
 ---
 
-## 🔧 PATH A DISPLAY FIX - Worker Response Field Transformation (2026-02-03)
+## 🔧 PATH A DISPLAY FIX - Two Critical Bugs (2026-02-03)
 
 ### Issue
-Nothing showed up in Path A pane despite worker successfully executing list command and returning 1 item. Logs showed:
+Path A pane remained empty despite worker successfully executing list command. Logs showed:
 - Worker: "List completed: 1 items (total: 1)"
 - API: Command completed successfully (200 OK)
 - Frontend: Empty file list
 
-### Root Cause
-Field name mismatch between worker response and API schema:
+### Root Cause #1: Worker Not Sending Result Data ⚠️ **CRITICAL**
+**File**: `workers/FileManagerWorker/CommandHandler.cs`
+
+The worker was **discarding the actual file list data**:
+- `HandleListAsync` (line 331): Called `ListAsync()` to get items, but only sent back file count
+- `HandleSearchAsync` (line 367): Called `SearchAsync()` to get results, but only sent back count
+- The `CommandResponse.Success()` factory method only accepts `fileCount` and `totalSizeBytes`
+- The actual items/results array was thrown away completely
+
+**Why logs were misleading**: Worker logged "1 items" before discarding the data, making it appear the worker was functioning correctly.
+
+### Root Cause #2: Field Name Mismatch (API Side)
+Even if data were sent, the API couldn't parse it:
 - **Worker sends**: `size` and `modified` fields
 - **FileInfo schema expects**: `size_bytes` and `modified_at` fields
-- When creating `FileInfo(**item)` objects from worker response, validation failed silently
-- Empty items array was returned to frontend
+- Pydantic validation would fail silently, resulting in empty items array
 
-### ✅ Fix Applied
-**File**: `backend/api/app.py` (lines 156-167, 267-277)
-- Added field transformation in `list_directory` endpoint
-- Added field transformation in `search_files` endpoint
-- Converts `size` → `size_bytes` for backward compatibility
-- Converts `modified` → `modified_at` for backward compatibility
-- Ensures worker response format matches FileInfo Pydantic schema
+### ✅ Fixes Applied
 
-### Previous Fix (Still Valid)
-**File**: `backend/api/app.py` (line 178)
-- Elasticsearch indexing uses `item.size_bytes` (not `item.size`)
-- Prevents AttributeError during background indexing
+**1. Worker Fix** (CommandHandler.cs lines 328-338, 364-374):
+```csharp
+var response = CommandResponse.Success(cmdId, message, fileCount);
+response.ErrorDetails = result;  // Include full data (items, total, etc.)
+return response;
+```
+
+**2. API Fix** (backend/api/app.py lines 156-167, 267-277):
+```python
+# Transform worker response format to FileInfo format
+for item in response.error_details["items"]:
+    if "size" in item: item["size_bytes"] = item.pop("size")
+    if "modified" in item: item["modified_at"] = item.pop("modified")
+    items.append(FileInfo(**item))
+```
+
+### Verification
+- ✅ Worker includes result data in ErrorDetails
+- ✅ API transforms field names for compatibility
+- ✅ Copy operations properly return file_count/total_size
+- ✅ PUSH operations use B:/C: prefix notation
+- Operations will show in history with metadata
+- Revert operations use archived data from Path C
 
 ---
 
