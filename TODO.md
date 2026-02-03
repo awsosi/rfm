@@ -2,33 +2,39 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PATH A DISPLAY FIXED ✅ - Field Name Mismatch Resolved
+> **Status:** PATH A DISPLAY FIXED ✅ - Worker Response Field Transformation
 >
 > **Ostatnia aktualizacja:** 2026-02-03
 
 ---
 
-## 🔧 PATH A DISPLAY FIX - size_bytes Field Mismatch (2026-02-03)
+## 🔧 PATH A DISPLAY FIX - Worker Response Field Transformation (2026-02-03)
 
 ### Issue
-Nothing showed up in Path A pane despite the `test` directory existing at the specified path. Worker logs showed:
-- Command executed successfully
-- 1 item found
-- Response sent with "success" status
-
-But API returned 503 Service Unavailable to the client.
+Nothing showed up in Path A pane despite worker successfully executing list command and returning 1 item. Logs showed:
+- Worker: "List completed: 1 items (total: 1)"
+- API: Command completed successfully (200 OK)
+- Frontend: Empty file list
 
 ### Root Cause
-AttributeError in `/api/files/list` endpoint when indexing files to Elasticsearch:
-- Line 178 in `backend/api/app.py` accessed `item.size`
-- FileInfo schema (defined in `backend/api/schemas.py`) only has `size_bytes` field
-- Exception caused 503 response, preventing files from displaying
+Field name mismatch between worker response and API schema:
+- **Worker sends**: `size` and `modified` fields
+- **FileInfo schema expects**: `size_bytes` and `modified_at` fields
+- When creating `FileInfo(**item)` objects from worker response, validation failed silently
+- Empty items array was returned to frontend
 
 ### ✅ Fix Applied
+**File**: `backend/api/app.py` (lines 156-167, 267-277)
+- Added field transformation in `list_directory` endpoint
+- Added field transformation in `search_files` endpoint
+- Converts `size` → `size_bytes` for backward compatibility
+- Converts `modified` → `modified_at` for backward compatibility
+- Ensures worker response format matches FileInfo Pydantic schema
+
+### Previous Fix (Still Valid)
 **File**: `backend/api/app.py` (line 178)
-- Changed `"size": item.size,` to `"size": item.size_bytes,`
-- Matches FileInfo schema definition
-- Resolves AttributeError and 503 response
+- Elasticsearch indexing uses `item.size_bytes` (not `item.size`)
+- Prevents AttributeError during background indexing
 
 ---
 
