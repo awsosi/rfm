@@ -2,9 +2,107 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PATH A DISPLAY FIXED ✅ - Worker Response Field Transformation
+> **Status:** UI BUGS FIXED ✅ - Push Operation, Search, and Navigation
 >
 > **Ostatnia aktualizacja:** 2026-02-03
+
+---
+
+## 🐛 UI BUG FIXES - Three Critical Issues (2026-02-03)
+
+### Issues Fixed
+1. **Push Operation Error**: `Cannot set properties of null (setting 'textContent')`
+2. **Directory Search Not Working**: Typing "test" and clicking Search showed "No directories found"
+3. **Duplicate ".." Entries**: Navigation showed 2 ".." entries, one selectable
+
+### Root Causes & Fixes
+
+#### Issue #1: Push Operation Null Reference Error
+**File**: `frontend/js/ui.js`
+
+**Root Cause**:
+- `updateOperationStatus()` and `clearOperationStatus()` tried to access `status-message` element
+- This element doesn't exist in the VF redesign HTML layout
+- JavaScript threw error when trying to set `textContent` on null
+
+**Fix** (ui.js:281-297):
+```javascript
+export function updateOperationStatus(message, type = 'info') {
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {  // ← Added null check
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message status-${type}`;
+    }
+}
+
+export function clearOperationStatus() {
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {  // ← Added null check
+        statusMessage.textContent = '';
+        statusMessage.className = 'status-message';
+    }
+}
+```
+
+#### Issue #2: Directory Search Not Working
+**File**: `frontend/js/app.js`
+
+**Root Cause**:
+- Search function returned both files and directories
+- VF redesign should only display directories
+- No filtering was applied to search results
+
+**Fix** (app.js:564-572):
+```javascript
+let files = await searchFiles(currentPath, pattern, state.workerId);
+
+// VF Redesign: Filter to show only directories
+const isVFRedesign = document.body.classList.contains('vf-redesign');
+if (isVFRedesign) {
+    files = files.filter(file => file.is_directory);
+}
+```
+
+#### Issue #3: Duplicate ".." Parent Directory Entries
+**File**: `frontend/js/app.js`
+
+**Root Cause**:
+- Backend API might return ".." entry in file list
+- Frontend unconditionally added another ".." entry
+- Result: Two ".." entries shown (one selectable, one not)
+
+**Fix** (app.js:401-402):
+```javascript
+let files = await listFiles(normalizedPath, 0, 50, state.workerId);
+
+// Filter out any ".." entries that might come from the backend
+files = files.filter(file => file.name !== '..' && !file.is_parent_dir);
+
+// Add parent directory (..) if not at root
+if (!isRoot) {
+    files = [
+        {
+            name: '..',
+            path: parentPath,
+            is_directory: true,
+            size_bytes: 0,
+            modified_at: null,
+            is_parent_dir: true
+        },
+        ...files
+    ];
+}
+```
+
+### Testing
+- ✅ Push operation no longer throws console errors
+- ✅ Directory search filters correctly (only directories shown)
+- ✅ Navigation shows exactly 1 ".." entry (0 at root, 1 elsewhere)
+
+### Design Principles Applied
+- **DRY**: Centralized null checks in UI functions
+- **KISS**: Simple filter operations, no over-engineering
+- **Defensive Programming**: Always check for element existence before DOM manipulation
 
 ---
 

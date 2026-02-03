@@ -280,8 +280,10 @@ function handleContextMenuAction(action, file, paneId) {
  */
 export function updateOperationStatus(message, type = 'info') {
     const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message status-${type}`;
+    if (statusMessage) {
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message status-${type}`;
+    }
 }
 
 /**
@@ -289,8 +291,10 @@ export function updateOperationStatus(message, type = 'info') {
  */
 export function clearOperationStatus() {
     const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = '';
-    statusMessage.className = 'status-message';
+    if (statusMessage) {
+        statusMessage.textContent = '';
+        statusMessage.className = 'status-message';
+    }
 }
 
 /**
