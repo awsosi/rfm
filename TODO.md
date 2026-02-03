@@ -2817,3 +2817,330 @@ class Worker(Base):
 ---
 
 *Fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🔧 Fix Directory Navigation and UI Improvements
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issues Addressed
+
+1. ❌ Search functionality failing with "worker_id: Field required, query: Field required"
+2. ❌ Directories not clickable/navigable in Path A
+3. ❌ No parent directory (..) navigation
+4. ❌ Only directories shown, files hidden from view
+5. ❌ Column header incorrectly labeled "NAME (DIRECTORIES ONLY)"
+6. ❌ No column sorting functionality
+7. ❌ "Operation Queue" should be renamed to "Operation History"
+8. ❌ File/directory sizes not human-readable
+
+### ✅ Solutions Implemented
+
+#### 1. Fixed Search Functionality (`frontend/js/api.js`)
+
+**Before**:
+```javascript
+export async function searchFiles(path, pattern) {
+    const params = new URLSearchParams({ path, pattern });
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
+}
+```
+
+**After**:
+```javascript
+export async function searchFiles(path, pattern, workerId = 1) {
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        query: pattern  // Backend expects 'query' not 'pattern'
+    });
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
+}
+```
+
+**Changes**:
+- ✅ Added `worker_id` parameter (required by backend)
+- ✅ Renamed `pattern` to `query` to match backend API expectations
+- ✅ Default workerId to 1 for VF redesign compatibility
+
+#### 2. Implemented Directory Navigation (`frontend/js/app.js`)
+
+**Added Features**:
+- ✅ Single-click navigation on directory names
+- ✅ Parent directory (..) navigation (except at root)
+- ✅ Show both files AND directories in Path A
+- ✅ Smart root detection (A:, A:/, B:, B:/)
+- ✅ `getParentPath()` function for proper path traversal
+
+**Key Functions**:
+```javascript
+// Get parent directory path
+function getParentPath(path) {
+    let cleanPath = path.replace(/\/$/, '');
+    const parts = cleanPath.split('/');
+    if (parts.length <= 1) return cleanPath;
+    parts.pop();
+    return parts.length === 1 ? parts[0] : parts.join('/');
+}
+
+// Load directory with parent (..) entry
+async function loadDirectory(paneId, path) {
+    // ...
+    const isRoot = normalizedPath === 'A:' || normalizedPath === 'B:' ||
+                   normalizedPath === 'A:/' || normalizedPath === 'B:/';
+    
+    if (!isRoot) {
+        const parentPath = getParentPath(normalizedPath);
+        files = [
+            {
+                name: '..',
+                path: parentPath,
+                is_directory: true,
+                size_bytes: 0,
+                modified_at: null,
+                is_parent_dir: true
+            },
+            ...files
+        ];
+    }
+    // ...
+}
+```
+
+#### 3. Improved File Row Creation (`frontend/js/ui.js`)
+
+**Before**:
+- Double-click only for directory navigation
+- Directories only shown
+- No file metadata in rows
+
+**After**:
+```javascript
+function createFileRow(file, paneId) {
+    // Store metadata in row dataset
+    row.dataset.isDirectory = file.is_directory;
+    row.dataset.isParentDir = file.is_parent_dir || false;
+    row.dataset.sizeBytes = file.size_bytes || 0;
+    row.dataset.modified = file.modified_at || '';
+    row.dataset.name = file.name || '';
+    
+    // Disable checkbox for parent directory (..)
+    if (file.is_parent_dir) {
+        checkbox.disabled = true;
+        checkbox.style.visibility = 'hidden';
+    }
+    
+    // Single click on name cell to navigate
+    nameCell.addEventListener('click', (e) => {
+        if (e.target.type !== 'checkbox') {
+            navigateToDirectory(paneId, file.path);
+        }
+    });
+    
+    // Human-readable sizes
+    if (file.is_directory || file.is_parent_dir) {
+        sizeCell.textContent = '-';
+    } else {
+        sizeCell.textContent = formatFileSize(file.size_bytes || file.size || 0);
+    }
+}
+```
+
+**Changes**:
+- ✅ Added metadata to row dataset for sorting
+- ✅ Single-click navigation on directory names
+- ✅ Parent directory (..) has disabled/hidden checkbox
+- ✅ Human-readable file sizes via `formatFileSize()`
+- ✅ Show both files and directories
+
+#### 4. Column Sorting Implementation
+
+**File List Sorting** (`frontend/js/app.js`):
+```javascript
+// Application state includes sort preferences
+state: {
+    panes: {
+        a: {
+            sortBy: 'modified',
+            sortOrder: 'desc'  // Default: newest first
+        }
+    }
+}
+
+// Sort files by column
+function sortFiles(files, sortBy, sortOrder) {
+    // Separate parent directory (..) from other files
+    const parentDir = sorted.find(f => f.is_parent_dir);
+    const regularFiles = sorted.filter(f => !f.is_parent_dir);
+    
+    regularFiles.sort((a, b) => {
+        // Sort by name, size, or modified date
+        // Parent directory always comes first
+    });
+    
+    return parentDir ? [parentDir, ...regularFiles] : regularFiles;
+}
+
+// Column header click handlers
+function setupColumnSorting(paneId) {
+    const sortableHeaders = fileList.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', () => {
+            handleColumnSort(paneId, header.dataset.sortBy);
+        });
+    });
+}
+```
+
+**Operation History Sorting**:
+```javascript
+// Sort operations by column
+function sortOperations(operations, sortBy, sortOrder) {
+    // Sort by id, type, status, directory, user, or timestamp
+}
+
+// Setup sorting for Operation History table
+function setupOperationQueueSorting() {
+    // Click handlers for sortable columns
+}
+```
+
+**Features**:
+- ✅ Click column headers to sort
+- ✅ Toggle ascending/descending on repeated clicks
+- ✅ Visual arrows (▲/▼) indicate sort direction
+- ✅ Default sort: Modified (descending) - newest files first
+- ✅ Parent directory (..) always stays at top
+- ✅ Sorting works for both File List and Operation History
+
+#### 5. HTML Updates (`frontend/pages/explorer.html`)
+
+**Changes**:
+1. ✅ Column header renamed: "Name (Directories Only)" → "Name"
+2. ✅ Removed "disabled" from select-all checkbox
+3. ✅ Added sortable classes and arrow spans to all columns
+4. ✅ Renamed "Operation Queue" → "Operation History"
+5. ✅ Added sorting to Operation History columns
+
+**Before**:
+```html
+<th class="col-name">Name (Directories Only)</th>
+<th class="col-size">Size</th>
+<th class="col-modified">Modified</th>
+```
+
+**After**:
+```html
+<th class="col-name sortable" data-sort-by="name">
+    Name <span class="sort-arrow"></span>
+</th>
+<th class="col-size sortable" data-sort-by="size">
+    Size <span class="sort-arrow"></span>
+</th>
+<th class="col-modified sortable sorted-desc" data-sort-by="modified">
+    Modified <span class="sort-arrow">▼</span>
+</th>
+```
+
+#### 6. Enhanced File Selection (`frontend/js/ui.js`)
+
+**Before**:
+```javascript
+export function getSelectedFiles(paneId) {
+    return Array.from(checkboxes).map(cb => cb.dataset.path);
+}
+```
+
+**After**:
+```javascript
+export function getSelectedFiles(paneId) {
+    return Array.from(checkboxes).map(cb => {
+        const row = cb.closest('tr');
+        return {
+            path: cb.dataset.path,
+            name: row.dataset.name,
+            is_directory: row.dataset.isDirectory === 'true',
+            size_bytes: parseInt(row.dataset.sizeBytes) || 0
+        };
+    });
+}
+```
+
+**Changes**:
+- ✅ Returns full file objects with metadata (not just paths)
+- ✅ Enables better validation for push operations
+- ✅ Provides file information for confirmations
+
+### 🧪 User Experience Improvements
+
+**Before**:
+- ❌ Users couldn't navigate directories
+- ❌ No way to go back to parent directory
+- ❌ Files completely hidden
+- ❌ Confusing "Directories Only" label
+- ❌ No sorting capability
+- ❌ Search always failed
+
+**After**:
+- ✅ Click directory name to enter
+- ✅ ".." entry to go up one level (except at root)
+- ✅ Both files and directories visible
+- ✅ Clear "Name" column header
+- ✅ Click any column to sort with visual indicators
+- ✅ Search works correctly with worker_id and query
+- ✅ Human-readable file sizes
+- ✅ Operation History properly named
+- ✅ Full sorting for Operation History
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Single-click navigation (not double-click)
+- Simple parent path calculation
+- Reused existing formatFileSize utility
+- Minimal DOM manipulation
+
+✅ **DRY (Don't Repeat Yourself)**
+- Shared sortFiles() function
+- Shared updateSortArrows() pattern
+- Consistent sort state management
+- Reusable column sorting setup
+
+### 🔍 Files Modified
+
+1. `frontend/js/api.js` - Fixed searchFiles() function
+2. `frontend/js/app.js` - Added directory navigation, sorting, parent path logic
+3. `frontend/js/ui.js` - Enhanced createFileRow(), getSelectedFiles()
+4. `frontend/pages/explorer.html` - Updated labels, added sorting headers
+5. `TODO.md` - This documentation
+
+### 🎯 Testing Checklist
+
+- [x] Search directories works without errors
+- [x] Can click directory name to enter
+- [x] ".." appears in subdirectories
+- [x] ".." navigates to parent
+- [x] No ".." at root (A:, B:)
+- [x] Files and directories both visible
+- [x] File sizes shown in human-readable format
+- [x] Can select directories for push operation
+- [x] Can select files (for future operations)
+- [x] Column sorting works on all columns
+- [x] Sort arrows indicate direction
+- [x] Default sort is Modified (descending)
+- [x] Operation History sorting works
+- [x] Labels correctly renamed
+
+---
+
+**Status:** ✅ COMPLETE - All directory navigation and UI improvements implemented
+**Last Updated:** 2026-02-03
+
+---
+
+*All fixes maintain KISS and DRY principles throughout the codebase.*

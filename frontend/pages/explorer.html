@@ -50,10 +50,16 @@
                     <table class="file-list" id="file-list-a">
                         <thead>
                             <tr>
-                                <th class="col-select"><input type="checkbox" id="select-all-a" disabled title="Select directories only"></th>
-                                <th class="col-name">Name (Directories Only)</th>
-                                <th class="col-size">Size</th>
-                                <th class="col-modified">Modified</th>
+                                <th class="col-select"><input type="checkbox" id="select-all-a"></th>
+                                <th class="col-name sortable" data-sort-by="name">
+                                    Name <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-size sortable" data-sort-by="size">
+                                    Size <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-modified sortable sorted-desc" data-sort-by="modified">
+                                    Modified <span class="sort-arrow">▼</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="file-list-body-a">
@@ -76,10 +82,10 @@
                 </button>
             </div>
 
-            <!-- Operation Queue (Right Side) -->
+            <!-- Operation History (Right Side) -->
             <div class="operation-queue-panel" id="operation-queue-panel">
                 <div class="queue-header">
-                    <h2>Operation Queue</h2>
+                    <h2>Operation History</h2>
                     <div class="queue-search">
                         <input type="text" id="queue-search-input" class="search-input" placeholder="Search operations..." />
                         <button class="btn btn-sm" id="queue-search-btn">Search</button>
@@ -107,12 +113,24 @@
                         <thead>
                             <tr>
                                 <th class="col-select"><input type="checkbox" id="select-operation" title="Select operation for Pull"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-status">Status</th>
-                                <th class="col-directory">Directory</th>
-                                <th class="col-user">User</th>
-                                <th class="col-timestamp">Timestamp</th>
+                                <th class="col-id sortable" data-sort-by="id">
+                                    ID <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-type sortable" data-sort-by="type">
+                                    Type <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-status sortable" data-sort-by="status">
+                                    Status <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-directory sortable" data-sort-by="directory">
+                                    Directory <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-user sortable" data-sort-by="user">
+                                    User <span class="sort-arrow"></span>
+                                </th>
+                                <th class="col-timestamp sortable sorted-desc" data-sort-by="timestamp">
+                                    Timestamp <span class="sort-arrow">▼</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="queue-table-body">

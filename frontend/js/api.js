@@ -90,10 +90,15 @@ export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
  * Search files recursively
  * @param {string} path - Base path to search
  * @param {string} pattern - Search pattern
+ * @param {number} workerId - Worker ID (defaults to 1 for VF redesign)
  * @returns {Promise<Array>}
  */
-export async function searchFiles(path, pattern) {
-    const params = new URLSearchParams({ path, pattern });
+export async function searchFiles(path, pattern, workerId = 1) {
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        query: pattern  // Backend expects 'query' not 'pattern'
+    });
     const response = await apiRequest(`/api/files/search?${params}`);
     return response.results || [];
 }
