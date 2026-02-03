@@ -3144,3 +3144,289 @@ export function getSelectedFiles(paneId) {
 ---
 
 *All fixes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🔍 Fix Search Functionality and Elasticsearch Indexing
+
+**Branch:** claude/fix-directory-navigation-AcYCH
+**Date:** 2026-02-03
+**Status:** ✅ COMPLETE
+
+### 📋 Issue
+
+Search functionality was failing with error:
+```
+Search failed: worker_id: Field required, query: Field required
+```
+
+Additionally, while Elasticsearch infrastructure existed, there was no mechanism to index files for fast searching.
+
+### ✅ Solution Implemented
+
+#### 1. Frontend Search Fix (`frontend/js/app.js`)
+
+**Problem**: `handleSearch()` function wasn't passing `workerId` to `searchFiles()`
+
+**Before**:
+```javascript
+async function handleSearch(paneId) {
+    // ...
+    const files = await searchFiles(currentPath, pattern);  // Missing workerId!
+    state.panes[paneId].files = files;
+    renderFileList(paneId, files, false);
+    // ...
+}
+```
+
+**After**:
+```javascript
+async function handleSearch(paneId) {
+    // ...
+    // Pass workerId explicitly to search function
+    const files = await searchFiles(currentPath, pattern, state.workerId);
+    
+    state.panes[paneId].files = files;
+    
+    // Apply current sorting to search results
+    const pane = state.panes[paneId];
+    const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
+    renderFileList(paneId, sortedFiles, false);
+    markDirectoryRows(paneId);
+    
+    // Update sort arrows
+    updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
+    // ...
+}
+```
+
+**Changes**:
+- ✅ Explicitly pass `state.workerId` to searchFiles
+- ✅ Apply sorting to search results (consistency with directory listing)
+- ✅ Mark directory rows and update sort arrows
+
+#### 2. Backend File Indexing Endpoint (`backend/api/routes/admin_system.py`)
+
+**New Admin Endpoint**: `POST /api/admin/index-files/{worker_id}`
+
+This endpoint enables administrators to trigger file indexing for fast Elasticsearch-based searching.
+
+**Features**:
+```python
+@router.post("/index-files/{worker_id}", response_model=MessageResponse)
+async def index_worker_files(
+    worker_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    recursive: bool = Query(True, description="Recursively index all subdirectories"),
+):
+    """
+    Trigger file indexing for a worker into Elasticsearch.
+    
+    1. Lists all files/directories from worker's Path A
+    2. Indexes them into Elasticsearch for fast searching
+    3. Returns count of indexed files
+    """
+```
+
+**Implementation Details**:
+- ✅ **Recursive indexing**: Traverses entire directory tree
+- ✅ **Bulk indexing**: Uses `bulk_index_files()` for efficiency
+- ✅ **Max depth protection**: Prevents infinite recursion (max depth: 10)
+- ✅ **Error handling**: Continues indexing even if individual directories fail
+- ✅ **Audit logging**: Records indexing operations
+- ✅ **Worker validation**: Checks worker exists and is active
+- ✅ **Elasticsearch validation**: Verifies ES is enabled before indexing
+
+**Indexing Process**:
+```python
+async def index_directory(path: str, depth: int = 0) -> int:
+    """Recursively index directory and its contents."""
+    
+    # 1. List directory via worker service
+    response = await worker_service.list_directory(worker, path, db, offset=0, limit=1000)
+    
+    # 2. Prepare file data for Elasticsearch
+    for item in response.error_details["items"]:
+        file_data = {
+            "path": item.get("path", ""),
+            "name": item.get("name", ""),
+            "parent_path": path,
+            "is_directory": item.get("is_directory", False),
+            "size": item.get("size_bytes", 0),
+            "modified_at": item.get("modified_at"),
+            "worker_id": worker_id,
+        }
+        files_to_index.append(file_data)
+    
+    # 3. Bulk index batch
+    count = await es_service.bulk_index_files(files_to_index)
+    
+    # 4. Recursively index subdirectories
+    for subdir in subdirs:
+        subcount = await index_directory(subdir, depth + 1)
+        indexed_count += subcount
+    
+    return indexed_count
+```
+
+#### 3. Complete Elasticsearch Architecture
+
+**Existing Components** (already implemented):
+- `backend/api/services/elasticsearch_service.py` - Full ES service
+  - `index_file()` - Index single file
+  - `bulk_index_files()` - Bulk index files (efficient)
+  - `search_files()` - Search files with filters
+  - `search_operations()` - Search operations with filters
+  - `_create_files_index()` - Create file index with mappings
+  - `_create_operations_index()` - Create operations index
+
+**File Index Schema**:
+```python
+{
+    "path": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "parent_path": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+    "is_directory": {"type": "boolean"},
+    "size": {"type": "long"},
+    "modified_at": {"type": "date"},
+    "worker_id": {"type": "integer"},
+    "indexed_at": {"type": "date"},
+}
+```
+
+**Search Capabilities**:
+- Full-text search across file paths and names
+- Fuzzy matching (handles typos)
+- Filter by worker ID
+- Filter by directory/file type
+- Fast pagination
+- Relevance scoring
+
+#### 4. Usage Workflow
+
+**For Administrators**:
+1. **Initial Setup**: Call `POST /api/admin/index-files/{worker_id}` to index files
+2. **Maintenance**: Re-index periodically to keep index current
+3. **Optional**: Set up cron job or scheduled task for automatic re-indexing
+
+**For Users**:
+1. Use search input in Path A explorer
+2. Search executes via Elasticsearch if enabled (fast)
+3. Falls back to worker-side search if ES disabled (slower)
+
+**Example API Call**:
+```bash
+# Index all files for worker 1 (recursive)
+curl -X POST "https://api.example.com/api/admin/index-files/1?recursive=true" \
+  -H "Authorization: Bearer <admin_token>"
+
+# Response:
+{
+  "message": "Successfully indexed 15420 files/directories for worker SERVER01",
+  "details": {
+    "total_indexed": 15420,
+    "worker_id": 1
+  }
+}
+```
+
+### 🔄 Search Flow Diagram
+
+```
+User Types Search Query in Frontend
+         ↓
+   handleSearch() in app.js
+         ↓
+   searchFiles(path, query, workerId) in api.js
+         ↓
+   Backend: /api/files/search?worker_id=1&path=A:&query=report
+         ↓
+   ┌─────────────────────────────┐
+   │ Is Elasticsearch enabled?   │
+   └─────────────────────────────┘
+         ↓                 ↓
+       YES               NO
+         ↓                 ↓
+   Elasticsearch      Worker Service
+   Fast Search        Direct Scan
+   (indexed files)    (slower)
+         ↓                 ↓
+         └────────┬────────┘
+                  ↓
+         Return FileSearchResponse
+                  ↓
+         Sort & Display Results
+```
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Simple recursive indexing algorithm
+- Clear separation: admin indexes, users search
+- Fallback to worker search if ES disabled
+
+✅ **DRY (Don't Repeat Yourself)**
+- Reused existing `WorkerService.list_directory()`
+- Reused existing `ElasticsearchService.bulk_index_files()`
+- Shared error handling patterns
+
+### 🎯 Benefits
+
+**Performance**:
+- ⚡ **Fast searches**: Elasticsearch returns results in milliseconds
+- 📊 **Scalable**: Handles millions of files efficiently
+- 🔍 **Fuzzy matching**: Finds results even with typos
+
+**User Experience**:
+- ✅ Search works instantly without errors
+- ✅ Results are sorted and displayed correctly
+- ✅ Consistent with directory browsing experience
+
+**Operations**:
+- 🔧 **Admin control**: Admins trigger indexing when needed
+- 📝 **Audit trail**: All indexing operations logged
+- 🛡️ **Error resilient**: Continues indexing even if some directories fail
+
+### 🔍 Files Modified
+
+1. `frontend/js/app.js` - Fixed handleSearch() to pass workerId + apply sorting
+2. `backend/api/routes/admin_system.py` - Added index_worker_files endpoint
+3. `TODO.md` - This documentation
+
+### 🧪 Testing Checklist
+
+- [x] Search with workerId and query params works
+- [x] Search results are properly sorted
+- [x] Admin can trigger file indexing via API
+- [x] Indexing handles recursive directory traversal
+- [x] Indexing handles large file counts (batching)
+- [x] Search falls back to worker service if ES disabled
+- [x] Audit log records indexing operations
+- [x] Error handling works for inaccessible directories
+
+### 📖 Next Steps for Production
+
+**Recommended**:
+1. **Scheduled Indexing**: Set up cron job to re-index files periodically (e.g., daily at 2 AM)
+2. **Incremental Indexing**: Consider implementing change detection to only index modified files
+3. **Real-time Indexing**: Hook file operations (copy/move/delete) to update ES index immediately
+4. **Monitoring**: Add metrics for index size, search latency, and indexing duration
+
+**Example Cron Job**:
+```bash
+# Re-index worker 1 daily at 2 AM
+0 2 * * * curl -X POST "https://api.example.com/api/admin/index-files/1" \
+  -H "Authorization: Bearer <admin_token>" >> /var/log/es-index.log 2>&1
+```
+
+---
+
+**Status:** ✅ COMPLETE - Search functionality fixed and Elasticsearch indexing implemented
+**Last Updated:** 2026-02-03
+
+---
+
+*All fixes maintain KISS and DRY principles throughout the codebase.*

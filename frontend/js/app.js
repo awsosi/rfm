@@ -562,10 +562,19 @@ async function handleSearch(paneId) {
     state.panes[paneId].isSearching = true;
 
     try {
-        const files = await searchFiles(currentPath, pattern);
+        // Pass workerId explicitly to search function
+        const files = await searchFiles(currentPath, pattern, state.workerId);
 
         state.panes[paneId].files = files;
-        renderFileList(paneId, files, false);
+
+        // Apply current sorting to search results
+        const pane = state.panes[paneId];
+        const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
+        renderFileList(paneId, sortedFiles, false);
+        markDirectoryRows(paneId);
+
+        // Update sort arrows
+        updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
 
     } catch (error) {
         console.error(`Error searching files in pane ${paneId}:`, error);

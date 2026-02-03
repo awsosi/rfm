@@ -6,12 +6,14 @@ Includes:
 - Worker provisioning and real-time control
 - System monitoring and statistics
 - Real-time log viewing
+- Elasticsearch file indexing
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from loguru import logger
 from sqlalchemy import select, update, delete, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -929,3 +931,140 @@ async def get_logging_config(
         log_retention_days=int(config_values.get('log_retention_days', '14')),
         enable_log_compression=config_values.get('enable_log_compression', 'true').lower() == 'true',
     )
+
+# =============================================================================
+# Elasticsearch File Indexing
+# =============================================================================
+
+@router.post("/index-files/{worker_id}", response_model=MessageResponse)
+async def index_worker_files(
+    worker_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    recursive: bool = Query(True, description="Recursively index all subdirectories"),
+):
+    """
+    Trigger file indexing for a worker into Elasticsearch.
+    
+    This endpoint:
+    1. Lists all files/directories from the worker's Path A
+    2. Indexes them into Elasticsearch for fast searching
+    3. Returns the count of indexed files
+    
+    Note: This may take time for large directory structures.
+    """
+    from api.services.elasticsearch_service import get_elasticsearch_service
+    
+    # Get worker
+    worker = await get_worker_by_id(worker_id, db)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    
+    # Check if worker is active
+    if worker.status != WorkerStatus.ACTIVE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Worker is not active (status: {worker.status.value})"
+        )
+    
+    # Check if Elasticsearch is enabled
+    es_service = await get_elasticsearch_service()
+    if not es_service.is_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Elasticsearch is not enabled. File search will fall back to worker-side search."
+        )
+    
+    try:
+        # Initialize worker service
+        worker_service = WorkerService(settings)
+        
+        # Get files from worker's Path A
+        root_path = worker.path_a_prefix or "A:"
+        
+        async def index_directory(path: str, depth: int = 0) -> int:
+            """Recursively index directory and its contents."""
+            indexed_count = 0
+            max_depth = 10  # Prevent infinite recursion
+            
+            if depth > max_depth:
+                logger.warning(f"Max recursion depth reached at {path}")
+                return indexed_count
+            
+            try:
+                # List directory
+                response = await worker_service.list_directory(
+                    worker, path, db, offset=0, limit=1000
+                )
+                
+                if response.error_details and "items" in response.error_details:
+                    files_to_index = []
+                    subdirs = []
+                    
+                    for item in response.error_details["items"]:
+                        # Prepare file data for Elasticsearch
+                        file_data = {
+                            "path": item.get("path", ""),
+                            "name": item.get("name", ""),
+                            "parent_path": path,
+                            "is_directory": item.get("is_directory", False),
+                            "size": item.get("size_bytes", item.get("size", 0)),
+                            "modified_at": item.get("modified_at"),
+                            "worker_id": worker_id,
+                        }
+                        
+                        files_to_index.append(file_data)
+                        
+                        # Track subdirectories for recursive indexing
+                        if recursive and item.get("is_directory"):
+                            subdirs.append(item.get("path", ""))
+                    
+                    # Bulk index current batch
+                    if files_to_index:
+                        count = await es_service.bulk_index_files(files_to_index)
+                        indexed_count += count
+                        logger.info(f"Indexed {count} items from {path}")
+                    
+                    # Recursively index subdirectories
+                    if recursive:
+                        for subdir in subdirs:
+                            subcount = await index_directory(subdir, depth + 1)
+                            indexed_count += subcount
+                
+            except Exception as e:
+                logger.error(f"Error indexing directory {path}: {e}")
+            
+            return indexed_count
+        
+        # Start indexing from root
+        logger.info(f"Starting file indexing for worker {worker_id} at {root_path}")
+        total_indexed = await index_directory(root_path)
+        
+        # Log to audit trail
+        await AuditLogger.log(
+            db=db,
+            request=request,
+            user_id=current_user.id,
+            action="index_files",
+            details={
+                "worker_id": worker_id,
+                "worker_name": worker.hostname,
+                "root_path": root_path,
+                "total_indexed": total_indexed,
+                "recursive": recursive,
+            },
+        )
+        
+        return MessageResponse(
+            message=f"Successfully indexed {total_indexed} files/directories for worker {worker.hostname}",
+            details={"total_indexed": total_indexed, "worker_id": worker_id}
+        )
+    
+    except Exception as e:
+        logger.error(f"File indexing failed for worker {worker_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"File indexing failed: {str(e)}"
+        )
