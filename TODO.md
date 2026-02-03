@@ -2,9 +2,132 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PUSH OPERATION FIXED ✅ - File Impersonation Added
+> **Status:** PUSH OPERATION FIXED ✅ - Fail-Fast Validation Added
 >
 > **Ostatnia aktualizacja:** 2026-02-03
+
+---
+
+## 🔧 CRITICAL FIX - Missing Samba Credentials Validation (2026-02-03)
+
+### Issue
+**Push Operations Still Failing**: Despite impersonation code being added in previous fix, PUSH operations continued to fail with "Access to the path is denied" errors.
+
+### Root Cause
+**File**: `workers/FileManagerWorker/FileOperations.cs`
+
+**Problem**:
+1. Impersonation code was implemented correctly
+2. BUT samba credentials were never configured on the worker (no `/config` run)
+3. When `ServiceUser` is null/empty, impersonation is silently skipped
+4. File operations run as Network Service account
+5. Network Service cannot access network shares (\\192.168.100.10\Zasoby-test\KATALOG)
+6. Operations fail with generic "Access denied" error
+
+**Previous Fix Failed Because**:
+- It added impersonation code but didn't validate that credentials were actually configured
+- Worker service started successfully even without samba credentials
+- Error only appeared during file operation, not at startup
+- No clear indication that credentials were missing
+
+### Fix Implementation
+
+**1. Added Network Share Detection** (FileOperations.cs:114-123):
+```csharp
+private bool IsNetworkPath(string path)
+{
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return false;
+    }
+    // UNC paths start with \\
+    return path.StartsWith(@"\\") || path.StartsWith("//");
+}
+```
+
+**2. Added Fail-Fast Validation** (FileOperations.cs:69-97):
+```csharp
+// Validate that credentials are provided for network shares
+var networkPaths = new List<string>();
+if (IsNetworkPath(pathAPrefix)) networkPaths.Add($"PathA: {pathAPrefix}");
+if (IsNetworkPath(pathBPrefix)) networkPaths.Add($"PathB: {pathBPrefix}");
+if (IsNetworkPath(pathCPrefix)) networkPaths.Add($"PathC: {pathCPrefix}");
+
+if (networkPaths.Count > 0 && string.IsNullOrWhiteSpace(_sambaUsername))
+{
+    Logger.Error("========================================================================");
+    Logger.Error("CRITICAL: Network share access requires samba credentials!");
+    Logger.Error("========================================================================");
+    Logger.Error("The following paths are network shares:");
+    foreach (var path in networkPaths)
+    {
+        Logger.Error("  - {0}", path);
+    }
+    Logger.Error("");
+    Logger.Error("Network Service account cannot access network shares by default.");
+    Logger.Error("");
+    Logger.Error("SOLUTION:");
+    Logger.Error("  1. Stop the service");
+    Logger.Error("  2. Run as Administrator: FileManagerWorker.exe /config");
+    Logger.Error("  3. Enter samba credentials (e.g., DOMAIN\\username)");
+    Logger.Error("  4. Restart the service");
+    Logger.Error("========================================================================");
+    throw new InvalidOperationException(
+        $"Samba credentials required for network share access. " +
+        $"Run 'FileManagerWorker.exe /config' to configure credentials.");
+}
+```
+
+**3. Enhanced Logging** (FileOperations.cs:99-108):
+```csharp
+if (!string.IsNullOrWhiteSpace(_sambaUsername))
+{
+    Logger.Info("========================================================================");
+    Logger.Info("File operations will use IMPERSONATION with user: {0}", _sambaUsername);
+    Logger.Info("========================================================================");
+}
+else
+{
+    Logger.Info("File operations will use Network Service account permissions");
+}
+```
+
+**4. Better Error Handling** (FileOperations.cs:137-154):
+```csharp
+catch (InvalidOperationException ex)
+{
+    Logger.Error("========================================================================");
+    Logger.Error("Impersonation failed for user: {0}", _sambaUsername);
+    Logger.Error("========================================================================");
+    Logger.Error("Error: {0}", ex.Message);
+    Logger.Error("");
+    Logger.Error("Possible causes:");
+    Logger.Error("  1. Invalid samba credentials");
+    Logger.Error("  2. Account is disabled or locked");
+    Logger.Error("  3. Password has expired");
+    Logger.Error("  4. Domain controller unreachable");
+    Logger.Error("");
+    Logger.Error("SOLUTION:");
+    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
+    Logger.Error("  Verify and re-enter samba credentials");
+    Logger.Error("========================================================================");
+    throw;
+}
+```
+
+### Impact
+- **Fail-Fast**: Worker service will now FAIL TO START if network shares are configured without samba credentials
+- **Clear Error Messages**: Detailed error messages explain exactly what's wrong and how to fix it
+- **Prevents Silent Failures**: No more mysterious "Access denied" errors during operations
+- **Better Debugging**: Enhanced logging shows when impersonation is used vs. skipped
+
+### Resolution Steps for Deployment
+1. Stop the FileManagerWorker service on HV2012R2
+2. Run as Administrator: `FileManagerWorker.exe /config`
+3. Enter API URL and samba credentials (e.g., `VITKAC\fotosamba`)
+4. Restart the service
+5. Service will now start successfully with impersonation enabled
+6. PUSH operations will work with proper network share access
 
 ---
 
