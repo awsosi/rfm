@@ -233,6 +233,7 @@ async def search_files(
             result = await es_service.search_files(
                 query=query,
                 worker_id=worker_id,
+                parent_path=path,
                 is_directory=None,
                 offset=offset,
                 limit=limit,

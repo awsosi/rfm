@@ -255,6 +255,10 @@ services:
       ENABLE_AUTO_ROLLBACK: ${ENABLE_AUTO_ROLLBACK:-true}
       MAX_FILE_LISTING_ITEMS: ${MAX_FILE_LISTING_ITEMS:-1000}
 
+      # VF Redesign: PUSH/PULL operation paths
+      PATH_B: ${PATH_B:-}
+      PATH_C: ${PATH_C:-}
+
       # Development
       DEBUG: ${DEBUG:-false}
       SQL_ECHO: ${SQL_ECHO:-false}

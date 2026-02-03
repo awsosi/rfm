@@ -422,6 +422,7 @@ class ElasticsearchService:
         self,
         query: str,
         worker_id: Optional[int] = None,
+        parent_path: Optional[str] = None,
         is_directory: Optional[bool] = None,
         offset: int = 0,
         limit: int = 100,
@@ -432,6 +433,7 @@ class ElasticsearchService:
         Args:
             query: Free-text search query (searches path and name)
             worker_id: Filter by worker ID
+            parent_path: Filter by parent directory path
             is_directory: Filter by directory flag
             offset: Result offset for pagination
             limit: Maximum results to return
@@ -460,6 +462,9 @@ class ElasticsearchService:
             # Add filters
             if worker_id is not None:
                 must_clauses.append({"term": {"worker_id": worker_id}})
+
+            if parent_path is not None:
+                must_clauses.append({"term": {"parent_path.keyword": parent_path}})
 
             if is_directory is not None:
                 must_clauses.append({"term": {"is_directory": is_directory}})
