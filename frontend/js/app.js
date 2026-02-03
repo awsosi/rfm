@@ -398,6 +398,9 @@ async function loadDirectory(paneId, path) {
     try {
         let files = await listFiles(normalizedPath, 0, 50, state.workerId);
 
+        // Filter out any ".." entries that might come from the backend
+        files = files.filter(file => file.name !== '..' && !file.is_parent_dir);
+
         // Add parent directory (..) if not at root
         const isRoot = normalizedPath === 'A:' || normalizedPath === 'B:' ||
                        normalizedPath === 'A:/' || normalizedPath === 'B:/';
@@ -563,7 +566,13 @@ async function handleSearch(paneId) {
 
     try {
         // Pass workerId explicitly to search function
-        const files = await searchFiles(currentPath, pattern, state.workerId);
+        let files = await searchFiles(currentPath, pattern, state.workerId);
+
+        // VF Redesign: Filter to show only directories
+        const isVFRedesign = document.body.classList.contains('vf-redesign');
+        if (isVFRedesign) {
+            files = files.filter(file => file.is_directory);
+        }
 
         state.panes[paneId].files = files;
 
