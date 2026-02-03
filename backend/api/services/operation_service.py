@@ -592,11 +592,21 @@ class OperationService:
         Raises:
             OperationError: If PATH_B or PATH_C not configured or operation fails
         """
-        # Validate PATH_B and PATH_C are configured
-        if not self.settings.path_b:
-            raise OperationError("PATH_B not configured. Contact administrator.")
-        if not self.settings.path_c:
-            raise OperationError("PATH_C not configured. Contact administrator.")
+        # Get worker and validate PATH_B and PATH_C are configured
+        worker = await get_worker_by_id(worker_id, db)
+        if not worker:
+            raise OperationError(f"Worker {worker_id} not found")
+
+        if not worker.path_b_prefix:
+            raise OperationError(
+                f"PATH_B not configured for worker '{worker.name}'. "
+                "Configure in Admin Panel -> System -> Worker Configuration."
+            )
+        if not worker.path_c_prefix:
+            raise OperationError(
+                f"PATH_C not configured for worker '{worker.name}'. "
+                "Configure in Admin Panel -> System -> Worker Configuration."
+            )
 
         # Extract directory name from source path
         import os

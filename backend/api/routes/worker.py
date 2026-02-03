@@ -246,6 +246,6 @@ async def get_worker_config(
     return WorkerConfigResponse(
         path_a_prefix=worker.path_a_prefix,
         path_b_prefix=worker.path_b_prefix,
-        path_c_prefix=settings.path_c,  # Global path C configuration
+        path_c_prefix=worker.path_c_prefix,
         polling_interval_seconds=5,
     )
