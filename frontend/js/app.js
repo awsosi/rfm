@@ -1585,8 +1585,7 @@ async function handlePullOperation() {
         `Pull (revert) operation ${operation.id}?\n\n` +
         `This will:\n` +
         `1. Copy from PATH_B back to: ${operation.original_path}\n` +
-        `2. Remove from PATH_B\n\n` +
-        `Original data will be restored from archive.`
+        `2. Remove from PATH_B\n\n`
     );
 
     if (!confirmed) {
