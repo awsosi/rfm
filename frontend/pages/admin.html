@@ -486,12 +486,25 @@
                         </div>
                     </div>
                     <div class="panel-body">
-                        <div class="logs-container" id="logs-container">
-                            <div class="log-entries" id="log-entries">
-                                <!-- Log entries will be loaded here -->
-                            </div>
-                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Time</th>
+                                    <th>Operation</th>
+                                    <th>Source Directory</th>
+                                    <th>Target Directory</th>
+                                    <th>User ID</th>
+                                    <th>Username</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body">
+                                <!-- Logs will be loaded here -->
+                            </tbody>
+                        </table>
                         <div class="loading-indicator hidden" id="logs-loading">Loading logs...</div>
+                        <div id="logs-pagination-info" style="margin-top: 10px; text-align: center;"></div>
                         <button class="btn btn-secondary load-more" id="load-more-logs">Load More</button>
                     </div>
                 </div>

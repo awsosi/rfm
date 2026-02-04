@@ -22,6 +22,66 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Enhanced System Logs Display in Admin Panel
+**Issue**: System logs in Admin Panel showed minimal information without proper table structure. Logs displayed only basic data and lacked source/target directory information for PUSH/PULL operations.
+
+**Requirements**: Display comprehensive log information in a structured table:
+- Full timestamp (YYYY-MM-DD HH:mm:SS.milliseconds format)
+- Relative timestamp (Just now, X mins ago, X hours ago)
+- Operation type (push, pull, login_success, worker_provision, etc.)
+- Source directory (for push/pull operations)
+- Target directory (for push/pull operations)
+- User ID
+- Username
+- IP Address
+
+**Fixes Applied**:
+
+1. **Admin HTML - Table Structure** (admin.html:489-504):
+   - Replaced simple div#log-entries with proper data-table structure
+   - Added 8 columns: Timestamp, Time, Operation, Source Directory, Target Directory, User ID, Username, IP Address
+   - Added pagination info display
+   - Maintains existing log controls (filters, refresh, export)
+
+2. **Admin JS - Logs Rendering** (admin-system.js:354-415):
+   - Updated `renderLogs()` to extract source_directory and target_directory from details_json
+   - Shows '-' for non-PUSH/PULL operations where directories aren't applicable
+   - Displays full timestamp (YYYY-MM-DD HH:mm:SS.milliseconds format) as first column
+   - Displays relative timestamps using formatRelativeTime() method as second column
+   - Shows username or 'System' when user information not available
+   - Updated column span from 6 to 8 for "No logs found" message
+
+3. **Admin JS - Time Formatting** (admin-system.js:570-603):
+   - Added `formatRelativeTime()` method to AdminSystem class
+   - Formats timestamps as: "Just now" (<1 min), "X mins ago" (<1 hour), "X hours ago" (<24 hours), "X days ago" (<7 days)
+   - Falls back to localized date/time for older entries
+   - Handles invalid timestamps gracefully
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 489-504: replaced log-entries div with 8-column table structure)
+- `frontend/js/admin-system.js` (lines 354-415: updated renderLogs with YYYY-MM-DD HH:mm:SS.milliseconds timestamp formatting; lines 578-611: added formatRelativeTime)
+
+**Result**:
+✅ System logs display in structured table with all required columns
+✅ Full timestamp displayed as first column for precise time reference
+✅ Relative timestamps show "Just now", "X mins ago", "X hours ago" for quick reference
+✅ PUSH/PULL operations show source_directory and target_directory from details_json
+✅ User ID and Username displayed for all operations
+✅ IP addresses visible for audit purposes
+✅ Maintains existing filtering, refresh, and export functionality
+
+**Example Display**:
+```
+Timestamp                   Time        Operation         Source Dir    Target Dir    User ID  Username  IP Address
+2026-02-04 10:30:45.123     Just now    pull              B:/data       A:/data       2        john      192.168.200.7
+2026-02-04 10:30:42.456     Just now    push              A:/test       B:/test       2        john      192.168.200.7
+2026-02-04 10:29:15.789     1 min ago   login_success     -             -             2        john      192.168.200.7
+2026-02-04 10:28:52.012     1 min ago   worker_provision  -             -             1        admin     192.168.200.7
+2026-02-04 10:28:10.345     2 mins ago  user_create       -             -             1        admin     192.168.200.7
+```
+
+**Design Notes**: KISS approach - simple table structure with data extraction from existing details_json; DRY - reusable formatRelativeTime() method consistent with existing utils.js patterns; Dual timestamp display provides both precise time (for audit trail) and relative time (for quick reference); Maintains existing backend API contract - no backend changes needed as details_json already contains all required information
+
 ### 2026-02-04 - Fix PUSH Operation Failing with Null Reference Exception
 **Issue**: PUSH operations failed immediately with "Object reference not set to an instance of an object" error from the worker. The operation created successfully but failed during execution when trying to verify the source directory exists.
 
