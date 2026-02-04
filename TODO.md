@@ -22,6 +22,71 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Improve Logging System for PUSH/PULL Operations
+**Issue**: Admin Panel Log Viewer and syslog showed minimal information for PUSH/PULL operations - only generic field names (source, path_b, path_c) that weren't descriptive, and PULL operations were missing complete path information (source and archive directories).
+
+**Example of Previous Logging**:
+```
+1 min ago   push   User ID: 2   IP: 192.168.200.76
+Details: {"source": "A:/data", "path_b": "B:/data", "path_c": "C:/data"}
+```
+
+**Requirements**:
+- PUSH/PULL logs should show: operation type, source directory, target directory, archive directory, user ID, username, and IP address
+- Field names should be descriptive and consistent
+- PULL operations should include complete path information from original PUSH operation
+
+**Fixes Applied**:
+
+1. **PUSH Operation Logging** (app.py:611-615):
+   - Changed field names to be more descriptive:
+     - `"source"` → `"source_directory"` (PATH_A)
+     - `"path_b"` → `"target_directory"` (PATH_B)
+     - `"path_c"` → `"archive_directory"` (PATH_C)
+   - Already includes: user_id, username, ip_address, operation_id
+
+2. **PULL Operation Logging** (app.py:692-697):
+   - Added complete path information:
+     - `"source_directory"` (PATH_B - where files are being pulled from)
+     - `"target_directory"` (PATH_A - restore location)
+     - `"archive_directory"` (PATH_C - from original PUSH operation)
+     - `"original_operation_id"` (reference to original PUSH)
+   - Already includes: user_id, username, ip_address, operation_id
+
+**Result**:
+✅ Admin Panel Log Viewer now displays complete operation details with clear field names
+✅ Syslog messages include all path information (source, target, archive directories)
+✅ PUSH operations: Shows source (PATH_A) → target (PATH_B) + archive (PATH_C)
+✅ PULL operations: Shows source (PATH_B) → target (PATH_A) + archive reference (PATH_C)
+✅ All logs include: operation type, user ID, username, IP address, and timestamp
+
+**Example of Improved Logging**:
+```
+Admin Panel & Database:
+1 min ago   push   User ID: 2   Username: john   IP: 192.168.200.76
+Details: {
+  "source_directory": "A:/data/project",
+  "target_directory": "B:/data/project",
+  "archive_directory": "C:/data/project"
+}
+
+2 mins ago   pull   User ID: 3   Username: alice   IP: 192.168.200.7
+Details: {
+  "original_operation_id": 123,
+  "source_directory": "B:/data/project",
+  "target_directory": "A:/data/project",
+  "archive_directory": "C:/data/project"
+}
+
+Syslog (RFC 5424):
+<134>1 2026-02-04T10:30:00Z hostname file-manager - - [filemanager user_id="2" operation_id="456" action="push" username="john" ip_address="192.168.200.76" source_path="A:/data/project" dest_path="B:/data/project"] User john performed push operation
+```
+
+**Files Modified**:
+- `backend/api/app.py` (lines 611-615: PUSH logging; lines 692-697: PULL logging)
+
+**Design Notes**: KISS approach - updated field names to be self-documenting; DRY - consistent naming across PUSH/PULL operations; Complete audit trail - all relevant paths logged for both operations; Backward compatible - existing syslog handler already supports these fields
+
 ### 2026-02-04 - Fix Path Logic Descriptions in Configuration Wizard
 **Issue**: Configuration wizard displayed incorrect descriptions for Path B and Path C, causing confusion about operation flow.
 
