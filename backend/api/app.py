@@ -609,9 +609,9 @@ async def push_operation(
                 operation_id=operation.id,
                 action="push",
                 details={
-                    "source": request_data.source_path,
-                    "path_b": operation.dest_path,
-                    "path_c": operation.archive_path,
+                    "source_directory": request_data.source_path,
+                    "target_directory": operation.dest_path,
+                    "archive_directory": operation.archive_path,
                 },
                 ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
@@ -691,7 +691,9 @@ async def pull_operation(
                 action="pull",
                 details={
                     "original_operation_id": request_data.operation_id,
-                    "restore_to": operation.dest_path,
+                    "source_directory": operation.source_path,
+                    "target_directory": operation.dest_path,
+                    "archive_directory": original_op.archive_path,
                 },
                 ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
