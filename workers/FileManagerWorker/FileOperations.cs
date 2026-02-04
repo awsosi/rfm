@@ -625,7 +625,7 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Searches for files matching pattern
+        /// Searches for files and directories matching pattern
         /// </summary>
         public async Task<Dictionary<string, object>> SearchAsync(string path, string pattern, bool recursive = true)
         {
@@ -668,27 +668,40 @@ namespace FileManagerWorker
 
                     var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
-                    var files = Directory.GetFiles(resolvedPath, pattern, searchOption)
+                    // Search for both files and directories matching the pattern
+                    var matchedFiles = Directory.GetFiles(resolvedPath, pattern, searchOption)
                         .Select(f => new
                         {
                             path = virtualPrefix + "/" + f.Substring(prefixToRemove.Length).TrimStart('\\', '/'),
                             name = Path.GetFileName(f),
                             size = new FileInfo(f).Length,
-                            modified = File.GetLastWriteTimeUtc(f).ToString("o")
-                        })
-                        .ToList();
+                            modified = File.GetLastWriteTimeUtc(f).ToString("o"),
+                            is_directory = false
+                        });
+
+                    var matchedDirs = Directory.GetDirectories(resolvedPath, pattern, searchOption)
+                        .Select(d => new
+                        {
+                            path = virtualPrefix + "/" + d.Substring(prefixToRemove.Length).TrimStart('\\', '/'),
+                            name = Path.GetFileName(d),
+                            size = 0L,
+                            modified = Directory.GetLastWriteTimeUtc(d).ToString("o"),
+                            is_directory = true
+                        });
+
+                    var results = matchedFiles.Concat(matchedDirs).ToList();
 
                     return new Dictionary<string, object>
                     {
                         { "path", path },
                         { "pattern", pattern },
-                        { "count", files.Count },
-                        { "files", files }
+                        { "count", results.Count },
+                        { "files", results }
                     };
                 });
             });
 
-            Logger.Info("Search completed: {0} files found", result["count"]);
+            Logger.Info("Search completed: {0} items found (files and directories)", result["count"]);
             return result;
         }
 

@@ -266,15 +266,18 @@ async def search_files(
             )
 
             results = []
-            if response.error_details and "results" in response.error_details:
+            if response.error_details and "files" in response.error_details:
                 # Transform worker response format to FileInfo format
-                for item in response.error_details["results"]:
+                for item in response.error_details["files"]:
                     # Convert 'size' to 'size_bytes' for backward compatibility
                     if "size" in item and "size_bytes" not in item:
                         item["size_bytes"] = item.pop("size")
                     # Convert 'modified' to 'modified_at' for backward compatibility
                     if "modified" in item and "modified_at" not in item:
                         item["modified_at"] = item.pop("modified")
+                    # Add is_directory field if missing (defaults to False for files)
+                    if "is_directory" not in item:
+                        item["is_directory"] = False
                     results.append(FileInfo(**item))
 
             return FileSearchResponse(
