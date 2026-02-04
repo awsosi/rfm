@@ -125,7 +125,7 @@ class WorkerService:
                     command_id=str(completed_command.id),
                     file_count=completed_command.response_data.get("file_count") if completed_command.response_data else None,
                     total_size_bytes=completed_command.response_data.get("total_size_bytes") if completed_command.response_data else None,
-                    error_details=completed_command.response_data.get("error_details") if completed_command.response_data else None,
+                    error_details=completed_command.response_data if completed_command.response_data else None,
                 )
             else:
                 raise WorkerCommunicationError(
