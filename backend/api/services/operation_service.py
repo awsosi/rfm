@@ -185,65 +185,66 @@ class OperationService:
         Raises:
             OperationError: If operation fails
         """
-        # Get path lock to prevent concurrent operations on same path
-        async with self._get_path_lock(operation.source_path):
-            # Mark as in progress
-            operation.status = OperationStatus.IN_PROGRESS
-            operation.started_at = datetime.now(timezone.utc)
+        # Path locking is now handled at the API endpoint level (app.py)
+        # to prevent race conditions before operation creation
+
+        # Mark as in progress
+        operation.status = OperationStatus.IN_PROGRESS
+        operation.started_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        # Update in Elasticsearch
+        await self._index_operation_in_elasticsearch(operation, None, db)
+
+        try:
+            # Get workers
+            workers = await self._get_operation_workers(operation, db)
+
+            if len(workers) == 1:
+                # Single worker operation
+                result = await self._execute_single_worker(
+                    operation, workers[0], db
+                )
+            elif len(workers) == 2:
+                # Two-worker operation (coordinated transfer)
+                result = await self._execute_two_worker(
+                    operation, workers[0], workers[1], db
+                )
+            else:
+                raise OperationError(
+                    f"Invalid worker count: {len(workers)}. Expected 1 or 2."
+                )
+
+            # Mark as completed
+            operation.status = OperationStatus.COMPLETED
+            operation.completed_at = datetime.now(timezone.utc)
             await db.commit()
+
+            logger.info(f"Operation {operation.id} completed successfully")
 
             # Update in Elasticsearch
             await self._index_operation_in_elasticsearch(operation, None, db)
 
-            try:
-                # Get workers
-                workers = await self._get_operation_workers(operation, db)
+            return operation
 
-                if len(workers) == 1:
-                    # Single worker operation
-                    result = await self._execute_single_worker(
-                        operation, workers[0], db
-                    )
-                elif len(workers) == 2:
-                    # Two-worker operation (coordinated transfer)
-                    result = await self._execute_two_worker(
-                        operation, workers[0], workers[1], db
-                    )
-                else:
-                    raise OperationError(
-                        f"Invalid worker count: {len(workers)}. Expected 1 or 2."
-                    )
+        except Exception as exc:
+            # Mark as failed
+            operation.status = OperationStatus.FAILED
+            operation.error_msg = str(exc)
+            operation.completed_at = datetime.now(timezone.utc)
+            await db.commit()
 
-                # Mark as completed
-                operation.status = OperationStatus.COMPLETED
-                operation.completed_at = datetime.now(timezone.utc)
-                await db.commit()
+            logger.error(f"Operation {operation.id} failed: {exc}")
 
-                logger.info(f"Operation {operation.id} completed successfully")
+            # Update in Elasticsearch
+            await self._index_operation_in_elasticsearch(operation, None, db)
 
-                # Update in Elasticsearch
-                await self._index_operation_in_elasticsearch(operation, None, db)
+            # Attempt automatic rollback if enabled
+            # PUSH/PULL operations should not use auto-rollback (they have their own undo mechanism via PULL)
+            if self.settings.enable_auto_rollback and operation.type not in (OperationType.PUSH, OperationType.PULL):
+                await self._rollback_operation(operation, db)
 
-                return operation
-
-            except Exception as exc:
-                # Mark as failed
-                operation.status = OperationStatus.FAILED
-                operation.error_msg = str(exc)
-                operation.completed_at = datetime.now(timezone.utc)
-                await db.commit()
-
-                logger.error(f"Operation {operation.id} failed: {exc}")
-
-                # Update in Elasticsearch
-                await self._index_operation_in_elasticsearch(operation, None, db)
-
-                # Attempt automatic rollback if enabled
-                # PUSH/PULL operations should not use auto-rollback (they have their own undo mechanism via PULL)
-                if self.settings.enable_auto_rollback and operation.type not in (OperationType.PUSH, OperationType.PULL):
-                    await self._rollback_operation(operation, db)
-
-                raise OperationError(f"Operation failed: {exc}")
+            raise OperationError(f"Operation failed: {exc}")
 
     async def _execute_single_worker(
         self,

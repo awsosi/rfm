@@ -22,6 +22,34 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix PUSH/PULL Operations Stuck in PENDING (Double-Locking Deadlock)
+**Issue**: After collision prevention changes (commit bf78d76), ALL operations created but never executed - stayed in PENDING status forever. Users saw operations in history but they never transitioned to IN_PROGRESS or COMPLETED.
+
+**Root Cause**: Double-locking deadlock introduced by collision prevention fix. Path locks were added at TWO levels:
+1. API endpoint level (app.py:596, 677) - acquired lock BEFORE creating operation
+2. Execution level (operation_service.py:189) - `execute_operation()` tried to acquire SAME lock
+
+Since `asyncio.Lock()` is not reentrant, the same async task cannot acquire the same lock twice. Flow:
+1. Endpoint acquires lock for path "A:/test"
+2. Inside lock: creates operation (PENDING) ✅
+3. Inside lock: creates audit log ✅
+4. Inside lock: calls `execute_operation()` which tries to acquire same lock ❌
+5. **DEADLOCK** - hangs forever waiting for lock it already holds
+6. Operation never transitions to IN_PROGRESS
+7. Request times out or hangs indefinitely
+
+**Fix Applied**: Remove duplicate path lock from `execute_operation()` method (operation_service.py:188-189)
+- Path locking now only at API endpoint level (as intended by collision prevention fix)
+- Lock acquired BEFORE operation creation ensures atomicity
+- No need for second lock inside `execute_operation()` since caller already holds it
+
+**Files Modified**:
+- `backend/api/services/operation_service.py` (lines 188-189: removed async with lock block, unindented code)
+
+**Result**: ✅ Operations now execute immediately after creation; ✅ Proper status transitions (PENDING → IN_PROGRESS → COMPLETED); ✅ No deadlocks; ✅ Collision prevention still works correctly
+
+**Design Notes**: KISS approach - single lock point at API level is sufficient; collision prevention logic preserved; no duplicate locking needed
+
 ### 2026-02-04 - Improve Logging System for PUSH/PULL Operations
 **Issue**: Admin Panel Log Viewer and syslog showed minimal information for PUSH/PULL operations - only generic field names (source, path_b, path_c) that weren't descriptive, and PULL operations were missing complete path information (source and archive directories).
 
