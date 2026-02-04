@@ -23,6 +23,35 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Path A Pane Race Condition (Auto-Refresh Interruption)
+**Issue**: Users unable to complete typing in Path A address bar; navigation gets reset during auto-refresh; search results cleared by refresh
+**Root Cause**:
+  - Auto-refresh runs every 5 seconds, calling `refreshPane('a')` unconditionally
+  - `loadDirectory()` updates path input field via `setCurrentPath()`, erasing user's typing
+  - Multiple navigation/search operations could race with auto-refresh, causing:
+    - Path input value reset while user is typing
+    - Search results cleared mid-browse
+    - Navigation interrupted if auto-refresh triggers during directory load
+**Fix Applied**:
+  - Added `shouldSkipAutoRefresh()` function to detect user interaction before auto-refresh
+  - Checks multiple conditions to prevent refresh interruption:
+    1. **Navigation in progress**: `state.panes[paneId].isLoading` flag set during `loadDirectory()` and `handleSearch()`
+    2. **Path input has focus**: User is actively typing in address bar
+    3. **Recent input**: Skip refresh for 2 seconds after last keystroke
+    4. **Search input has focus**: User is typing search query
+  - Updated `loadDirectory()` and `handleSearch()` to set/clear `isLoading` flag in try/finally blocks
+  - Added event listeners to path input to track typing activity (`input`, `focus`, `blur` events)
+  - Added `userInteraction` state tracking to record last input timestamp
+**Files Modified**:
+  - `frontend/js/app.js`:
+    - Lines 62-109: Added `isLoading` flags to pane state, added `userInteraction` tracking
+    - Lines 186-245: Modified `startAutoRefresh()` to check conditions, added `shouldSkipAutoRefresh()`
+    - Lines 330-364: Added input event listeners in `setupPaneControls()`
+    - Lines 521-588: Added `isLoading` flag management in `loadDirectory()` (set at start, cleared in finally)
+    - Lines 714-754: Added `isLoading` flag management in `handleSearch()` (set at start, cleared in finally)
+**Result**: ✅ Users can complete typing without interruption; ✅ Navigation never gets reset; ✅ Search results remain stable during browsing
+**Design Notes**: KISS approach - simple boolean flags and focus detection; DRY - reusable `shouldSkipAutoRefresh()` function; graceful degradation - auto-refresh resumes immediately after user interaction ends
+
 ### 2026-02-04 - Fix %appdata% Path Crash (Missing Logger Import)
 **Issue**: When users typed `%appdata%` (or any other path that caused exceptions) into Path A address bar, the app returned 503 Service Unavailable with NameError
 **Root Cause**:
