@@ -33,6 +33,10 @@ from models import (
     User,
 )
 
+# Global lock dictionary for path-based operation locking
+# This ensures locks are shared across all OperationService instances
+_operation_locks: dict[str, asyncio.Lock] = {}
+
 
 class OperationError(Exception):
     """Base exception for operation errors."""
@@ -58,7 +62,6 @@ class OperationService:
         """
         self.settings = settings
         self.worker_service = worker_service
-        self._operation_locks: dict[str, asyncio.Lock] = {}
 
     async def _index_operation_in_elasticsearch(
         self, operation: Operation, user_name: Optional[str] = None, db: Optional[AsyncSession] = None
@@ -236,7 +239,8 @@ class OperationService:
                 await self._index_operation_in_elasticsearch(operation, None, db)
 
                 # Attempt automatic rollback if enabled
-                if self.settings.enable_auto_rollback:
+                # PUSH/PULL operations should not use auto-rollback (they have their own undo mechanism via PULL)
+                if self.settings.enable_auto_rollback and operation.type not in (OperationType.PUSH, OperationType.PULL):
                     await self._rollback_operation(operation, db)
 
                 raise OperationError(f"Operation failed: {exc}")
@@ -558,15 +562,19 @@ class OperationService:
         """
         Get lock for specific file path to prevent concurrent operations.
 
+        Uses global lock dictionary to ensure locks are shared across all
+        OperationService instances and prevent concurrent operations on the
+        same path from different requests.
+
         Args:
             path: File path
 
         Returns:
             Lock for path
         """
-        if path not in self._operation_locks:
-            self._operation_locks[path] = asyncio.Lock()
-        return self._operation_locks[path]
+        if path not in _operation_locks:
+            _operation_locks[path] = asyncio.Lock()
+        return _operation_locks[path]
 
     async def create_push_operation(
         self,
@@ -784,6 +792,24 @@ class OperationService:
         )
 
         try:
+            # Verify source directory exists before proceeding
+            # This prevents race conditions where another user already moved/deleted the directory
+            verify_command = WorkerRequest(
+                command="list",
+                source_path=operation.source_path,
+            )
+            verify_response = await self.worker_service.send_command(
+                worker, verify_command, db
+            )
+
+            if verify_response.status != "success":
+                raise OperationError(
+                    f"Source directory {operation.source_path} does not exist or is not accessible. "
+                    f"It may have been moved or deleted by another operation."
+                )
+
+            logger.info(f"PUSH: Verified source directory {operation.source_path} exists")
+
             # Step 1: Copy to PATH_B
             logger.info(f"PUSH Step 1: Copying {operation.source_path} to {operation.dest_path}")
             copy_response = await self.worker_service.copy_file(

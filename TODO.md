@@ -23,6 +23,52 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Concurrent PUSH/PULL Operations Race Condition (Phantom Operations)
+**Issue**: When 2 users push/pull the same directory concurrently, a phantom third operation appears with incorrect directory paths (shows B:/example when actual direction was A->B). The phantom operation completes successfully but makes no logical sense and isn't properly logged.
+
+**Example from Operation History**:
+```
+39  PUSH  Completed     B:/anotherdir  user1  26m ago  (phantom - wrong source!)
+38  PUSH  Rolled Back   A:/anotherdir  user1  26m ago
+37  PUSH  Completed     A:/anotherdir  user2  26m ago
+```
+
+**Root Causes**:
+1. **Auto-Rollback Bug**: When user1's operation failed (because user2 already moved the directory), auto-rollback kicked in and called `_get_rollback_type(OperationType.PUSH)`. Since PUSH wasn't in the rollback map, it returned PUSH as the rollback type (wrong!). This created a phantom PUSH operation with `source_path=B:/anotherdir` (from the failed operation's dest_path).
+2. **Shared Lock Failure**: Path locks were stored in instance variable `self._operation_locks`, but each API request creates a new OperationService instance. This meant locks weren't shared across requests, defeating their purpose entirely.
+3. **Lock Timing**: Path lock was acquired inside `execute_operation()` after the operation was already created in the database. Both users could create operations before either acquired the lock, leading to race conditions.
+4. **No Existence Check**: PUSH operations didn't verify the source directory still existed before executing, so concurrent operations could attempt to push directories that were already moved/deleted by another user.
+
+**Fixes Applied**:
+1. **Disable Auto-Rollback for PUSH/PULL** (operation_service.py:240):
+   - Added condition: `operation.type not in (OperationType.PUSH, OperationType.PULL)`
+   - PUSH/PULL have their own undo mechanism (PULL reverts PUSH), so auto-rollback is inappropriate and creates phantom operations
+
+2. **Global Lock Dictionary** (operation_service.py:36-38):
+   - Moved `_operation_locks` from instance variable to module-level global: `_operation_locks: dict[str, asyncio.Lock] = {}`
+   - Updated `_get_path_lock()` to use global dictionary (line 575-576)
+   - Ensures locks are shared across ALL OperationService instances and requests
+
+3. **Early Lock Acquisition** (app.py:579, 659):
+   - Moved path lock acquisition to API endpoint level, BEFORE creating operations
+   - PUSH endpoint: `async with operation_service._get_path_lock(request_data.source_path)`
+   - PULL endpoint: `async with operation_service._get_path_lock(original_op.original_path)`
+   - Entire create+execute flow is now atomic for a given path
+
+4. **Source Directory Verification** (operation_service.py:788-804):
+   - Added existence check in `_execute_push_operation()` before proceeding
+   - Uses worker `list` command to verify directory exists and is accessible
+   - Provides clear error message: "Source directory does not exist or is not accessible. It may have been moved or deleted by another operation."
+   - Prevents attempting operations on non-existent paths
+
+**Files Modified**:
+- `backend/api/services/operation_service.py` (lines 36-38, 240, 575-576, 788-804)
+- `backend/api/app.py` (lines 579, 648-659)
+
+**Result**: ✅ No more phantom operations; ✅ Concurrent operations properly serialized; ✅ Clear error messages when conflicts occur; ✅ Operations marked as FAILED (not ROLLED_BACK with phantom operations)
+
+**Design Notes**: KISS approach - global lock dictionary, early lock acquisition, simple existence check; DRY - reusable global lock mechanism applies to all operation types; Proper error handling - failed operations stay FAILED without creating phantom rollback operations
+
 ### 2026-02-04 - Fix Path A Pane Race Condition (Auto-Refresh Interruption)
 **Issue**: Users unable to complete typing in Path A address bar; navigation gets reset during auto-refresh; search results cleared by refresh
 **Root Cause**:
