@@ -179,9 +179,13 @@ namespace FileManagerWorker
                 Console.WriteLine();
                 Console.WriteLine("--- Path Prefix Configuration ---");
                 Console.WriteLine("Configure the base paths for virtual drives A:, B:, and C:");
-                Console.WriteLine("  - Path A: User workspace (source files)");
-                Console.WriteLine("  - Path B: Archive location (backed up files)");
-                Console.WriteLine("  - Path C: Final storage (moved files)");
+                Console.WriteLine("  - Path A: Source files");
+                Console.WriteLine("  - Path B: Target (destination for PUSH operations)");
+                Console.WriteLine("  - Path C: Archive (final storage after PUSH)");
+                Console.WriteLine();
+                Console.WriteLine("Operation logic:");
+                Console.WriteLine("  - PUSH: A -> B (copy) + A -> C (move)");
+                Console.WriteLine("  - PULL: B -> A (restore from target)");
                 Console.WriteLine();
                 Console.Write("Enter Path A Prefix (default: C:\\PathA): ");
                 string pathAPrefix = Console.ReadLine();
