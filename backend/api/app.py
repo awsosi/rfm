@@ -524,9 +524,9 @@ async def push_operation(
             }
         )
 
+        # Use model_copy to update immutable Pydantic model
         op_response = OperationResponse.model_validate(operation)
-        op_response.user_name = current_user.username
-        return op_response
+        return op_response.model_copy(update={"user_name": current_user.username})
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -585,9 +585,9 @@ async def pull_operation(
             }
         )
 
+        # Use model_copy to update immutable Pydantic model
         op_response = OperationResponse.model_validate(operation)
-        op_response.user_name = current_user.username
-        return op_response
+        return op_response.model_copy(update={"user_name": current_user.username})
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
