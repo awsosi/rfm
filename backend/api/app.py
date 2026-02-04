@@ -574,56 +574,59 @@ async def push_operation(
     worker_service = WorkerService(settings)
     operation_service = OperationService(settings, worker_service)
 
-    try:
-        # Create and execute PUSH operation
-        operation = await operation_service.create_push_operation(
-            user=current_user,
-            source_dir=request_data.source_path,
-            worker_id=request_data.worker_id,
-            db=db,
-        )
-
-        # Log operation
-        await AuditLogger.log_operation(
-            user_id=current_user.id,
-            operation_id=operation.id,
-            action="push",
-            details={
-                "source": request_data.source_path,
-                "path_b": operation.dest_path,
-                "path_c": operation.archive_path,
-            },
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
-
-        # Execute operation
-        operation = await operation_service.execute_operation(operation, db)
-
-        # Refresh operation to ensure all attributes are loaded after commit
-        await db.refresh(operation)
-
-        # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+    # Acquire path lock BEFORE creating the operation to prevent race conditions
+    # where two users try to push the same directory concurrently
+    async with operation_service._get_path_lock(request_data.source_path):
         try:
-            from api.websocket_manager import ws_manager
-            await ws_manager.broadcast(
-                {
-                    "type": "operation_update",
-                    "operation_id": operation.id,
-                    "status": operation.status.value,
-                    "user": current_user.username,
-                },
-                topic="operations"
+            # Create and execute PUSH operation
+            operation = await operation_service.create_push_operation(
+                user=current_user,
+                source_dir=request_data.source_path,
+                worker_id=request_data.worker_id,
+                db=db,
             )
-        except Exception as ws_exc:
-            logger.warning(f"Failed to broadcast operation update: {ws_exc}")
 
-        # Use model_copy to update immutable Pydantic model
-        op_response = OperationResponse.model_validate(operation)
-        return op_response.model_copy(update={"user_name": current_user.username})
+            # Log operation
+            await AuditLogger.log_operation(
+                user_id=current_user.id,
+                operation_id=operation.id,
+                action="push",
+                details={
+                    "source": request_data.source_path,
+                    "path_b": operation.dest_path,
+                    "path_c": operation.archive_path,
+                },
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
 
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+            # Execute operation
+            operation = await operation_service.execute_operation(operation, db)
+
+            # Refresh operation to ensure all attributes are loaded after commit
+            await db.refresh(operation)
+
+            # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+            try:
+                from api.websocket_manager import ws_manager
+                await ws_manager.broadcast(
+                    {
+                        "type": "operation_update",
+                        "operation_id": operation.id,
+                        "status": operation.status.value,
+                        "user": current_user.username,
+                    },
+                    topic="operations"
+                )
+            except Exception as ws_exc:
+                logger.warning(f"Failed to broadcast operation update: {ws_exc}")
+
+            # Use model_copy to update immutable Pydantic model
+            op_response = OperationResponse.model_validate(operation)
+            return op_response.model_copy(update={"user_name": current_user.username})
+
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/api/operations/pull", response_model=OperationResponse)
@@ -642,55 +645,67 @@ async def pull_operation(
     worker_service = WorkerService(settings)
     operation_service = OperationService(settings, worker_service)
 
-    try:
-        # Create and execute PULL operation
-        operation = await operation_service.create_pull_operation(
-            user=current_user,
-            original_operation_id=request_data.operation_id,
-            worker_id=request_data.worker_id,
-            db=db,
-        )
+    # Fetch original operation to get the lock path
+    from sqlalchemy import select
+    from models import Operation as OperationModel
+    stmt = select(OperationModel).where(OperationModel.id == request_data.operation_id)
+    result = await db.execute(stmt)
+    original_op = result.scalar_one_or_none()
 
-        # Log operation
-        await AuditLogger.log_operation(
-            user_id=current_user.id,
-            operation_id=operation.id,
-            action="pull",
-            details={
-                "original_operation_id": request_data.operation_id,
-                "restore_to": operation.dest_path,
-            },
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
+    if not original_op or not original_op.original_path:
+        raise HTTPException(status_code=400, detail="Original operation not found or has no original path")
 
-        # Execute operation
-        operation = await operation_service.execute_operation(operation, db)
-
-        # Refresh operation to ensure all attributes are loaded after commit
-        await db.refresh(operation)
-
-        # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+    # Acquire path lock on the destination (original_path) to prevent race conditions
+    async with operation_service._get_path_lock(original_op.original_path):
         try:
-            from api.websocket_manager import ws_manager
-            await ws_manager.broadcast(
-                {
-                    "type": "operation_update",
-                    "operation_id": operation.id,
-                    "status": operation.status.value,
-                    "user": current_user.username,
-                },
-                topic="operations"
+            # Create and execute PULL operation
+            operation = await operation_service.create_pull_operation(
+                user=current_user,
+                original_operation_id=request_data.operation_id,
+                worker_id=request_data.worker_id,
+                db=db,
             )
-        except Exception as ws_exc:
-            logger.warning(f"Failed to broadcast operation update: {ws_exc}")
 
-        # Use model_copy to update immutable Pydantic model
-        op_response = OperationResponse.model_validate(operation)
-        return op_response.model_copy(update={"user_name": current_user.username})
+            # Log operation
+            await AuditLogger.log_operation(
+                user_id=current_user.id,
+                operation_id=operation.id,
+                action="pull",
+                details={
+                    "original_operation_id": request_data.operation_id,
+                    "restore_to": operation.dest_path,
+                },
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
 
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+            # Execute operation
+            operation = await operation_service.execute_operation(operation, db)
+
+            # Refresh operation to ensure all attributes are loaded after commit
+            await db.refresh(operation)
+
+            # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+            try:
+                from api.websocket_manager import ws_manager
+                await ws_manager.broadcast(
+                    {
+                        "type": "operation_update",
+                        "operation_id": operation.id,
+                        "status": operation.status.value,
+                        "user": current_user.username,
+                    },
+                    topic="operations"
+                )
+            except Exception as ws_exc:
+                logger.warning(f"Failed to broadcast operation update: {ws_exc}")
+
+            # Use model_copy to update immutable Pydantic model
+            op_response = OperationResponse.model_validate(operation)
+            return op_response.model_copy(update={"user_name": current_user.username})
+
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/api/operations/history", response_model=List[OperationResponse])
