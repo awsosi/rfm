@@ -23,6 +23,30 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix File Manager API 503 Error (Nested error_details)
+**Issue**: After recent changes, file listing (Path A pane) stopped working completely - returned 503 Service Unavailable error
+**Root Cause**:
+  - Previous commit changed `worker_service.py` to pass entire `response_data` as `error_details`
+  - However, `worker.py` wraps worker's error_details inside a `response_dict`, creating nested structure:
+    ```json
+    {
+      "file_count": 10,
+      "total_size_bytes": 0,
+      "error_details": {
+        "items": [...],
+        "total": 10
+      }
+    }
+    ```
+  - App.py expected `error_details["items"]` but actual structure was `error_details["error_details"]["items"]`
+**Fixes Applied**:
+  1. **Backend - List Directory**: Updated to handle both nested and flat error_details structures for backward compatibility
+  2. **Backend - Search Files**: Applied same fix to search endpoint
+  3. **Backend - Error Logging**: Added proper error logging to diagnose 503 errors instead of generic exceptions
+**Files Modified**:
+  - `backend/api/app.py` (lines 156-183 for list, 283-313 for search, 212-214 for error logging)
+**Result**: ✅ File listing works again; ✅ Search works with nested structure; ✅ Better error visibility
+
 ### 2026-02-04 - Fix Search 503 Error and Layout Adjustment
 **Issues**:
   1. Search in Path A pane returned 503 Service Unavailable error
