@@ -2,9 +2,81 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** PUSH OPERATION FIXED ✅ - Credential Storage Rewritten
+> **Status:** CROSS-VOLUME MOVES & REAL-TIME UI FIXED ✅
 >
 > **Ostatnia aktualizacja:** 2026-02-04
+
+---
+
+## 🔧 LATEST FIXES - Cross-Volume Moves & Real-Time UI (2026-02-04)
+
+### Issue 1: Cross-Volume Move Operation Failure
+**Error**: `System.IO.IOException: Source and destination path must have identical roots. Move will not work across volumes.`
+
+**Root Cause**:
+- Windows `Directory.Move()` and `File.Move()` don't work across different drive letters (volumes)
+- PUSH operation tries to move from A: to C: (different volumes) → fails
+- Impersonation was working correctly, but the move API itself doesn't support cross-volume operations
+
+**Fix Implementation** (FileOperations.cs):
+```csharp
+// Detect cross-volume moves
+var sourceRoot = Path.GetPathRoot(resolvedSource);
+var destRoot = Path.GetPathRoot(resolvedDest);
+var isCrossVolume = !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase);
+
+if (isCrossVolume) {
+    // Use copy + delete strategy
+    File.Copy(resolvedSource, resolvedDest, true);
+    File.Delete(resolvedSource);
+} else {
+    // Use fast native move
+    File.Move(resolvedSource, resolvedDest);
+}
+```
+
+**Benefits**:
+- ✅ Works across different drives (A: → C:, etc.)
+- ✅ Maintains fast native Move() for same-volume operations
+- ✅ Properly handles both files and directories
+- ✅ Logging shows which strategy is used
+
+### Issue 2: UI Not Updating in Real-Time
+**Problem**: Operation History and Path A file listing required manual refresh to see changes
+
+**Fix Implementation** (app.js):
+
+**1. Auto-Refresh Intervals**:
+```javascript
+// Operation History refreshes every 3 seconds
+state.autoRefreshIntervals.operationHistory = setInterval(async () => {
+    await loadOperationHistory(false);
+}, 3000);
+
+// File listing refreshes every 5 seconds
+state.autoRefreshIntervals.fileList = setInterval(async () => {
+    await refreshPane('a');
+}, 5000);
+```
+
+**2. Enhanced WebSocket Event Handling**:
+```javascript
+// Immediate refresh when operations complete
+if (data.status === 'completed' || data.status === 'failed') {
+    await loadOperationHistory(false);
+    await refreshPane('a');
+}
+```
+
+**Benefits**:
+- ✅ Operation History updates automatically (no manual refresh needed)
+- ✅ File listings update automatically after operations complete
+- ✅ WebSocket events trigger immediate updates for faster feedback
+- ✅ Proper cleanup on logout
+
+### Resolution
+All changes committed and pushed to branch: `claude/fix-file-manager-operation-8MFDq`
+- Commit: `fix: Handle cross-volume moves and implement real-time UI updates`
 
 ---
 
