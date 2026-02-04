@@ -23,6 +23,12 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Path A Search Not Showing Files
+**Issue**: File/directory search in Path A pane returned no results for files (e.g., "test.txt")
+**Root Cause**: VF redesign filter removed all non-directory results from search
+**Fixed**: Removed directory-only filter from `handleSearch()` - search now returns both files and directories
+**Files**: `frontend/js/app.js:620-628`
+
 ### 2026-02-04 - Complete Fix for PR#79 and PR#80 Issues
 **Issue**: Operations succeeded but returned 500 error; selections lost on refresh; could re-pull already-reverted operations
 **Root Causes**:

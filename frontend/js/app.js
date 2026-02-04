@@ -619,13 +619,7 @@ async function handleSearch(paneId) {
 
     try {
         // Pass workerId explicitly to search function
-        let files = await searchFiles(currentPath, pattern, state.workerId);
-
-        // VF Redesign: Filter to show only directories
-        const isVFRedesign = document.body.classList.contains('vf-redesign');
-        if (isVFRedesign) {
-            files = files.filter(file => file.is_directory);
-        }
+        const files = await searchFiles(currentPath, pattern, state.workerId);
 
         state.panes[paneId].files = files;
 
