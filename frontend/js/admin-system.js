@@ -358,21 +358,36 @@ class AdminSystem {
         tbody.innerHTML = '';
 
         if (response.logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="no-data">No logs found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="no-data">No logs found</td></tr>';
             return;
         }
 
         response.logs.forEach(log => {
+            // Extract source and target directories from details_json for push/pull operations
+            let sourceDir = '-';
+            let targetDir = '-';
+
+            if (log.details && (log.action === 'push' || log.action === 'pull')) {
+                if (log.details.source_directory) {
+                    sourceDir = log.details.source_directory;
+                }
+                if (log.details.target_directory) {
+                    targetDir = log.details.target_directory;
+                }
+            }
+
+            // Format timestamp as relative time
+            const timestamp = this.formatRelativeTime(log.timestamp);
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${new Date(log.timestamp).toLocaleString()}</td>
-                <td><span class="badge ${this.getLogLevelClass(log.level)}">${log.level}</span></td>
-                <td>${log.username || 'System'}</td>
+                <td>${timestamp}</td>
                 <td>${this.escapeHtml(log.action)}</td>
+                <td>${this.escapeHtml(sourceDir)}</td>
+                <td>${this.escapeHtml(targetDir)}</td>
+                <td>${log.user_id || '-'}</td>
+                <td>${this.escapeHtml(log.username || 'System')}</td>
                 <td>${log.ip_address || 'N/A'}</td>
-                <td>
-                    ${log.details ? `<button class="btn btn-sm btn-secondary" onclick="adminSystem.showLogDetails(${log.id})">Details</button>` : 'N/A'}
-                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -539,6 +554,37 @@ class AdminSystem {
         if (days > 0) return `${days}d ${hours}h ${minutes}m`;
         if (hours > 0) return `${hours}h ${minutes}m`;
         return `${minutes}m`;
+    }
+
+    formatRelativeTime(timestamp) {
+        if (!timestamp) return 'N/A';
+
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return 'Invalid date';
+
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) {
+            return 'Just now';
+        } else if (diffMins < 60) {
+            return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+        } else if (diffDays < 7) {
+            return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+        }
+
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     }
 
     escapeHtml(text) {
