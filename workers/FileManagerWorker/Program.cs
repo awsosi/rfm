@@ -175,6 +175,29 @@ namespace FileManagerWorker
                     Console.WriteLine();
                 }
 
+                // Prompt for Path Prefixes
+                Console.WriteLine();
+                Console.WriteLine("--- Path Prefix Configuration ---");
+                Console.WriteLine("Configure the base paths for virtual drives A:, B:, and C:");
+                Console.WriteLine("  - Path A: User workspace (source files)");
+                Console.WriteLine("  - Path B: Archive location (backed up files)");
+                Console.WriteLine("  - Path C: Final storage (moved files)");
+                Console.WriteLine();
+                Console.Write("Enter Path A Prefix (default: C:\\PathA): ");
+                string pathAPrefix = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(pathAPrefix))
+                    pathAPrefix = @"C:\PathA";
+
+                Console.Write("Enter Path B Prefix (default: C:\\PathB): ");
+                string pathBPrefix = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(pathBPrefix))
+                    pathBPrefix = @"C:\PathB";
+
+                Console.Write("Enter Path C Prefix (default: C:\\PathC): ");
+                string pathCPrefix = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(pathCPrefix))
+                    pathCPrefix = @"C:\PathC";
+
                 // Generate mTLS certificate
                 Console.WriteLine();
                 Console.WriteLine("--- Generating mTLS Certificate ---");
@@ -200,7 +223,7 @@ namespace FileManagerWorker
                 // Save to secure storage using DPAPI
                 Console.WriteLine();
                 Console.WriteLine("--- Saving Configuration ---");
-                if (!SecureConfigStorage.SaveConfiguration(apiUrl, serviceUser, servicePassword))
+                if (!SecureConfigStorage.SaveConfiguration(apiUrl, serviceUser, servicePassword, pathAPrefix, pathBPrefix, pathCPrefix))
                 {
                     Console.WriteLine("ERROR: Failed to save configuration to secure storage");
                     return 1;
@@ -402,7 +425,8 @@ namespace FileManagerWorker
                 Console.WriteLine();
 
                 // Verify configuration exists in secure storage
-                if (!SecureConfigStorage.LoadConfiguration(out string apiUrl, out string serviceUser, out string servicePassword))
+                if (!SecureConfigStorage.LoadConfiguration(out string apiUrl, out string serviceUser, out string servicePassword,
+                    out string pathAPrefix, out string pathBPrefix, out string pathCPrefix))
                 {
                     Console.WriteLine("ERROR: Configuration not found in secure storage");
                     Console.WriteLine();
@@ -418,6 +442,9 @@ namespace FileManagerWorker
                 Console.WriteLine($"  Config file: {SecureConfigStorage.GetConfigFilePath()}");
                 Console.WriteLine($"  API URL: {apiUrl}");
                 Console.WriteLine($"  Samba User: {(string.IsNullOrWhiteSpace(serviceUser) ? "(none - will use Network Service permissions)" : serviceUser)}");
+                Console.WriteLine($"  Path A: {pathAPrefix}");
+                Console.WriteLine($"  Path B: {pathBPrefix}");
+                Console.WriteLine($"  Path C: {pathCPrefix}");
                 Console.WriteLine();
                 Console.WriteLine("Installing service...");
                 Console.WriteLine();
