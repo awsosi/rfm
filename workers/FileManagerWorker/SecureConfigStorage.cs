@@ -28,12 +28,16 @@ namespace FileManagerWorker
             public string ApiUrl { get; set; }
             public string ServiceUser { get; set; }
             public string ServicePassword { get; set; }
+            public string PathAPrefix { get; set; }
+            public string PathBPrefix { get; set; }
+            public string PathCPrefix { get; set; }
         }
 
         /// <summary>
         /// Save configuration securely
         /// </summary>
-        public static bool SaveConfiguration(string apiUrl, string serviceUser, string servicePassword)
+        public static bool SaveConfiguration(string apiUrl, string serviceUser, string servicePassword,
+            string pathAPrefix = null, string pathBPrefix = null, string pathCPrefix = null)
         {
             try
             {
@@ -49,7 +53,10 @@ namespace FileManagerWorker
                 {
                     ApiUrl = apiUrl,
                     ServiceUser = serviceUser ?? "",
-                    ServicePassword = servicePassword ?? ""
+                    ServicePassword = servicePassword ?? "",
+                    PathAPrefix = pathAPrefix ?? @"C:\PathA",
+                    PathBPrefix = pathBPrefix ?? @"C:\PathB",
+                    PathCPrefix = pathCPrefix ?? @"C:\PathC"
                 };
 
                 // Serialize to JSON
@@ -82,11 +89,15 @@ namespace FileManagerWorker
         /// <summary>
         /// Load configuration securely
         /// </summary>
-        public static bool LoadConfiguration(out string apiUrl, out string serviceUser, out string servicePassword)
+        public static bool LoadConfiguration(out string apiUrl, out string serviceUser, out string servicePassword,
+            out string pathAPrefix, out string pathBPrefix, out string pathCPrefix)
         {
             apiUrl = null;
             serviceUser = null;
             servicePassword = null;
+            pathAPrefix = null;
+            pathBPrefix = null;
+            pathCPrefix = null;
 
             try
             {
@@ -114,6 +125,9 @@ namespace FileManagerWorker
                 apiUrl = config.ApiUrl;
                 serviceUser = config.ServiceUser;
                 servicePassword = config.ServicePassword;
+                pathAPrefix = config.PathAPrefix;
+                pathBPrefix = config.PathBPrefix;
+                pathCPrefix = config.PathCPrefix;
 
                 Logger.Info("Configuration loaded from secure storage: {0}", ConfigFilePath);
                 return true;

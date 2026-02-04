@@ -17,11 +17,35 @@
 - [ ] Admin Panel: Change PATH_B and PATH_C → verify new operations use new paths
 - [ ] Admin Panel: Verify non-admin users cannot change paths
 - [ ] Worker: Integration testing in staging environment
-- [ ] Worker: Verify PathCPrefix configuration updates
 
 ---
 
 ## 🔧 RECENT FIXES (Last 7 Days)
+
+### 2026-02-04 - Fix Worker PathC/PathB/PathA Prefix Configuration
+**Issue**: PathCPrefix (and PathAPrefix, PathBPrefix) set in App.config were not being applied. The `/config` wizard didn't prompt for these values and didn't store them in secure storage (DPAPI), causing workers to always use hardcoded defaults.
+
+**Root Cause**: Path prefixes were only read from App.config file with hardcoded defaults, but were NOT stored in the SecureConfigStorage (DPAPI) system. The `/config` wizard only saved ApiUrl, ServiceUser, and ServicePassword to secure storage.
+
+**Fixes Applied**:
+1. **SecureConfigStorage.cs**: Added PathAPrefix, PathBPrefix, PathCPrefix to ConfigData class (lines 31-33)
+2. **SecureConfigStorage.cs**: Updated SaveConfiguration() to accept and store path prefixes with defaults (lines 39-40, 57-59)
+3. **SecureConfigStorage.cs**: Updated LoadConfiguration() to return path prefixes (lines 92-93, 98-100, 128-130)
+4. **Program.cs**: Added path prefix prompts in `/config` wizard with defaults (lines 178-199)
+5. **Program.cs**: Updated SaveConfiguration call to include path prefixes (line 226)
+6. **Program.cs**: Updated HandleInstall to load and display path prefixes (lines 428-429, 445-447)
+7. **WorkerService.cs**: Updated LoadConfiguration to load paths from secure storage with App.config fallback (lines 255-257, 262-263, 307-319, 327-329)
+
+**Files Modified**:
+- `workers/FileManagerWorker/SecureConfigStorage.cs` (ConfigData, SaveConfiguration, LoadConfiguration)
+- `workers/FileManagerWorker/Program.cs` (HandleConfig, HandleInstall)
+- `workers/FileManagerWorker/WorkerService.cs` (LoadConfiguration)
+
+**Result**: ✅ Path prefixes now properly configured during `/config` wizard; ✅ Stored securely in DPAPI; ✅ App.config serves as fallback for backward compatibility; ✅ Worker logs show loaded path prefixes on startup
+
+**Configuration**: Run `FileManagerWorker.exe /config` and enter path prefixes when prompted (or press Enter for defaults: C:\PathA, C:\PathB, C:\PathC)
+
+**Design Notes**: KISS approach - added path configuration to existing secure storage system; DRY - reused existing DPAPI encryption; backward compatible - App.config still works as fallback
 
 ### 2026-02-04 - Improve Audit Logs with Real Client IP and Enhanced Syslog
 **Issue**: Application running behind Traefik reverse proxy captured Traefik's IP instead of real client IP. Audit logs needed real client IP, and syslog messages lacked operation details (directory, username).

@@ -252,11 +252,15 @@ namespace FileManagerWorker
                 string apiUrl = null;
                 string serviceUser = null;
                 string servicePassword = null;
+                string pathAPrefix = null;
+                string pathBPrefix = null;
+                string pathCPrefix = null;
 
                 try
                 {
                     // Try to load from secure storage
-                    if (SecureConfigStorage.LoadConfiguration(out apiUrl, out serviceUser, out servicePassword))
+                    if (SecureConfigStorage.LoadConfiguration(out apiUrl, out serviceUser, out servicePassword,
+                        out pathAPrefix, out pathBPrefix, out pathCPrefix))
                     {
                         Logger.Info("Configuration loaded from secure storage: {0}", SecureConfigStorage.GetConfigFilePath());
                     }
@@ -300,15 +304,29 @@ namespace FileManagerWorker
                     return null;
                 }
 
+                // Fallback to App.config for path prefixes if not in secure storage
+                if (string.IsNullOrEmpty(pathAPrefix))
+                {
+                    pathAPrefix = ConfigurationManager.AppSettings["PathAPrefix"] ?? @"C:\PathA";
+                }
+                if (string.IsNullOrEmpty(pathBPrefix))
+                {
+                    pathBPrefix = ConfigurationManager.AppSettings["PathBPrefix"] ?? @"C:\PathB";
+                }
+                if (string.IsNullOrEmpty(pathCPrefix))
+                {
+                    pathCPrefix = ConfigurationManager.AppSettings["PathCPrefix"] ?? @"C:\PathC";
+                }
+
                 // Load non-sensitive settings from App.config
                 var config = new ServiceConfiguration
                 {
                     ApiUrl = apiUrl,
                     ServiceUser = serviceUser,
                     ServicePassword = servicePassword,
-                    PathAPrefix = ConfigurationManager.AppSettings["PathAPrefix"] ?? @"C:\PathA",
-                    PathBPrefix = ConfigurationManager.AppSettings["PathBPrefix"] ?? @"C:\PathB",
-                    PathCPrefix = ConfigurationManager.AppSettings["PathCPrefix"] ?? @"C:\PathC",
+                    PathAPrefix = pathAPrefix,
+                    PathBPrefix = pathBPrefix,
+                    PathCPrefix = pathCPrefix,
                     PollingIntervalSeconds = int.Parse(ConfigurationManager.AppSettings["PollingIntervalSeconds"] ?? "5"),
                     UseMtls = bool.Parse(ConfigurationManager.AppSettings["UseMtls"] ?? "true")
                 };
