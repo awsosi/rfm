@@ -1142,12 +1142,12 @@
         const logsLimit = 100;
 
         async function loadLogs(append = false) {
-            const container = document.getElementById('log-entries');
+            const tbody = document.getElementById('logs-table-body');
             const loading = document.getElementById('logs-loading');
 
             if (!append) {
                 logsOffset = 0;
-                container.innerHTML = '';
+                tbody.innerHTML = '';
             }
 
             loading.classList.remove('hidden');
@@ -1156,27 +1156,79 @@
                 const level = document.getElementById('log-level-filter')?.value;
                 const search = document.getElementById('log-search')?.value;
 
-                const logs = await getLogs({ level, search, offset: logsOffset, limit: logsLimit });
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (level) params.append('level', level);
+                if (search) params.append('search_query', search);
+                params.append('offset', logsOffset);
+                params.append('limit', logsLimit);
+
+                const response = await apiRequest(`/api/admin/logs/stream?${params.toString()}`);
+
+                if (!response || !response.logs) {
+                    throw new Error('Invalid response from server');
+                }
+
+                const logs = response.logs;
 
                 if (logs.length === 0 && !append) {
-                    container.innerHTML = '<div class="no-logs">No audit logs found.</div>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="no-data">No audit logs found</td></tr>';
                 }
 
                 logs.forEach(log => {
-                    const entry = document.createElement('div');
-                    entry.className = 'log-entry';
-                    entry.innerHTML = `
-                        <span class="log-timestamp">${formatDate(log.timestamp)}</span>
-                        <span class="log-action">${escapeHtml(log.action)}</span>
-                        ${log.user_id ? `<span class="log-user">User ID: ${log.user_id}</span>` : ''}
-                        ${log.ip_address ? `<span class="log-ip">IP: ${escapeHtml(log.ip_address)}</span>` : ''}
+                    // Extract source and target directories from details
+                    let sourceDir = '-';
+                    let targetDir = '-';
+
+                    if (log.details && (log.action === 'push' || log.action === 'pull')) {
+                        if (log.details.source_directory) {
+                            sourceDir = log.details.source_directory;
+                        }
+                        if (log.details.target_directory) {
+                            targetDir = log.details.target_directory;
+                        }
+                    }
+
+                    // Format full timestamp as YYYY-MM-DD HH:mm:SS.milliseconds
+                    let fullTimestamp = 'N/A';
+                    if (log.timestamp) {
+                        const date = new Date(log.timestamp);
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+                        fullTimestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+                    }
+
+                    // Format relative time
+                    const relativeTime = formatRelativeTime(log.timestamp);
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${fullTimestamp}</td>
+                        <td>${relativeTime}</td>
+                        <td>${escapeHtml(log.action)}</td>
+                        <td>${escapeHtml(sourceDir)}</td>
+                        <td>${escapeHtml(targetDir)}</td>
+                        <td>${log.user_id || '-'}</td>
+                        <td>${escapeHtml(log.username || 'System')}</td>
+                        <td>${log.ip_address || 'N/A'}</td>
                     `;
-                    container.appendChild(entry);
+                    tbody.appendChild(tr);
                 });
 
                 logsOffset += logs.length;
 
-                if (logs.length < logsLimit) {
+                // Update pagination info
+                const paginationInfo = document.getElementById('logs-pagination-info');
+                if (paginationInfo) {
+                    paginationInfo.textContent = `Showing ${response.offset + 1} to ${response.offset + logs.length} of ${response.total_count}`;
+                }
+
+                if (!response.has_more) {
                     document.getElementById('load-more-logs').style.display = 'none';
                 } else {
                     document.getElementById('load-more-logs').style.display = 'block';
@@ -1184,10 +1236,42 @@
 
             } catch (error) {
                 console.error('Failed to load logs:', error);
-                container.innerHTML = '<div class="error">Error loading logs: ' + error.message + '</div>';
+                tbody.innerHTML = '<tr><td colspan="8" class="error">Error loading logs: ' + error.message + '</td></tr>';
             } finally {
                 loading.classList.add('hidden');
             }
+        }
+
+        // Helper function for relative time formatting
+        function formatRelativeTime(timestamp) {
+            if (!timestamp) return 'N/A';
+
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) return 'Invalid date';
+
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) {
+                return 'Just now';
+            } else if (diffMins < 60) {
+                return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+            } else if (diffHours < 24) {
+                return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+            } else if (diffDays < 7) {
+                return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+            }
+
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
 
         document.getElementById('refresh-logs-btn').addEventListener('click', () => loadLogs(false));

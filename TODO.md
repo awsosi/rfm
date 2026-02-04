@@ -22,6 +22,56 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Missing Audit Logs (Element ID Mismatch)
+**Issue**: After the previous system logs enhancement, the audit logs table appeared completely empty in the Admin Panel. No logs were displayed at all, even though the API was functioning correctly and returning data.
+
+**Root Cause**: Element ID mismatch in the JavaScript `loadLogs()` function. The function was trying to populate a non-existent element:
+- **Incorrect**: Function tried to populate `document.getElementById('log-entries')` (line 1145)
+- **Correct**: The actual table body element has ID `logs-table-body` (line 502)
+
+Since the element didn't exist, the logs were never rendered to the page, resulting in a completely empty table.
+
+**Fixes Applied**:
+
+1. **Admin HTML - Load Logs Function** (admin.html:1144-1271):
+   - Changed target element from `log-entries` to `logs-table-body` (actual table tbody ID)
+   - Updated to use proper API endpoint `/api/admin/logs/stream` instead of `getLogs()` helper
+   - Fixed response handling to use `response.logs` array from API
+   - Added proper query parameter building using URLSearchParams
+   - Implemented table row creation (TR/TD elements) instead of div elements
+   - Added full timestamp formatting (YYYY-MM-DD HH:mm:SS.milliseconds)
+   - Added relative time formatting helper function
+   - Extracted source/target directories from log.details for push/pull operations
+   - Updated pagination info display using response.total_count and response.has_more
+   - Fixed error display to show in table format (colspan 8)
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 1144-1271: complete rewrite of loadLogs function and added formatRelativeTime helper)
+
+**Result**:
+✅ Audit logs now display correctly in the table
+✅ All 8 columns populated with proper data
+✅ Pagination works correctly with "Load More" button
+✅ Full and relative timestamps both display
+✅ Source/target directories extracted from details_json for push/pull operations
+✅ Filtering and search functionality works
+
+**CRITICAL LESSON LEARNED - ALWAYS VERIFY ELEMENT IDS**:
+**When implementing UI changes:**
+1. ✅ **ALWAYS verify HTML element IDs match JavaScript selectors** - Use browser DevTools or grep to confirm IDs exist
+2. ✅ **Test the actual UI after making changes** - Even simple changes can break functionality
+3. ✅ **Check for element existence before populating** - Add defensive checks like `if (!element) return;`
+4. ✅ **Use consistent naming** - If table body is `logs-table-body`, don't reference `log-entries`
+5. ✅ **Read the actual HTML structure** - Don't assume element IDs based on similar code elsewhere
+
+**How to prevent this mistake in the future:**
+- Before writing JavaScript to populate an element, search the HTML file for that element ID
+- Use `document.getElementById()` checks and log warnings if element not found
+- When copying code from another component, verify all element references are updated
+- Always test functionality end-to-end after changes, even "simple" ones
+
+**Design Notes**: This was a simple but critical bug - the fix was just changing one element ID and ensuring the data format matched the table structure. KISS approach - no complex logic needed, just proper element targeting. The mistake teaches the importance of verifying assumptions about the DOM structure.
+
 ### 2026-02-04 - Enhanced System Logs Display in Admin Panel
 **Issue**: System logs in Admin Panel showed minimal information without proper table structure. Logs displayed only basic data and lacked source/target directory information for PUSH/PULL operations.
 
