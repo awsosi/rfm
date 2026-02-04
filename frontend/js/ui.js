@@ -535,7 +535,10 @@ export function renderOperationQueue(operations, append = false) {
         loadingIndicator.classList.add('hidden');
     }
 
+    // Save currently selected operation ID before clearing
+    let selectedOperationId = null;
     if (!append) {
+        selectedOperationId = getSelectedOperationId();
         tbody.innerHTML = '';
     }
 
@@ -559,6 +562,18 @@ export function renderOperationQueue(operations, append = false) {
         const row = createOperationTableRow(operation);
         tbody.appendChild(row);
     });
+
+    // Restore previously selected operation if it still exists
+    if (selectedOperationId) {
+        const checkbox = tbody.querySelector(`input[type="radio"][value="${selectedOperationId}"]`);
+        if (checkbox && !checkbox.disabled) {
+            checkbox.checked = true;
+            const row = checkbox.closest('tr');
+            if (row) {
+                row.classList.add('selected');
+            }
+        }
+    }
 }
 
 function createOperationTableRow(operation) {

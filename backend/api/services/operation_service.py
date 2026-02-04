@@ -702,6 +702,22 @@ class OperationService:
                 f"Cannot revert."
             )
 
+        # Check if this operation has already been pulled
+        existing_pull_stmt = (
+            select(Operation)
+            .where(Operation.rollback_operation_id == original_operation_id)
+            .where(Operation.type == OperationType.PULL)
+            .where(Operation.status == OperationStatus.COMPLETED)
+        )
+        existing_pull_result = await db.execute(existing_pull_stmt)
+        existing_pull = existing_pull_result.scalar_one_or_none()
+
+        if existing_pull:
+            raise OperationError(
+                f"Operation {original_operation_id} has already been pulled "
+                f"(PULL operation {existing_pull.id}). Cannot pull again."
+            )
+
         # Create PULL operation
         operation = Operation(
             user_id=user.id,

@@ -4002,3 +4002,141 @@ The layout proportions favored Operation History (55%) over Path A (40%), making
 ---
 
 *All changes maintain KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🔧 Fix: Error Toast on Successful Operations & UX Improvements
+
+**Issue:**
+- Push/Pull operations succeeded but returned 500 error toast
+- Operations could be pulled multiple times (no validation)
+- Auto-refresh deselected items (bad UX)
+
+**Root Cause Analysis:**
+1. **500 Error Toast**: Pydantic v2 models are immutable by default. Code tried to set `user_name` after model creation, causing `ValidationError`
+2. **Duplicate Pulls**: No check to prevent pulling already-pulled operations
+3. **Selection Loss**: `renderOperationQueue()` cleared table without preserving selection state
+
+**Solutions Implemented:**
+
+### 1. Fixed Pydantic Immutability Issue
+**File:** `backend/api/app.py`
+
+**Before:**
+```python
+op_response = OperationResponse.model_validate(operation)
+op_response.user_name = current_user.username  # FAILS - immutable
+return op_response
+```
+
+**After:**
+```python
+# Use model_copy to update immutable Pydantic model
+op_response = OperationResponse.model_validate(operation)
+return op_response.model_copy(update={"user_name": current_user.username})
+```
+
+**Why:** Pydantic v2 models don't allow attribute assignment after creation. Use `model_copy(update={...})` to create new instance with updated fields.
+
+### 2. Prevent Duplicate Pull Operations
+**File:** `backend/api/services/operation_service.py` (lines 705-719)
+
+**Added validation:**
+```python
+# Check if this operation has already been pulled
+existing_pull_stmt = (
+    select(Operation)
+    .where(Operation.rollback_operation_id == original_operation_id)
+    .where(Operation.type == OperationType.PULL)
+    .where(Operation.status == OperationStatus.COMPLETED)
+)
+existing_pull_result = await db.execute(existing_pull_stmt)
+existing_pull = existing_pull_result.scalar_one_or_none()
+
+if existing_pull:
+    raise OperationError(
+        f"Operation {original_operation_id} has already been pulled "
+        f"(PULL operation {existing_pull.id}). Cannot pull again."
+    )
+```
+
+**Why:** PULL operations should only revert PUSH operations once. Multiple pulls would cause data inconsistency.
+
+### 3. Preserve Selection Across Auto-Refresh
+**File:** `frontend/js/ui.js` (function `renderOperationQueue`)
+
+**Before:**
+```javascript
+if (!append) {
+    tbody.innerHTML = '';  // Clears selection!
+}
+```
+
+**After:**
+```javascript
+// Save currently selected operation ID before clearing
+let selectedOperationId = null;
+if (!append) {
+    selectedOperationId = getSelectedOperationId();
+    tbody.innerHTML = '';
+}
+
+operations.forEach(operation => {
+    const row = createOperationTableRow(operation);
+    tbody.appendChild(row);
+});
+
+// Restore previously selected operation if it still exists
+if (selectedOperationId) {
+    const checkbox = tbody.querySelector(`input[type="radio"][value="${selectedOperationId}"]`);
+    if (checkbox && !checkbox.disabled) {
+        checkbox.checked = true;
+        const row = checkbox.closest('tr');
+        if (row) {
+            row.classList.add('selected');
+        }
+    }
+}
+```
+
+**Why:** Users expect selections to persist during auto-refresh. Clearing the table without restoration creates frustrating UX.
+
+### 🎯 Benefits
+
+**Reliability:**
+- ✅ **No more false errors**: Operations return 200 success as expected
+- ✅ **Data integrity**: Prevents duplicate pull operations
+- ✅ **Consistent state**: Selection persists across refreshes
+
+**User Experience:**
+- ✅ **Clear feedback**: Success operations show success toast
+- ✅ **No confusion**: Can't accidentally pull same operation twice
+- ✅ **Better UX**: Selection stays active during auto-refresh
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Minimal code changes to fix root causes
+- No complex refactoring needed
+- Direct, straightforward solutions
+
+✅ **DRY (Don't Repeat Yourself)**
+- Fixed both push and pull endpoints with same pattern
+- Reused existing `getSelectedOperationId()` function
+- Single selection preservation logic
+
+### 🔍 Files Modified
+
+1. `backend/api/app.py` - Fixed Pydantic immutability (push & pull endpoints)
+2. `backend/api/services/operation_service.py` - Added duplicate pull validation
+3. `frontend/js/ui.js` - Preserve selection across table refreshes
+4. `TODO.md` - This documentation
+
+---
+
+**Status:** ✅ COMPLETE - All three issues resolved
+**Last Updated:** 2026-02-04
+
+---
+
+*All changes maintain KISS and DRY principles throughout the codebase.*
