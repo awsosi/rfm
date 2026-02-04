@@ -93,7 +93,12 @@ const state = {
         sortOrder: 'desc'
     },
     // VF Redesign: Worker ID (for single worker operations)
-    workerId: 1 // Default to first worker, can be updated from settings
+    workerId: 1, // Default to first worker, can be updated from settings
+    // VF Redesign: Auto-refresh intervals
+    autoRefreshIntervals: {
+        operationHistory: null,
+        fileList: null
+    }
 };
 
 /**
@@ -160,7 +165,54 @@ async function init() {
     // Load active operations
     await loadActiveOperations();
 
+    // VF Redesign: Start auto-refresh for operation history and file list
+    if (isVFRedesign) {
+        startAutoRefresh();
+    }
+
     console.log('Application initialized');
+}
+
+/**
+ * Start auto-refresh for Operation History and file listings (VF Redesign)
+ */
+function startAutoRefresh() {
+    // Refresh Operation History every 3 seconds
+    state.autoRefreshIntervals.operationHistory = setInterval(async () => {
+        try {
+            await loadOperationHistory(false);
+        } catch (error) {
+            console.error('Auto-refresh operation history failed:', error);
+        }
+    }, 3000);
+
+    // Refresh Path A file listing every 5 seconds
+    state.autoRefreshIntervals.fileList = setInterval(async () => {
+        try {
+            await refreshPane('a');
+        } catch (error) {
+            console.error('Auto-refresh file list failed:', error);
+        }
+    }, 5000);
+
+    console.log('Auto-refresh started for Operation History and file listings');
+}
+
+/**
+ * Stop auto-refresh (VF Redesign)
+ */
+function stopAutoRefresh() {
+    if (state.autoRefreshIntervals.operationHistory) {
+        clearInterval(state.autoRefreshIntervals.operationHistory);
+        state.autoRefreshIntervals.operationHistory = null;
+    }
+
+    if (state.autoRefreshIntervals.fileList) {
+        clearInterval(state.autoRefreshIntervals.fileList);
+        state.autoRefreshIntervals.fileList = null;
+    }
+
+    console.log('Auto-refresh stopped');
 }
 
 /**
@@ -169,6 +221,7 @@ async function init() {
 function setupEventListeners() {
     // Logout button
     document.getElementById('logout-btn').addEventListener('click', () => {
+        stopAutoRefresh();
         disconnectWebSocket();
         logout();
         window.location.href = 'login.html';
@@ -1475,8 +1528,26 @@ function updateVFButtonStates() {
  * Handle WebSocket operation updates for VF redesign
  */
 function handleVFOperationUpdate(data) {
-    if (data.type === 'operation_update' && data.operation_id) {
-        // Find and update the operation in our local state
+    console.log('VF operation update received:', data);
+
+    // Immediately refresh operation history when operations complete or fail
+    if (data.status === 'completed' || data.status === 'failed') {
+        console.log('Operation completed/failed, refreshing operation history');
+        loadOperationHistory(false).catch(err => {
+            console.error('Failed to refresh operation history:', err);
+        });
+
+        // Also refresh file listing if operation affected Path A
+        if (state.panes.a.currentPath) {
+            console.log('Refreshing file listing');
+            refreshPane('a').catch(err => {
+                console.error('Failed to refresh file listing:', err);
+            });
+        }
+    }
+
+    // Update individual operation in queue if it exists
+    if (data.operation_id) {
         const opIndex = state.operationQueue.operations.findIndex(
             op => op.id === data.operation_id
         );
@@ -1491,9 +1562,6 @@ function handleVFOperationUpdate(data) {
 
             // Update UI
             updateOperationInQueueTable(state.operationQueue.operations[opIndex]);
-        } else {
-            // New operation, reload history
-            loadOperationHistory();
         }
     }
 }

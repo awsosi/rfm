@@ -361,16 +361,55 @@ namespace FileManagerWorker
             {
                 return ExecuteWithImpersonation(() =>
                 {
+                    // Check if source and destination are on different volumes
+                    var sourceRoot = Path.GetPathRoot(resolvedSource);
+                    var destRoot = Path.GetPathRoot(resolvedDest);
+                    var isCrossVolume = !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase);
+
+                    if (isCrossVolume)
+                    {
+                        Logger.Info("Cross-volume move detected ({0} -> {1}), using copy+delete instead", sourceRoot, destRoot);
+                    }
+
                     if (File.Exists(resolvedSource))
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
-                        File.Move(resolvedSource, resolvedDest);
+
+                        if (isCrossVolume)
+                        {
+                            // Cross-volume: use copy + delete
+                            File.Copy(resolvedSource, resolvedDest, true);
+                            File.Delete(resolvedSource);
+                            Logger.Info("Cross-volume file move completed using copy+delete");
+                        }
+                        else
+                        {
+                            // Same volume: use fast move
+                            File.Move(resolvedSource, resolvedDest);
+                            Logger.Info("Same-volume file move completed");
+                        }
+
                         result["type"] = "file";
+                        result["size"] = new FileInfo(resolvedDest).Length;
                     }
                     else if (Directory.Exists(resolvedSource))
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
-                        Directory.Move(resolvedSource, resolvedDest);
+                        if (isCrossVolume)
+                        {
+                            // Cross-volume: use copy + delete
+                            var filesCopied = CopyDirectorySync(resolvedSource, resolvedDest);
+                            Directory.Delete(resolvedSource, true);
+                            Logger.Info("Cross-volume directory move completed using copy+delete: {0} files", filesCopied);
+                            result["filesMoved"] = filesCopied;
+                        }
+                        else
+                        {
+                            // Same volume: use fast move
+                            Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
+                            Directory.Move(resolvedSource, resolvedDest);
+                            Logger.Info("Same-volume directory move completed");
+                        }
+
                         result["type"] = "directory";
                     }
                     else
