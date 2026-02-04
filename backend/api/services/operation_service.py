@@ -360,7 +360,7 @@ class OperationService:
             # Worker2 verifies the file exists at destination
             verify_command = WorkerRequest(
                 command="list",
-                source_path=operation.dest_path,
+                params={"path": operation.dest_path},
             )
 
             await self._update_worker_status(
@@ -797,7 +797,7 @@ class OperationService:
             # This prevents race conditions where another user already moved/deleted the directory
             verify_command = WorkerRequest(
                 command="list",
-                source_path=operation.source_path,
+                params={"path": operation.source_path},
             )
             verify_response = await self.worker_service.send_command(
                 worker, verify_command, db

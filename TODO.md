@@ -22,6 +22,38 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix PUSH Operation Failing with Null Reference Exception
+**Issue**: PUSH operations failed immediately with "Object reference not set to an instance of an object" error from the worker. The operation created successfully but failed during execution when trying to verify the source directory exists.
+
+**Root Cause**: The `list` command verification step in PUSH and two-worker operations was using incorrect parameter format. The worker expects the path in `params["path"]`, but the code was passing it as `source_path` instead. This caused a null reference exception on the worker side when it tried to read the missing `params["path"]` value.
+
+**Incorrect Code**:
+```python
+verify_command = WorkerRequest(
+    command="list",
+    source_path=operation.source_path,  # WRONG - not read by worker
+)
+```
+
+**Correct Code**:
+```python
+verify_command = WorkerRequest(
+    command="list",
+    params={"path": operation.source_path},  # Correct format
+)
+```
+
+**Fixes Applied**:
+1. **PUSH Operation Verification** (operation_service.py:798-801): Changed `source_path=operation.source_path` to `params={"path": operation.source_path}`
+2. **Two-Worker Operation Verification** (operation_service.py:361-364): Changed `source_path=operation.dest_path` to `params={"path": operation.dest_path}`
+
+**Files Modified**:
+- `backend/api/services/operation_service.py` (lines 800, 363)
+
+**Result**: ✅ PUSH operations now execute successfully; ✅ Source directory verification works correctly; ✅ Worker receives proper command parameters; ✅ No more null reference exceptions
+
+**Design Notes**: KISS approach - used the same parameter format consistently across all `list` command usage; aligned with existing `list_directory()` method in worker_service.py
+
 ### 2026-02-04 - Fix PUSH/PULL Operations Stuck in PENDING (Double-Locking Deadlock)
 **Issue**: After collision prevention changes (commit bf78d76), ALL operations created but never executed - stayed in PENDING status forever. Users saw operations in history but they never transitioned to IN_PROGRESS or COMPLETED.
 
