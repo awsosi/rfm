@@ -1302,7 +1302,7 @@ select {
 /* Main VF Layout Container */
 .vf-layout .vf-container {
     display: grid;
-    grid-template-columns: 60% 5% 35%;
+    grid-template-columns: 47.5% 5% 47.5%;
     gap: var(--spacing-md);
     height: calc(100vh - 80px);
     padding: var(--spacing-lg);
@@ -1633,7 +1633,7 @@ select {
 /* Responsive Design for VF Layout */
 @media (max-width: 1400px) {
     .vf-layout .vf-container {
-        grid-template-columns: 65% 5% 30%;
+        grid-template-columns: 47.5% 5% 47.5%;
     }
 }
 

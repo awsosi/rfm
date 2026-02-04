@@ -23,6 +23,28 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Search 503 Error and Layout Adjustment
+**Issues**:
+  1. Search in Path A pane returned 503 Service Unavailable error
+  2. Layout not evenly distributed between Path A and Operation History panels
+
+**Root Causes**:
+  1. **503 Error**: Worker service was correctly returning search results in `response_data`, but `worker_service.py` was trying to extract nested `"error_details"` key that didn't exist
+  2. **Layout Issue**: CSS grid was set to 60% Path A / 35% Operation History instead of 50/50
+
+**Fixes Applied**:
+  1. **Backend - Search Response**: Fixed `worker_service.py` line 128 to pass entire `response_data` as `error_details` instead of trying to extract nested key
+     - Previously: `error_details=completed_command.response_data.get("error_details")`
+     - Now: `error_details=completed_command.response_data`
+  2. **Frontend - Layout**: Adjusted CSS grid columns from `60% 5% 35%` to `47.5% 5% 47.5%` for equal distribution
+     - Updated both default and responsive (1400px) breakpoints
+
+**Files Modified**:
+  - `backend/api/services/worker_service.py` (line 128)
+  - `frontend/css/style.css` (lines 1305, 1636)
+
+**Result**: ✅ Search now returns results properly; ✅ Path A and Operation History panels are equal size (50/50)
+
 ### 2026-02-04 - Fix Persistent Issues (500 Errors & Empty Search)
 **Issues**:
   1. PUSH/PULL operations succeeded but still showed error 500 toast
