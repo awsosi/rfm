@@ -275,6 +275,8 @@ class OperationResponse(BaseModel):
     file_count: Optional[int]
     total_size_bytes: Optional[int]
     params_json: Optional[dict[str, Any]]
+    rollback_operation_id: Optional[int] = None  # ID of original operation if this is a PULL
+    has_been_pulled: bool = False  # True if this PUSH has been successfully pulled/reverted
     created_at: datetime
 
 
