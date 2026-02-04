@@ -332,9 +332,9 @@ async def copy_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    # Use model_copy to update immutable Pydantic model
     op_response = OperationResponse.model_validate(operation)
-    op_response.user_name = current_user.username
-    return op_response
+    return op_response.model_copy(update={"user_name": current_user.username})
 
 
 @app.post("/api/files/move", response_model=OperationResponse)
@@ -377,9 +377,9 @@ async def move_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    # Use model_copy to update immutable Pydantic model
     op_response = OperationResponse.model_validate(operation)
-    op_response.user_name = current_user.username
-    return op_response
+    return op_response.model_copy(update={"user_name": current_user.username})
 
 
 @app.post("/api/files/delete", response_model=OperationResponse)
@@ -421,9 +421,9 @@ async def delete_file(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    # Use model_copy to update immutable Pydantic model
     op_response = OperationResponse.model_validate(operation)
-    op_response.user_name = current_user.username
-    return op_response
+    return op_response.model_copy(update={"user_name": current_user.username})
 
 
 @app.post("/api/files/mkdir", response_model=OperationResponse)
@@ -465,9 +465,9 @@ async def create_directory(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    # Use model_copy to update immutable Pydantic model
     op_response = OperationResponse.model_validate(operation)
-    op_response.user_name = current_user.username
-    return op_response
+    return op_response.model_copy(update={"user_name": current_user.username})
 
 
 @app.post("/api/operations/push", response_model=OperationResponse)

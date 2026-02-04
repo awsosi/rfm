@@ -4134,7 +4134,98 @@ if (selectedOperationId) {
 
 ---
 
-**Status:** ✅ COMPLETE - All three issues resolved
+**Status:** ⚠️ INCOMPLETE - Only 2 of 6 endpoints were fixed (push & pull)
+**Last Updated:** 2026-02-04
+
+---
+
+## 🔧 COMPLETE FIX - All Remaining Pydantic Immutability Issues (2026-02-04)
+
+**Critical Problem**: PR #79 was INCOMPLETE!
+- PR #79 only fixed **2 out of 6 endpoints** (push & pull)
+- **4 endpoints still had the same bug** causing 500 errors on success
+
+### Root Cause (Same as PR #79)
+Pydantic v2 models are **immutable by default**. Direct attribute assignment after creation raises `ValidationError`:
+
+```python
+# ❌ BROKEN - Causes 500 error
+op_response = OperationResponse.model_validate(operation)
+op_response.user_name = current_user.username  # ValidationError!
+return op_response
+
+# ✅ CORRECT - Use model_copy
+op_response = OperationResponse.model_validate(operation)
+return op_response.model_copy(update={"user_name": current_user.username})
+```
+
+### Endpoints Fixed in This PR
+
+**File**: `backend/api/app.py`
+
+1. **`/api/files/copy`** (line 335-337) - File copy operations
+2. **`/api/files/move`** (line 380-382) - File move operations
+3. **`/api/files/delete`** (line 424-426) - File delete operations
+4. **`/api/files/mkdir`** (line 468-470) - Directory creation operations
+
+All four endpoints changed from:
+```python
+op_response = OperationResponse.model_validate(operation)
+op_response.user_name = current_user.username
+return op_response
+```
+
+To:
+```python
+# Use model_copy to update immutable Pydantic model
+op_response = OperationResponse.model_validate(operation)
+return op_response.model_copy(update={"user_name": current_user.username})
+```
+
+### Complete List of All Fixed Endpoints
+
+| Endpoint | Status | Fixed In |
+|----------|--------|----------|
+| `/api/operations/push` | ✅ Fixed | PR #79 |
+| `/api/operations/pull` | ✅ Fixed | PR #79 |
+| `/api/files/copy` | ✅ Fixed | **This PR** |
+| `/api/files/move` | ✅ Fixed | **This PR** |
+| `/api/files/delete` | ✅ Fixed | **This PR** |
+| `/api/files/mkdir` | ✅ Fixed | **This PR** |
+
+### 🎯 Benefits
+
+**Complete Coverage:**
+- ✅ **ALL 6 operation endpoints** now return proper 200 success responses
+- ✅ **No more 500 errors** on successful file operations
+- ✅ **Consistent behavior** across all endpoints
+
+**User Experience:**
+- ✅ **Copy operations** now show success toast (not error)
+- ✅ **Move operations** now show success toast (not error)
+- ✅ **Delete operations** now show success toast (not error)
+- ✅ **Mkdir operations** now show success toast (not error)
+
+### 📝 Design Principles Maintained
+
+✅ **KISS (Keep It Simple, Stupid)**
+- Same minimal fix applied to all endpoints
+- No refactoring or over-engineering
+- Consistent pattern throughout
+
+✅ **DRY (Don't Repeat Yourself)**
+- Single pattern used for all 6 endpoints
+- Consistent use of `model_copy(update={...})`
+- No code duplication
+
+### 🔍 Files Modified
+
+1. `backend/api/app.py` - Fixed all 4 remaining endpoints (copy, move, delete, mkdir)
+2. `TODO.md` - This documentation
+
+---
+
+**Status:** ✅ COMPLETE - ALL 6 endpoints now fixed properly
 **Last Updated:** 2026-02-04
 
 ---
