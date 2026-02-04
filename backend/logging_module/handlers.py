@@ -183,15 +183,44 @@ class SyslogHandler:
         """
         async with self._lock:
             try:
+                # Build structured data with all available context
+                structured_data = {
+                    "user_id": str(log_entry.user_id) if log_entry.user_id else "-",
+                    "operation_id": str(log_entry.operation_id) if log_entry.operation_id else "-",
+                    "action": log_entry.action,
+                    "level": log_entry.level.value,
+                }
+
+                # Add IP address if available
+                if log_entry.ip_address:
+                    structured_data["ip_address"] = log_entry.ip_address
+
+                # Add operation-specific fields if this is an OperationLog
+                from logging_module.models import OperationLog
+                if isinstance(log_entry, OperationLog):
+                    if log_entry.source_path:
+                        structured_data["source_path"] = log_entry.source_path
+                    if log_entry.dest_path:
+                        structured_data["dest_path"] = log_entry.dest_path
+                    if log_entry.operation_type:
+                        structured_data["operation_type"] = log_entry.operation_type
+
+                # Add username or other relevant details if present
+                if log_entry.details:
+                    # Include username if it's in details
+                    if isinstance(log_entry.details, dict):
+                        if "username" in log_entry.details:
+                            structured_data["username"] = log_entry.details["username"]
+                        # Include directory information for operations
+                        if "source" in log_entry.details:
+                            structured_data["directory"] = log_entry.details["source"]
+                        elif "restore_to" in log_entry.details:
+                            structured_data["directory"] = log_entry.details["restore_to"]
+
                 # Create syslog message
                 syslog_msg = SyslogMessage(
                     hostname=get_hostname(),
-                    structured_data={
-                        "user_id": log_entry.user_id or "-",
-                        "operation_id": log_entry.operation_id or "-",
-                        "action": log_entry.action,
-                        "level": log_entry.level.value,
-                    },
+                    structured_data=structured_data,
                     message=log_entry.message,
                 )
 

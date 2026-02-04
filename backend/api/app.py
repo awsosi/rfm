@@ -23,6 +23,7 @@ from api.middleware.logging import (
     RequestLoggingMiddleware,
     setup_logging,
     AuditLogger,
+    get_client_ip,
 )
 from api.schemas import *
 from api.services.worker_service import WorkerService, get_worker_by_id, get_active_workers
@@ -46,6 +47,14 @@ async def lifespan(app: FastAPI):
 
     # Setup logging
     setup_logging(settings.log_level, settings.enable_json_logs)
+
+    # Initialize structured logging module (for syslog, file rotation, etc.)
+    try:
+        from logging_module import setup_logging as setup_structured_logging
+        await setup_structured_logging()
+        logger.info("Structured logging module initialized")
+    except Exception as exc:
+        logger.warning(f"Failed to initialize structured logging module: {exc}")
 
     # Initialize database
     await init_database(
@@ -80,6 +89,14 @@ async def lifespan(app: FastAPI):
     # Close Elasticsearch
     from api.services.elasticsearch_service import close_elasticsearch_service
     await close_elasticsearch_service()
+
+    # Close structured logging module
+    try:
+        from logging_module import close_logging
+        close_logging()
+        logger.info("Structured logging module closed")
+    except Exception:
+        pass
 
     await close_database()
 
@@ -398,7 +415,7 @@ async def copy_file(
             "dest": request_data.dest_path,
             "workers": request_data.worker_ids,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -447,7 +464,7 @@ async def move_file(
             "dest": request_data.dest_path,
             "workers": request_data.worker_ids,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -493,7 +510,7 @@ async def delete_file(
             "path": request_data.path,
             "recursive": request_data.recursive,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -539,7 +556,7 @@ async def create_directory(
             "path": request_data.path,
             "parents": request_data.parents,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -596,8 +613,9 @@ async def push_operation(
                     "path_b": operation.dest_path,
                     "path_c": operation.archive_path,
                 },
-                ip_address=request.client.host if request.client else None,
+                ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
+                username=current_user.username,
             )
 
             # Execute operation
@@ -675,8 +693,9 @@ async def pull_operation(
                     "original_operation_id": request_data.operation_id,
                     "restore_to": operation.dest_path,
                 },
-                ip_address=request.client.host if request.client else None,
+                ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
+                username=current_user.username,
             )
 
             # Execute operation
@@ -956,7 +975,7 @@ async def register_worker(
         action="worker_register",
         target="worker",
         details={"worker_id": worker.id, "worker_name": worker.name, "hostname": worker.hostname},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 

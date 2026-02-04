@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import get_current_user
-from api.middleware.logging import AuditLogger
+from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import UserPreferencesResponse, UserPreferencesUpdate
 from database import get_db
 from models import User, UserPreferences
@@ -70,7 +70,7 @@ async def update_my_preferences(
         user_id=current_user.id,
         action="preferences_update",
         details={"updated_fields": list(update_data.keys())},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -113,7 +113,7 @@ async def reset_my_preferences(
         user_id=current_user.id,
         action="preferences_reset",
         details={},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
 from api.middleware.auth import get_current_user, require_admin
-from api.middleware.logging import AuditLogger
+from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import (
     UserCreate,
     UserUpdate,
@@ -80,7 +80,7 @@ async def create_user(
             "username": user.username,
             "role": user.role.value,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -163,7 +163,7 @@ async def update_user(
             "username": user.username,
             "changes": user_data.model_dump(exclude_none=True, exclude={"password"}),
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -227,7 +227,7 @@ async def delete_user(
             "deleted_user_id": user_id,
             "username": username,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -309,7 +309,7 @@ async def update_worker(
             "worker_name": worker.name,
             "changes": worker_data.model_dump(exclude_none=True),
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -360,7 +360,7 @@ async def approve_worker(
             "worker_id": worker.id,
             "worker_name": worker.name,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -405,7 +405,7 @@ async def suspend_worker(
             "worker_id": worker.id,
             "worker_name": worker.name,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -447,7 +447,7 @@ async def delete_worker(
             "worker_id": worker_id,
             "worker_name": worker_name,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -510,7 +510,7 @@ async def update_config(
             "old_value": old_value,
             "new_value": config.value,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -558,7 +558,7 @@ async def bulk_update_config(
             "updated_keys": list(bulk_data.configs.keys()),
             "errors": errors,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
