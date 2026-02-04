@@ -23,6 +23,18 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix %appdata% Path Crash (Missing Logger Import)
+**Issue**: When users typed `%appdata%` (or any other path that caused exceptions) into Path A address bar, the app returned 503 Service Unavailable with NameError
+**Root Cause**:
+  - `logger` was used in `backend/api/app.py` at lines 219, 247, and 258 but was never imported
+  - When exceptions occurred in `list_directory()`, the exception handler tried to call `logger.error()` which failed with `NameError: name 'logger' is not defined`
+  - This secondary error masked the original exception, making debugging difficult
+**Fix Applied**:
+  - Added `from loguru import logger` import to `backend/api/app.py` line 16
+**Files Modified**:
+  - `backend/api/app.py` (added import at line 16)
+**Result**: ✅ Exception logging now works properly; ✅ Errors are logged with full context instead of crashing
+
 ### 2026-02-04 - Path A Restrictions & Single Selection UI
 **Issues**:
   1. Users could enter invalid paths (B:, C:) in Path A pane, breaking the single-path design
