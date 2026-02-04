@@ -154,10 +154,22 @@ async def list_directory(
         )
 
         # Parse response into FileInfo objects
+        # The response structure has error_details nested inside error_details
+        # because worker.py wraps the worker's error_details in a response_dict
         items = []
-        if response.error_details and "items" in response.error_details:
+        data = None
+
+        if response.error_details:
+            # Check if error_details is nested (new structure after recent changes)
+            if "error_details" in response.error_details:
+                data = response.error_details["error_details"]
+            # Or if items is directly in error_details (old structure)
+            elif "items" in response.error_details:
+                data = response.error_details
+
+        if data and "items" in data:
             # Transform worker response format to FileInfo format
-            for item in response.error_details["items"]:
+            for item in data["items"]:
                 # Convert 'size' to 'size_bytes' for backward compatibility
                 if "size" in item and "size_bytes" not in item:
                     item["size_bytes"] = item.pop("size")
@@ -165,8 +177,10 @@ async def list_directory(
                 if "modified" in item and "modified_at" not in item:
                     item["modified_at"] = item.pop("modified")
                 items.append(FileInfo(**item))
+        else:
+            logger.warning(f"No items in response. error_details={response.error_details}")
 
-        total_count = response.error_details.get("total") if response.error_details else len(items)
+        total_count = data.get("total") if data else len(items)
 
         # Index files in Elasticsearch in background (non-blocking)
         try:
@@ -203,6 +217,7 @@ async def list_directory(
             has_more=(offset + len(items)) < total_count,
         )
     except Exception as exc:
+        logger.error(f"List directory failed: {exc}", exc_info=True)
         raise HTTPException(status_code=503, detail=str(exc))
 
 
@@ -265,14 +280,23 @@ async def search_files(
                 worker, path, query, db, recursive
             )
 
-            # Debug logging to diagnose search issues
-            logger.debug(f"Search response status: {response.status}, error_details: {response.error_details}")
-
             results = []
-            # Check if response has results - handle both 'files' and 'items' keys
+            # Check if response has results
+            # The response structure has error_details nested inside error_details
+            # because worker.py wraps the worker's error_details in a response_dict
+            data = None
+
             if response.error_details:
-                files_data = response.error_details.get("files") or response.error_details.get("items") or []
-                logger.debug(f"Found {len(files_data) if isinstance(files_data, list) else 0} search results")
+                # Check if error_details is nested (new structure after recent changes)
+                if "error_details" in response.error_details:
+                    data = response.error_details["error_details"]
+                # Or if data is directly in error_details (old structure)
+                else:
+                    data = response.error_details
+
+            if data:
+                # Handle both 'files', 'results', and 'items' keys
+                files_data = data.get("files") or data.get("results") or data.get("items") or []
                 # Transform worker response format to FileInfo format
                 for item in files_data:
                     # Convert 'size' to 'size_bytes' for backward compatibility
@@ -286,7 +310,7 @@ async def search_files(
                         item["is_directory"] = False
                     results.append(FileInfo(**item))
             else:
-                logger.warning(f"Search returned no error_details for query: {query} in path: {path}")
+                logger.warning(f"Search returned no data for query: {query} in path: {path}")
 
             return FileSearchResponse(
                 query=query,
