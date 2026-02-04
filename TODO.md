@@ -23,11 +23,17 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
-### 2026-02-04 - Path A Search Not Showing Files
-**Issue**: File/directory search in Path A pane returned no results for files (e.g., "test.txt")
-**Root Cause**: VF redesign filter removed all non-directory results from search
-**Fixed**: Removed directory-only filter from `handleSearch()` - search now returns both files and directories
-**Files**: `frontend/js/app.js:620-628`
+### 2026-02-04 - Path A Search Returning No Results
+**Issue**: File/directory search in Path A pane returned absolutely nothing (no files, no directories)
+**Root Causes**:
+  1. Backend looked for `error_details["results"]` but worker sent `error_details["files"]` (key mismatch)
+  2. Worker only searched files using `Directory.GetFiles()`, never searched directories
+  3. Frontend filtered results to directories only (VF redesign filter)
+**Fixes Applied**:
+  1. **Backend**: Changed to look for `"files"` key in worker response, added `is_directory` default
+  2. **Worker**: Added `Directory.GetDirectories()` to search both files AND directories, added `is_directory` flag
+  3. **Frontend**: Removed directory-only filter from `handleSearch()`
+**Files**: `backend/api/app.py:269-281`, `workers/FileManagerWorker/FileOperations.cs:628-705`, `frontend/js/app.js:620-624`
 
 ### 2026-02-04 - Complete Fix for PR#79 and PR#80 Issues
 **Issue**: Operations succeeded but returned 500 error; selections lost on refresh; could re-pull already-reverted operations
