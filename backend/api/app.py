@@ -329,6 +329,8 @@ async def copy_file(
     # In production, this would be handled by a background task queue
     try:
         operation = await operation_service.execute_operation(operation, db)
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -374,6 +376,8 @@ async def move_file(
 
     try:
         operation = await operation_service.execute_operation(operation, db)
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -418,6 +422,8 @@ async def delete_file(
 
     try:
         operation = await operation_service.execute_operation(operation, db)
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -462,6 +468,8 @@ async def create_directory(
 
     try:
         operation = await operation_service.execute_operation(operation, db)
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -511,6 +519,9 @@ async def push_operation(
 
         # Execute operation
         operation = await operation_service.execute_operation(operation, db)
+
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
 
         # Broadcast to WebSocket clients
         from api.websocket_manager import ws_manager
@@ -573,6 +584,9 @@ async def pull_operation(
         # Execute operation
         operation = await operation_service.execute_operation(operation, db)
 
+        # Refresh operation to ensure all attributes are loaded after commit
+        await db.refresh(operation)
+
         # Broadcast to WebSocket clients
         from api.websocket_manager import ws_manager
         await ws_manager.broadcast(
@@ -623,11 +637,28 @@ async def get_operations_history(
         result = await db.execute(query)
         rows = result.all()
 
-        # Build response with username
+        # Build response with username and check if PUSH operations have been pulled
         responses = []
         for operation, user in rows:
             op_response = OperationResponse.model_validate(operation)
-            op_response.user_name = user.username
+
+            # Check if this PUSH operation has been pulled
+            has_been_pulled = False
+            if operation.type == OperationType.PUSH and operation.status == OperationStatus.COMPLETED:
+                # Query for a completed PULL operation that references this PUSH
+                pull_check_query = select(Operation).where(
+                    Operation.rollback_operation_id == operation.id,
+                    Operation.type == OperationType.PULL,
+                    Operation.status == OperationStatus.COMPLETED
+                )
+                pull_result = await db.execute(pull_check_query)
+                has_been_pulled = pull_result.scalar_one_or_none() is not None
+
+            # Use model_copy to update immutable Pydantic model
+            op_response = op_response.model_copy(update={
+                "user_name": user.username,
+                "has_been_pulled": has_been_pulled
+            })
             responses.append(op_response)
 
         return responses
@@ -733,7 +764,8 @@ async def search_operations(
             operations = []
             for operation, user in rows:
                 op_response = OperationResponse.model_validate(operation)
-                op_response.user_name = user.username
+                # Use model_copy to update immutable Pydantic model
+                op_response = op_response.model_copy(update={"user_name": user.username})
                 operations.append(op_response.model_dump())
 
             # Get total count (approximate)
@@ -911,7 +943,8 @@ async def list_operations(
     responses = []
     for operation, user in rows:
         op_response = OperationResponse.model_validate(operation)
-        op_response.user_name = user.username
+        # Use model_copy to update immutable Pydantic model
+        op_response = op_response.model_copy(update={"user_name": user.username})
         responses.append(op_response)
 
     return responses

@@ -19,7 +19,15 @@ export function renderFileList(paneId, files, append = false) {
     // Hide loading indicator
     loading.classList.add('hidden');
 
+    // Save selected paths before clearing to restore selection after refresh
+    const selectedPaths = new Set();
     if (!append) {
+        const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox:checked`);
+        checkboxes.forEach(cb => {
+            if (cb.dataset.path) {
+                selectedPaths.add(cb.dataset.path);
+            }
+        });
         tbody.innerHTML = '';
     }
 
@@ -39,6 +47,17 @@ export function renderFileList(paneId, files, append = false) {
         const row = createFileRow(file, paneId);
         tbody.appendChild(row);
     });
+
+    // Restore selection after rendering
+    if (selectedPaths.size > 0) {
+        const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox`);
+        checkboxes.forEach(cb => {
+            if (selectedPaths.has(cb.dataset.path)) {
+                cb.checked = true;
+                cb.closest('tr').classList.add('selected');
+            }
+        });
+    }
 
     // Update load more button visibility
     const loadMoreBtn = document.getElementById(`load-more-${paneId}`);
@@ -593,7 +612,7 @@ function createOperationTableRow(operation) {
     checkbox.value = operation.id;
     checkbox.dataset.operationType = operation.type;
 
-    if (operation.type === 'PUSH' && operation.status === 'COMPLETED') {
+    if (operation.type === 'PUSH' && operation.status === 'COMPLETED' && !operation.has_been_pulled) {
         checkbox.addEventListener('change', (e) => {
             document.querySelectorAll('#queue-table-body tr').forEach(r => {
                 r.classList.remove('selected');

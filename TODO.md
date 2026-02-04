@@ -23,7 +23,29 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
-### 2026-02-04 - Complete Pydantic Immutability Fix
+### 2026-02-04 - Complete Fix for PR#79 and PR#80 Issues
+**Issue**: Operations succeeded but returned 500 error; selections lost on refresh; could re-pull already-reverted operations
+**Root Causes**:
+  1. Pydantic v2 immutability: Direct assignment after `model_validate()` in 3 more endpoints (history, search, list)
+  2. Database session detachment: Operation objects expired after commit, causing serialization failures
+  3. Frontend selection persistence: File/operation selections cleared on every refresh
+  4. Missing pulled status: Operations could be pulled multiple times
+
+**Fixes Applied**:
+  1. **Backend - Pydantic**: Fixed remaining 3 endpoints to use `model_copy(update={...})`
+  2. **Backend - Session**: Added `await db.refresh(operation)` after all `execute_operation()` calls
+  3. **Frontend - Path A Selection**: Save/restore selected file paths during `renderFileList()`
+  4. **Frontend - Operation History**: Preserve selected operation ID during refresh (already implemented)
+  5. **Backend/Frontend - Pull Prevention**: Added `has_been_pulled` field to `OperationResponse`, query for existing PULL operations, disable checkbox for pulled operations
+
+**Files Modified**:
+  - `backend/api/app.py` (lines 333, 380, 426, 472, 516, 580, 637-664)
+  - `backend/api/schemas.py` (lines 278-279)
+  - `frontend/js/ui.js` (lines 22-60, 615)
+
+**All Issues Resolved**: ✅ 500 errors fixed, ✅ selections persist, ✅ no duplicate pulls
+
+### 2026-02-04 - Complete Pydantic Immutability Fix (PR#79/80)
 **Issue**: All operation endpoints returned 500 error on success
 **Fixed**: 6 endpoints now use `model_copy(update={...})` instead of direct assignment
 **Endpoints**: `/api/files/copy`, `/api/files/move`, `/api/files/delete`, `/api/files/mkdir`, `/api/operations/push`, `/api/operations/pull`
