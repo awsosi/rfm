@@ -26,6 +26,7 @@
 **Issue**: System logs in Admin Panel showed minimal information without proper table structure. Logs displayed only basic data and lacked source/target directory information for PUSH/PULL operations.
 
 **Requirements**: Display comprehensive log information in a structured table:
+- Full timestamp (MM/DD/YYYY, HH:MM:SS format)
 - Relative timestamp (Just now, X mins ago, X hours ago)
 - Operation type (push, pull, login_success, worker_provision, etc.)
 - Source directory (for push/pull operations)
@@ -36,32 +37,34 @@
 
 **Fixes Applied**:
 
-1. **Admin HTML - Table Structure** (admin.html:488-504):
+1. **Admin HTML - Table Structure** (admin.html:489-504):
    - Replaced simple div#log-entries with proper data-table structure
-   - Added 7 columns: Time, Operation, Source Directory, Target Directory, User ID, Username, IP Address
+   - Added 8 columns: Timestamp, Time, Operation, Source Directory, Target Directory, User ID, Username, IP Address
    - Added pagination info display
    - Maintains existing log controls (filters, refresh, export)
 
-2. **Admin JS - Logs Rendering** (admin-system.js:354-393):
+2. **Admin JS - Logs Rendering** (admin-system.js:354-407):
    - Updated `renderLogs()` to extract source_directory and target_directory from details_json
    - Shows '-' for non-PUSH/PULL operations where directories aren't applicable
-   - Displays relative timestamps using new formatRelativeTime() method
+   - Displays full timestamp (MM/DD/YYYY, HH:MM:SS format) as first column
+   - Displays relative timestamps using formatRelativeTime() method as second column
    - Shows username or 'System' when user information not available
-   - Updated column span from 6 to 7 for "No logs found" message
+   - Updated column span from 6 to 8 for "No logs found" message
 
-3. **Admin JS - Time Formatting** (admin-system.js:561-594):
+3. **Admin JS - Time Formatting** (admin-system.js:570-603):
    - Added `formatRelativeTime()` method to AdminSystem class
    - Formats timestamps as: "Just now" (<1 min), "X mins ago" (<1 hour), "X hours ago" (<24 hours), "X days ago" (<7 days)
    - Falls back to localized date/time for older entries
    - Handles invalid timestamps gracefully
 
 **Files Modified**:
-- `frontend/pages/admin.html` (lines 488-504: replaced log-entries div with table structure)
-- `frontend/js/admin-system.js` (lines 354-393: updated renderLogs; lines 561-594: added formatRelativeTime)
+- `frontend/pages/admin.html` (lines 489-504: replaced log-entries div with 8-column table structure)
+- `frontend/js/admin-system.js` (lines 354-407: updated renderLogs with full timestamp; lines 570-603: added formatRelativeTime)
 
 **Result**:
 ✅ System logs display in structured table with all required columns
-✅ Relative timestamps show "Just now", "X mins ago", "X hours ago" for recent events
+✅ Full timestamp displayed as first column for precise time reference
+✅ Relative timestamps show "Just now", "X mins ago", "X hours ago" for quick reference
 ✅ PUSH/PULL operations show source_directory and target_directory from details_json
 ✅ User ID and Username displayed for all operations
 ✅ IP addresses visible for audit purposes
@@ -69,15 +72,15 @@
 
 **Example Display**:
 ```
-Time           Operation         Source Dir    Target Dir    User ID  Username  IP Address
-Just now       pull              B:/data       A:/data       2        john      192.168.200.7
-Just now       push              A:/test       B:/test       2        john      192.168.200.7
-1 min ago      login_success     -             -             2        john      192.168.200.7
-1 min ago      worker_provision  -             -             1        admin     192.168.200.7
-2 mins ago     user_create       -             -             1        admin     192.168.200.7
+Timestamp            Time        Operation         Source Dir    Target Dir    User ID  Username  IP Address
+02/04/2026, 10:30:45 Just now    pull              B:/data       A:/data       2        john      192.168.200.7
+02/04/2026, 10:30:42 Just now    push              A:/test       B:/test       2        john      192.168.200.7
+02/04/2026, 10:29:15 1 min ago   login_success     -             -             2        john      192.168.200.7
+02/04/2026, 10:28:52 1 min ago   worker_provision  -             -             1        admin     192.168.200.7
+02/04/2026, 10:28:10 2 mins ago  user_create       -             -             1        admin     192.168.200.7
 ```
 
-**Design Notes**: KISS approach - simple table structure with data extraction from existing details_json; DRY - reusable formatRelativeTime() method consistent with existing utils.js patterns; Maintains existing backend API contract - no backend changes needed as details_json already contains all required information
+**Design Notes**: KISS approach - simple table structure with data extraction from existing details_json; DRY - reusable formatRelativeTime() method consistent with existing utils.js patterns; Dual timestamp display provides both precise time (for audit trail) and relative time (for quick reference); Maintains existing backend API contract - no backend changes needed as details_json already contains all required information
 
 ### 2026-02-04 - Fix PUSH Operation Failing with Null Reference Exception
 **Issue**: PUSH operations failed immediately with "Object reference not set to an instance of an object" error from the worker. The operation created successfully but failed during execution when trying to verify the source directory exists.

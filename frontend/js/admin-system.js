@@ -358,7 +358,7 @@ class AdminSystem {
         tbody.innerHTML = '';
 
         if (response.logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="no-data">No logs found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="no-data">No logs found</td></tr>';
             return;
         }
 
@@ -376,12 +376,23 @@ class AdminSystem {
                 }
             }
 
+            // Format full timestamp
+            const fullTimestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }) : 'N/A';
+
             // Format timestamp as relative time
-            const timestamp = this.formatRelativeTime(log.timestamp);
+            const relativeTime = this.formatRelativeTime(log.timestamp);
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${timestamp}</td>
+                <td>${fullTimestamp}</td>
+                <td>${relativeTime}</td>
                 <td>${this.escapeHtml(log.action)}</td>
                 <td>${this.escapeHtml(sourceDir)}</td>
                 <td>${this.escapeHtml(targetDir)}</td>
