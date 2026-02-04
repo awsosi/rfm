@@ -22,6 +22,41 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Path Logic Descriptions in Configuration Wizard
+**Issue**: Configuration wizard displayed incorrect descriptions for Path B and Path C, causing confusion about operation flow.
+
+**Wrong Descriptions**:
+- Path B: "Archive location (backed up files)" ❌
+- Path C: "Final storage (moved files)" ❌
+
+**Correct Logic**:
+- Path A: Source files
+- Path B: Target (destination for PUSH operations)
+- Path C: Archive (final storage after PUSH)
+
+**Operation Flow**:
+- PUSH: A → B (copy) + A → C (move)
+- PULL: B → A (restore from target)
+
+**Fixes Applied**:
+1. **Worker Configuration Wizard** (Program.cs:178-189):
+   - Updated Path B description: "Target (destination for PUSH operations)"
+   - Updated Path C description: "Archive (final storage after PUSH)"
+   - Added operation logic explanation to wizard output
+
+**Files Modified**:
+- `workers/FileManagerWorker/Program.cs` (lines 178-189)
+
+**Verification**:
+- ✅ Backend logic already correct (operation_service.py PUSH/PULL implementation)
+- ✅ Frontend admin panel already has correct descriptions
+- ✅ Database schema comments already correct
+- ✅ Only configuration wizard had incorrect text
+
+**Result**: ✅ Configuration wizard now displays correct path purposes and operation flow
+
+**Design Notes**: KISS approach - corrected misleading descriptions to match actual operation logic; DRY - verified rest of codebase already had correct understanding
+
 ### 2026-02-04 - Fix Worker PathC/PathB/PathA Prefix Configuration
 **Issue**: PathCPrefix (and PathAPrefix, PathBPrefix) set in App.config were not being applied. The `/config` wizard didn't prompt for these values and didn't store them in secure storage (DPAPI), causing workers to always use hardcoded defaults.
 
