@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
 from api.middleware.auth import require_admin
-from api.middleware.logging import AuditLogger
+from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import MessageResponse, WorkerResponse
 from api.schemas_admin import (
     SambaPathCreate,
@@ -110,7 +110,7 @@ async def create_samba_path(
             "name": samba_path.name,
             "prefix": samba_path.path_prefix,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -172,7 +172,7 @@ async def update_samba_path(
             "path_id": path_id,
             "changes": path_data.model_dump(exclude_none=True),
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -213,7 +213,7 @@ async def delete_samba_path(
             "path_id": path_id,
             "name": path_name,
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -349,7 +349,7 @@ async def provision_worker(
             "worker_name": worker.name,
             "config": provision_data.config.model_dump(exclude_none=True),
         },
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -394,7 +394,7 @@ async def send_worker_command(
                 "command": command_data.command,
                 "status": response.status,
             },
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
 
@@ -468,7 +468,7 @@ async def test_path(
                 "worker_id": worker.id,
                 "success": response.status == "success",
             },
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
 
@@ -492,7 +492,7 @@ async def test_path(
                 "success": False,
                 "error": str(exc),
             },
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
 

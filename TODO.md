@@ -23,6 +23,84 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Improve Audit Logs with Real Client IP and Enhanced Syslog
+**Issue**: Application running behind Traefik reverse proxy captured Traefik's IP instead of real client IP. Audit logs needed real client IP, and syslog messages lacked operation details (directory, username).
+
+**Requirements**:
+1. Capture real client IP from Traefik headers (X-Forwarded-For, X-Real-IP)
+2. Ensure PUSH/PULL operation logs contain: operation ID, directory, username, time, and real client IP
+3. Send operation logs to syslog if configured
+4. Make logs available in Admin Panel and syslog with complete information
+
+**Root Causes**:
+1. **Wrong IP Capture**: Application used `request.client.host` which returns Traefik's IP, not the original client
+2. **Traefik Headers**: Traefik forwards real client IP in `X-Forwarded-For` (leftmost IP is original client) and `X-Real-IP`
+3. **Incomplete Syslog**: Syslog messages only included user_id, operation_id, action, and level - missing IP, username, and directory
+4. **No Syslog for Operations**: PUSH/PULL operations only logged to database, not to syslog (logging_module not initialized)
+
+**Fixes Applied**:
+1. **Client IP Utility** (api/middleware/logging.py:23-58):
+   - Created `get_client_ip(request)` function to extract real IP from Traefik headers
+   - Priority: X-Forwarded-For (leftmost) → X-Real-IP → request.client.host (fallback)
+   - Handles comma-separated proxy chains correctly
+
+2. **Updated All IP Capture Points** (6 files, 30+ occurrences):
+   - Replaced all `request.client.host if request.client else None` with `get_client_ip(request)`
+   - Files: app.py, routes/auth.py, routes/admin.py, routes/admin_system.py, routes/preferences.py
+   - Also updated RequestLoggingMiddleware to use new function
+
+3. **Enhanced Syslog Handler** (logging_module/handlers.py:177-225):
+   - Added ip_address to structured_data
+   - Added operation-specific fields: source_path, dest_path, operation_type (for OperationLog)
+   - Added username from details if present
+   - Added directory info (extracts from "source" or "restore_to" in details)
+   - Converts user_id and operation_id to strings for RFC 5424 compliance
+
+4. **Integrated Syslog for Operations** (api/middleware/logging.py:295-352):
+   - Modified `AuditLogger.log_operation()` to accept username parameter
+   - Added call to logging_module's `log_operation()` to send to syslog (if configured)
+   - Includes username in details and message
+   - Graceful fallback: database audit log always created even if syslog fails
+
+5. **Pass Username to Audit Logger** (app.py:602, 682):
+   - PUSH operation: Added `username=current_user.username` to log_operation call
+   - PULL operation: Added `username=current_user.username` to log_operation call
+   - Username now included in both database and syslog logs
+
+6. **Initialize Logging Module** (app.py:51-57, 93-99):
+   - Added logging_module initialization in application startup (lifespan)
+   - Graceful handling: logs warning if initialization fails, app continues
+   - Added close_logging() call in shutdown for proper cleanup
+
+**Files Modified**:
+- `backend/api/middleware/logging.py` (lines 23-58: get_client_ip; 97, 295-352: AuditLogger enhancement)
+- `backend/api/app.py` (lines 26: import get_client_ip; 51-57: init logging_module; 93-99: close; 602, 682: add username; all ip_address captures)
+- `backend/api/routes/auth.py` (lines 21: import; all ip_address captures)
+- `backend/api/routes/admin.py` (lines 15: import; all ip_address captures)
+- `backend/api/routes/admin_system.py` (lines 22: import; all ip_address captures)
+- `backend/api/routes/preferences.py` (lines 14: import; all ip_address captures)
+- `backend/logging_module/handlers.py` (lines 177-225: enhanced SyslogHandler.write_log)
+
+**Result**:
+✅ Real client IP captured from Traefik headers across all audit logs
+✅ Admin Panel shows real client IPs
+✅ Syslog messages include operation ID, username, directory, IP address, and timestamp
+✅ PUSH/PULL operations logged to both database and syslog (if configured)
+✅ Backward compatible - works with or without syslog configuration
+
+**Configuration**: To enable syslog, set environment variables:
+- `ENABLE_SYSLOG=true`
+- `SYSLOG_HOST=your.syslog.server`
+- `SYSLOG_PORT=514` (default)
+- `SYSLOG_PROTOCOL=UDP` or `TCP`
+
+**Syslog Message Format** (RFC 5424):
+```
+<134>1 2026-02-04T10:30:00.000000Z hostname file-manager - - [filemanager user_id="1" operation_id="123" action="push" level="INFO" ip_address="192.168.1.100" username="john" directory="A:/data/folder"] User john performed push operation
+```
+
+**Design Notes**: KISS approach - single utility function for IP extraction used everywhere; DRY - reusable get_client_ip() function; graceful degradation - app works without syslog, logs to database always; proper Traefik integration - handles X-Forwarded-For proxy chains correctly.
+
 ### 2026-02-04 - Fix Concurrent PUSH/PULL Operations Race Condition (Phantom Operations)
 **Issue**: When 2 users push/pull the same directory concurrently, a phantom third operation appears with incorrect directory paths (shows B:/example when actual direction was A->B). The phantom operation completes successfully but makes no logical sense and isn't properly logged.
 

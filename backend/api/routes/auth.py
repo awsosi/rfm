@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
 from api.middleware.auth import get_current_user
-from api.middleware.logging import AuditLogger
+from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import LoginRequest, LoginResponse
 from database import get_db
 from models import Session as SessionModel, User
@@ -114,7 +114,7 @@ async def _perform_login(
                 user_id=user.id,
                 action="login_failed_external_auth",
                 success=False,
-                ip_address=request.client.host if request.client else None,
+                ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
                 details={"username": login_data.username, "reason": "external_auth_failed"},
             )
@@ -146,7 +146,7 @@ async def _perform_login(
             user_id=user.id,
             action="login_failed",
             success=False,
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
             details={"username": login_data.username},
         )
@@ -165,7 +165,7 @@ async def _perform_login(
         user_id=user.id,
         token="",  # Will be set after generating JWT
         expires_at=expires_at,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.add(session)
@@ -195,7 +195,7 @@ async def _perform_login(
         user_id=user.id,
         action="login_success",
         success=True,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details={"session_id": session.id},
     )
@@ -303,7 +303,7 @@ async def logout(
             user_id=current_user.id,
             action="logout",
             success=True,
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
             details={"session_id": session.id},
         )

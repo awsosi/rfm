@@ -20,6 +20,44 @@ from database import DatabaseManager
 from models import AuditLog
 
 
+def get_client_ip(request: Request) -> str:
+    """
+    Extract real client IP address from request.
+
+    When behind a reverse proxy (like Traefik), the real client IP is forwarded
+    in headers. This function checks multiple headers in priority order:
+    1. X-Forwarded-For (takes leftmost/original client IP)
+    2. X-Real-IP
+    3. request.client.host (fallback to direct connection IP)
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        Client IP address as string, or None if unavailable
+    """
+    # X-Forwarded-For contains comma-separated list of IPs
+    # Format: "client, proxy1, proxy2"
+    # The leftmost IP is the original client
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        # Take the first IP (original client)
+        client_ip = forwarded_for.split(",")[0].strip()
+        if client_ip:
+            return client_ip
+
+    # X-Real-IP is set by some proxies to the client IP
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+
+    # Fallback to direct connection IP
+    if request.client:
+        return request.client.host
+
+    return None
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware for logging all HTTP requests and responses.
@@ -56,7 +94,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         path = request.url.path
         query_params = dict(request.query_params)
-        client_host = request.client.host if request.client else None
+        client_host = get_client_ip(request)
         user_agent = request.headers.get("user-agent", "")
 
         # Get authenticated user if present
@@ -261,12 +299,48 @@ class AuditLogger:
         details: dict,
         ip_address: str = None,
         user_agent: str = None,
+        username: str = None,
     ) -> AuditLog:
         """Log file operation."""
         audit_details = {
             "action_type": "operation",
             **details,
         }
+
+        # Include username in details if provided
+        if username:
+            audit_details["username"] = username
+
+        # Send to logging_module for syslog (if configured)
+        try:
+            from logging_module import log_operation as log_op_to_module
+
+            # Extract paths from details for structured logging
+            source_path = details.get("source") or details.get("original_operation_id")
+            dest_path = details.get("path_b") or details.get("restore_to")
+
+            # Create descriptive message
+            if username:
+                message = f"User {username} performed {action} operation"
+            else:
+                message = f"User ID {user_id} performed {action} operation"
+
+            # Send to logging_module (will forward to syslog if enabled)
+            await log_op_to_module(
+                operation_type=action,
+                message=message,
+                user_id=user_id,
+                operation_id=operation_id,
+                source_path=str(source_path) if source_path else None,
+                dest_path=str(dest_path) if dest_path else None,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details=audit_details,
+            )
+        except Exception:
+            # If logging_module is not initialized or fails, continue anyway
+            # (database audit log will still be created below)
+            pass
 
         return await create_audit_log(
             user_id=user_id,
