@@ -13,6 +13,7 @@ from typing import Annotated, Dict, List, Optional, Any
 from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from loguru import logger
 from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
