@@ -2,13 +2,58 @@
 
 > **Project:** File operation management system with microservices architecture
 >
-> **Status:** CROSS-VOLUME MOVES & REAL-TIME UI FIXED ✅
+> **Status:** WORKER REMOVAL FIXED ✅
 >
 > **Ostatnia aktualizacja:** 2026-02-04
 
 ---
 
-## 🔧 LATEST FIXES - Cross-Volume Moves & Real-Time UI (2026-02-04)
+## 🔧 LATEST FIX - Worker Remove Button (2026-02-04)
+
+### Issue: Remove Button Not Working in Admin Panel
+**Problem**: Clicking the "Remove" button in Admin Panel → Workers settings had no effect
+
+**Root Cause**:
+- The button was created with class `remove-worker-btn` but no event listener was attached
+- Backend DELETE endpoint `/api/admin/workers/{worker_id}` was working correctly
+- The issue was purely in the frontend - missing event handler
+
+**Fix Implementation** (frontend/pages/admin.html:917-937):
+```javascript
+// Attach event listeners to Remove buttons
+document.querySelectorAll('.remove-worker-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const workerId = btn.dataset.id;
+        const workerName = btn.dataset.name;
+
+        if (!confirm(`Are you sure you want to remove worker "${workerName}"?\n\nThe worker can re-register if it's still active.`)) {
+            return;
+        }
+
+        try {
+            await apiRequest(`/api/admin/workers/${workerId}`, {
+                method: 'DELETE'
+            });
+            alert('Worker removed successfully');
+            await loadWorkers();
+        } catch (error) {
+            alert('Error removing worker: ' + error.message);
+        }
+    });
+});
+```
+
+**Behavior**:
+- ✅ Remove button now works and properly deletes workers
+- ✅ Worker is removed from database (not banned - can re-register)
+- ✅ Confirmation dialog warns user that worker can re-register if still active
+- ✅ Table auto-refreshes after successful removal
+- ✅ Follows KISS principle - simple event listener attachment
+- ✅ DRY - similar pattern to approve/reject buttons
+
+---
+
+## 🔧 PREVIOUS FIXES - Cross-Volume Moves & Real-Time UI (2026-02-04)
 
 ### Issue 1: Cross-Volume Move Operation Failure
 **Error**: `System.IO.IOException: Source and destination path must have identical roots. Move will not work across volumes.`
