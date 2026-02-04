@@ -67,7 +67,8 @@ const state = {
             offset: 0,
             isSearching: false,
             sortBy: 'modified',
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            isLoading: false // Track if directory load is in progress
         },
         b: {
             currentPath: 'B:',
@@ -75,7 +76,8 @@ const state = {
             offset: 0,
             isSearching: false,
             sortBy: 'modified',
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            isLoading: false
         }
     },
     operations: new Map(),
@@ -98,6 +100,11 @@ const state = {
     autoRefreshIntervals: {
         operationHistory: null,
         fileList: null
+    },
+    // User interaction tracking to prevent refresh race conditions
+    userInteraction: {
+        lastInputTime: 0, // Timestamp of last user input in path field
+        isTyping: false // Whether user is currently typing
     }
 };
 
@@ -189,6 +196,11 @@ function startAutoRefresh() {
     // Refresh Path A file listing every 5 seconds
     state.autoRefreshIntervals.fileList = setInterval(async () => {
         try {
+            // Skip refresh if user is actively interacting
+            if (shouldSkipAutoRefresh('a')) {
+                console.log('Skipping auto-refresh: user is interacting');
+                return;
+            }
             await refreshPane('a');
         } catch (error) {
             console.error('Auto-refresh file list failed:', error);
@@ -196,6 +208,40 @@ function startAutoRefresh() {
     }, 5000);
 
     console.log('Auto-refresh started for Operation History and file listings');
+}
+
+/**
+ * Determine if auto-refresh should be skipped to prevent race conditions
+ * @param {string} paneId - Pane ID
+ * @returns {boolean} True if refresh should be skipped
+ */
+function shouldSkipAutoRefresh(paneId) {
+    const pane = state.panes[paneId];
+
+    // Skip if navigation/loading is already in progress
+    if (pane.isLoading) {
+        return true;
+    }
+
+    // Skip if user is currently typing in the path input
+    const pathInput = document.getElementById(`path-input-${paneId}`);
+    if (pathInput && document.activeElement === pathInput) {
+        return true;
+    }
+
+    // Skip if user recently typed (within last 2 seconds)
+    const timeSinceLastInput = Date.now() - state.userInteraction.lastInputTime;
+    if (timeSinceLastInput < 2000) {
+        return true;
+    }
+
+    // Skip if search input has focus (user might be typing search query)
+    const searchInput = document.getElementById(`search-${paneId}`);
+    if (searchInput && document.activeElement === searchInput) {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -282,14 +328,30 @@ function setupEventListeners() {
  * @param {string} paneId - Pane ID
  */
 function setupPaneControls(paneId) {
+    const pathInput = document.getElementById(`path-input-${paneId}`);
+
+    // Track user typing in path input to prevent refresh race conditions
+    pathInput.addEventListener('input', () => {
+        state.userInteraction.lastInputTime = Date.now();
+        state.userInteraction.isTyping = true;
+    });
+
+    pathInput.addEventListener('focus', () => {
+        state.userInteraction.isTyping = true;
+    });
+
+    pathInput.addEventListener('blur', () => {
+        state.userInteraction.isTyping = false;
+    });
+
     // Path go button
     document.getElementById(`path-go-${paneId}`).addEventListener('click', async () => {
-        const path = document.getElementById(`path-input-${paneId}`).value;
+        const path = pathInput.value;
         await loadDirectory(paneId, path);
     });
 
     // Path input enter key
-    document.getElementById(`path-input-${paneId}`).addEventListener('keypress', async (e) => {
+    pathInput.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
             const path = e.target.value;
             await loadDirectory(paneId, path);
@@ -484,6 +546,9 @@ async function loadDirectory(paneId, path) {
         return;
     }
 
+    // Set loading flag to prevent race conditions with auto-refresh
+    state.panes[paneId].isLoading = true;
+
     showLoading(paneId);
     state.panes[paneId].isSearching = false;
     state.panes[paneId].offset = 0;
@@ -532,6 +597,9 @@ async function loadDirectory(paneId, path) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
         showError(`Failed to load directory: ${error.message}`);
         hideLoading(paneId);
+    } finally {
+        // Clear loading flag after navigation completes
+        state.panes[paneId].isLoading = false;
     }
 }
 
@@ -654,6 +722,9 @@ async function handleSearch(paneId) {
 
     const currentPath = state.panes[paneId].currentPath;
 
+    // Set loading flag to prevent race conditions with auto-refresh
+    state.panes[paneId].isLoading = true;
+
     showLoading(paneId);
     state.panes[paneId].isSearching = true;
 
@@ -677,6 +748,8 @@ async function handleSearch(paneId) {
         showError(`Search failed: ${error.message}`);
     } finally {
         hideLoading(paneId);
+        // Clear loading flag after search completes
+        state.panes[paneId].isLoading = false;
     }
 }
 
