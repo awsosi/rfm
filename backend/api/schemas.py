@@ -268,6 +268,8 @@ class OperationResponse(BaseModel):
     type: OperationType
     source_path: str
     dest_path: Optional[str]
+    original_path: Optional[str] = None  # Original location for PUSH/PULL operations
+    archive_path: Optional[str] = None  # Archive location for PUSH operations
     status: OperationStatus
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
