@@ -19,15 +19,13 @@ export function renderFileList(paneId, files, append = false) {
     // Hide loading indicator
     loading.classList.add('hidden');
 
-    // Save selected paths before clearing to restore selection after refresh
-    const selectedPaths = new Set();
+    // Save selected path before clearing to restore selection after refresh (single selection)
+    let selectedPath = null;
     if (!append) {
-        const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox:checked`);
-        checkboxes.forEach(cb => {
-            if (cb.dataset.path) {
-                selectedPaths.add(cb.dataset.path);
-            }
-        });
+        const selectedRadio = document.querySelector(`#file-list-body-${paneId} .file-radio:checked`);
+        if (selectedRadio && selectedRadio.dataset.path) {
+            selectedPath = selectedRadio.dataset.path;
+        }
         tbody.innerHTML = '';
     }
 
@@ -48,15 +46,13 @@ export function renderFileList(paneId, files, append = false) {
         tbody.appendChild(row);
     });
 
-    // Restore selection after rendering
-    if (selectedPaths.size > 0) {
-        const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox`);
-        checkboxes.forEach(cb => {
-            if (selectedPaths.has(cb.dataset.path)) {
-                cb.checked = true;
-                cb.closest('tr').classList.add('selected');
-            }
-        });
+    // Restore selection after rendering (single selection)
+    if (selectedPath) {
+        const radio = document.querySelector(`#file-list-body-${paneId} .file-radio[data-path="${selectedPath}"]`);
+        if (radio) {
+            radio.checked = true;
+            radio.closest('tr').classList.add('selected');
+        }
     }
 
     // Update load more button visibility
@@ -83,20 +79,21 @@ function createFileRow(file, paneId) {
     row.dataset.modified = file.modified_at || '';
     row.dataset.name = file.name || '';
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'file-checkbox';
-    checkbox.dataset.path = file.path;
-    checkbox.dataset.isDirectory = file.is_directory;
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `file-select-${paneId}`; // All radios in same pane share name
+    radio.className = 'file-radio';
+    radio.dataset.path = file.path;
+    radio.dataset.isDirectory = file.is_directory;
 
-    // Disable checkbox for parent directory (..)
+    // Disable radio for parent directory (..)
     if (file.is_parent_dir) {
-        checkbox.disabled = true;
-        checkbox.style.visibility = 'hidden';
+        radio.disabled = true;
+        radio.style.visibility = 'hidden';
     }
 
-    const checkboxCell = document.createElement('td');
-    checkboxCell.appendChild(checkbox);
+    const radioCell = document.createElement('td');
+    radioCell.appendChild(radio);
 
     const nameCell = document.createElement('td');
     const icon = document.createElement('span');
@@ -120,7 +117,7 @@ function createFileRow(file, paneId) {
     const modifiedCell = document.createElement('td');
     modifiedCell.textContent = file.modified_at ? formatDate(file.modified_at) : '-';
 
-    row.appendChild(checkboxCell);
+    row.appendChild(radioCell);
     row.appendChild(nameCell);
     row.appendChild(sizeCell);
     row.appendChild(modifiedCell);
@@ -132,8 +129,8 @@ function createFileRow(file, paneId) {
 
         // Single click on name cell to navigate
         nameCell.addEventListener('click', (e) => {
-            // Don't navigate if clicking checkbox
-            if (e.target.type !== 'checkbox') {
+            // Don't navigate if clicking radio
+            if (e.target.type !== 'radio') {
                 navigateToDirectory(paneId, file.path);
             }
         });
@@ -147,26 +144,35 @@ function createFileRow(file, paneId) {
 
     // Add row selection (only for non-directory rows or when not clicking on name)
     row.addEventListener('click', (e) => {
-        // Don't toggle checkbox if:
-        // 1. Already clicking checkbox
+        // Don't toggle radio if:
+        // 1. Already clicking radio
         // 2. Clicking on name cell of a directory (navigation)
         // 3. Row is parent directory
         if (file.is_parent_dir) {
             return;
         }
 
-        if (e.target.type !== 'checkbox' && !e.target.closest('td:nth-child(2)')) {
-            checkbox.checked = !checkbox.checked;
-            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+        if (e.target.type !== 'radio' && !e.target.closest('td:nth-child(2)')) {
+            // Clear all other selections first
+            document.querySelectorAll(`#file-list-body-${paneId} tr`).forEach(r => {
+                r.classList.remove('selected');
+            });
 
-        // Update row selection visual state
-        row.classList.toggle('selected', checkbox.checked);
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+            row.classList.add('selected');
+        }
     });
 
-    // Also handle checkbox change events
-    checkbox.addEventListener('change', () => {
-        row.classList.toggle('selected', checkbox.checked);
+    // Also handle radio change events
+    radio.addEventListener('change', () => {
+        // Clear all other row selections
+        document.querySelectorAll(`#file-list-body-${paneId} tr`).forEach(r => {
+            r.classList.remove('selected');
+        });
+        if (radio.checked) {
+            row.classList.add('selected');
+        }
     });
 
     return row;
@@ -208,21 +214,23 @@ export function hideLoading(paneId) {
 }
 
 /**
- * Get selected files in pane
+ * Get selected file in pane (single selection with radio button)
  * @param {string} paneId - Pane ID
- * @returns {Array<Object>} Array of selected file objects with metadata
+ * @returns {Array<Object>} Array with single selected file object, or empty array
  */
 export function getSelectedFiles(paneId) {
-    const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox:checked`);
-    return Array.from(checkboxes).map(cb => {
-        const row = cb.closest('tr');
-        return {
-            path: cb.dataset.path,
-            name: row.dataset.name,
-            is_directory: row.dataset.isDirectory === 'true',
-            size_bytes: parseInt(row.dataset.sizeBytes) || 0
-        };
-    });
+    const selectedRadio = document.querySelector(`#file-list-body-${paneId} .file-radio:checked`);
+    if (!selectedRadio) {
+        return [];
+    }
+
+    const row = selectedRadio.closest('tr');
+    return [{
+        path: selectedRadio.dataset.path,
+        name: row.dataset.name,
+        is_directory: row.dataset.isDirectory === 'true',
+        size_bytes: parseInt(row.dataset.sizeBytes) || 0
+    }];
 }
 
 /**
@@ -230,10 +238,10 @@ export function getSelectedFiles(paneId) {
  * @param {string} paneId - Pane ID
  */
 export function clearSelection(paneId) {
-    const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox`);
-    checkboxes.forEach(cb => {
-        cb.checked = false;
-        cb.closest('tr').classList.remove('selected');
+    const radios = document.querySelectorAll(`#file-list-body-${paneId} .file-radio`);
+    radios.forEach(r => {
+        r.checked = false;
+        r.closest('tr').classList.remove('selected');
     });
 }
 
@@ -439,18 +447,13 @@ function createQueueItem(operation) {
 }
 
 /**
- * Setup select all checkbox
+ * Setup select all checkbox - REMOVED for single selection with radio buttons
+ * This function is kept for backward compatibility but does nothing
  * @param {string} paneId - Pane ID
  */
 export function setupSelectAll(paneId) {
-    const selectAll = document.getElementById(`select-all-${paneId}`);
-    selectAll.addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll(`#file-list-body-${paneId} .file-checkbox`);
-        checkboxes.forEach(cb => {
-            cb.checked = e.target.checked;
-            cb.closest('tr').classList.toggle('selected', e.target.checked);
-        });
-    });
+    // No-op: Radio buttons don't support select-all
+    // Kept for backward compatibility
 }
 
 /**

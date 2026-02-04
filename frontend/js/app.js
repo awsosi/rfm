@@ -437,12 +437,52 @@ function setupOperationButtons() {
 }
 
 /**
+ * Validate Path A path
+ * @param {string} path - Path to validate
+ * @returns {boolean} True if valid
+ * @throws {Error} If path is invalid
+ */
+function validatePathA(path) {
+    if (!path) {
+        throw new Error('Path cannot be empty');
+    }
+
+    const pathUpper = path.toUpperCase();
+
+    // Path must start with A:
+    if (!pathUpper.startsWith('A:')) {
+        throw new Error('Path A operations must use paths starting with "A:". Other drive letters (B:, C:) are not allowed.');
+    }
+
+    // Check for other drive letters in the path (B:, C:, D:, etc.)
+    const pathAfterA = path.substring(2);
+    const driveLetterRegex = /[B-Z]:/i;
+    if (driveLetterRegex.test(pathAfterA)) {
+        const match = pathAfterA.match(driveLetterRegex);
+        if (match) {
+            throw new Error(`Invalid path: Drive letter "${match[0]}" not allowed in Path A. Use relative paths only.`);
+        }
+    }
+
+    return true;
+}
+
+/**
  * Load directory contents
  * @param {string} paneId - Pane ID
  * @param {string} path - Directory path
  */
 async function loadDirectory(paneId, path) {
     const normalizedPath = normalizePath(path);
+
+    // Validate Path A
+    try {
+        validatePathA(normalizedPath);
+    } catch (error) {
+        showError(error.message);
+        hideLoading(paneId);
+        return;
+    }
 
     showLoading(paneId);
     state.panes[paneId].isSearching = false;
@@ -1193,7 +1233,7 @@ function setupVFRedesignControls() {
     const fileListA = document.getElementById('file-list-body-a');
     if (fileListA) {
         fileListA.addEventListener('change', (e) => {
-            if (e.target.type === 'checkbox') {
+            if (e.target.type === 'radio') {
                 updateVFButtonStates();
             }
         });
