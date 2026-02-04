@@ -23,6 +23,19 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix PUSH/PULL Operation 500 Errors
+**Issue**: PUSH and PULL operations succeeded but returned 500 Internal Server Error to the client
+**Root Causes**:
+  1. WebSocket broadcast arguments were in wrong order: passing string as data and dict as topic
+  2. OperationResponse schema missing `original_path` and `archive_path` fields used by PUSH/PULL operations
+**Fixes Applied**:
+  1. **Backend - WebSocket**: Fixed broadcast call to pass data dict first, topic second
+  2. **Backend - Schema**: Added `original_path` and `archive_path` fields to OperationResponse
+**Files Modified**:
+  - `backend/api/app.py` (lines 531-539, 595-603)
+  - `backend/api/schemas.py` (lines 271-272)
+**Result**: ✅ PUSH/PULL operations now complete successfully with proper 200 responses
+
 ### 2026-02-04 - Path A Search Returning No Results
 **Issue**: File/directory search in Path A pane returned absolutely nothing (no files, no directories)
 **Root Causes**:

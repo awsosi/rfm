@@ -529,13 +529,13 @@ async def push_operation(
         # Broadcast to WebSocket clients
         from api.websocket_manager import ws_manager
         await ws_manager.broadcast(
-            "operation",
             {
                 "type": "operation_update",
                 "operation_id": operation.id,
                 "status": operation.status.value,
                 "user": current_user.username,
-            }
+            },
+            topic="operation"
         )
 
         # Use model_copy to update immutable Pydantic model
@@ -593,13 +593,13 @@ async def pull_operation(
         # Broadcast to WebSocket clients
         from api.websocket_manager import ws_manager
         await ws_manager.broadcast(
-            "operation",
             {
                 "type": "operation_update",
                 "operation_id": operation.id,
                 "status": operation.status.value,
                 "user": current_user.username,
-            }
+            },
+            topic="operation"
         )
 
         # Use model_copy to update immutable Pydantic model
