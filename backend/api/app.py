@@ -265,10 +265,16 @@ async def search_files(
                 worker, path, query, db, recursive
             )
 
+            # Debug logging to diagnose search issues
+            logger.debug(f"Search response status: {response.status}, error_details: {response.error_details}")
+
             results = []
-            if response.error_details and "files" in response.error_details:
+            # Check if response has results - handle both 'files' and 'items' keys
+            if response.error_details:
+                files_data = response.error_details.get("files") or response.error_details.get("items") or []
+                logger.debug(f"Found {len(files_data) if isinstance(files_data, list) else 0} search results")
                 # Transform worker response format to FileInfo format
-                for item in response.error_details["files"]:
+                for item in files_data:
                     # Convert 'size' to 'size_bytes' for backward compatibility
                     if "size" in item and "size_bytes" not in item:
                         item["size_bytes"] = item.pop("size")
@@ -279,6 +285,8 @@ async def search_files(
                     if "is_directory" not in item:
                         item["is_directory"] = False
                     results.append(FileInfo(**item))
+            else:
+                logger.warning(f"Search returned no error_details for query: {query} in path: {path}")
 
             return FileSearchResponse(
                 query=query,
@@ -526,17 +534,20 @@ async def push_operation(
         # Refresh operation to ensure all attributes are loaded after commit
         await db.refresh(operation)
 
-        # Broadcast to WebSocket clients
-        from api.websocket_manager import ws_manager
-        await ws_manager.broadcast(
-            {
-                "type": "operation_update",
-                "operation_id": operation.id,
-                "status": operation.status.value,
-                "user": current_user.username,
-            },
-            topic="operation"
-        )
+        # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+        try:
+            from api.websocket_manager import ws_manager
+            await ws_manager.broadcast(
+                {
+                    "type": "operation_update",
+                    "operation_id": operation.id,
+                    "status": operation.status.value,
+                    "user": current_user.username,
+                },
+                topic="operations"
+            )
+        except Exception as ws_exc:
+            logger.warning(f"Failed to broadcast operation update: {ws_exc}")
 
         # Use model_copy to update immutable Pydantic model
         op_response = OperationResponse.model_validate(operation)
@@ -590,17 +601,20 @@ async def pull_operation(
         # Refresh operation to ensure all attributes are loaded after commit
         await db.refresh(operation)
 
-        # Broadcast to WebSocket clients
-        from api.websocket_manager import ws_manager
-        await ws_manager.broadcast(
-            {
-                "type": "operation_update",
-                "operation_id": operation.id,
-                "status": operation.status.value,
-                "user": current_user.username,
-            },
-            topic="operation"
-        )
+        # Broadcast to WebSocket clients (don't fail request if broadcast fails)
+        try:
+            from api.websocket_manager import ws_manager
+            await ws_manager.broadcast(
+                {
+                    "type": "operation_update",
+                    "operation_id": operation.id,
+                    "status": operation.status.value,
+                    "user": current_user.username,
+                },
+                topic="operations"
+            )
+        except Exception as ws_exc:
+            logger.warning(f"Failed to broadcast operation update: {ws_exc}")
 
         # Use model_copy to update immutable Pydantic model
         op_response = OperationResponse.model_validate(operation)

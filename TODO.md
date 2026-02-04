@@ -23,6 +23,30 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Fix Persistent Issues (500 Errors & Empty Search)
+**Issues**:
+  1. PUSH/PULL operations succeeded but still showed error 500 toast
+  2. Search returned empty list even for exact file/directory name matches
+
+**Root Causes**:
+  1. **500 Error**: WebSocket broadcast exception was propagating up and causing HTTP 500 response despite successful operation
+  2. **Empty Search**: Worker response used different key names (sometimes "files", sometimes "items"), and search endpoint only checked "files" key
+
+**Fixes Applied**:
+  1. **Backend - WebSocket Error Handling**: Wrapped WebSocket broadcast in try-except block to prevent operation failure if broadcast fails
+     - Fixed topic name from "operation" to "operations" (plural)
+     - Added warning log if broadcast fails
+     - Operations now return 200 even if WebSocket notification fails
+  2. **Backend - Search Response Handling**: Updated search endpoint to check both "files" and "items" keys in error_details
+     - Added debug logging to diagnose search response format
+     - Added warning if error_details is None/missing
+     - Handles empty search results gracefully
+
+**Files Modified**:
+  - `backend/api/app.py` (lines 523-548, 587-612 for WebSocket; lines 268-297 for search)
+
+**Result**: ✅ PUSH/PULL operations complete with proper 200 status; ✅ Search now handles multiple response formats
+
 ### 2026-02-04 - Fix PUSH/PULL Operation 500 Errors
 **Issue**: PUSH and PULL operations succeeded but returned 500 Internal Server Error to the client
 **Root Causes**:
