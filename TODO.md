@@ -23,6 +23,43 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-04 - Path A Restrictions & Single Selection UI
+**Issues**:
+  1. Users could enter invalid paths (B:, C:) in Path A pane, breaking the single-path design
+  2. Multi-select checkboxes in file list didn't match VF redesign requirement (single selection only)
+  3. Address bar needed to reflect current directory when navigating
+
+**Root Causes**:
+  1. **Path Validation**: No validation on API or UI to prevent absolute paths like B:, C: in Path A operations
+  2. **Multi-Select**: Checkboxes allowed selecting multiple files, contradicting VF redesign single-directory operation model
+  3. **Address Bar**: Already working correctly via `setCurrentPath()` in `loadDirectory()`
+
+**Fixes Applied**:
+  1. **Backend - Path Validation**: Added `validate_path_a()` function to validate all Path A operations
+     - Rejects paths not starting with "A:"
+     - Detects and blocks other drive letters (B:, C:, etc.) anywhere in path
+     - Applied to: `/api/files/list`, `/api/files/search`, `/api/operations/push`
+  2. **Frontend - Path Validation**: Added `validatePathA()` in `app.js` with same validation logic
+     - Shows error toast if invalid path entered
+     - Prevents API call for invalid paths
+  3. **UI - Single Selection**: Converted file list from checkboxes to radio buttons
+     - Removed "Select All" checkbox from table header
+     - Changed `createFileRow()` to use radio buttons with shared name attribute
+     - Updated `getSelectedFiles()` to return array with single item (backward compatible)
+     - Updated `clearSelection()` to work with radio buttons
+     - Changed event listener from checkbox to radio in `setupVFRedesignControls()`
+  4. **Address Bar**: Confirmed already working - `setCurrentPath()` called in `loadDirectory()` updates input on navigation
+
+**Files Modified**:
+  - Backend: `backend/api/app.py` (added validate_path_a function, lines 134-166; applied to list/search/push endpoints)
+  - Frontend: `frontend/js/app.js` (added validatePathA function, lines 445-468; updated loadDirectory, line 475-485; fixed radio event handler, line 1236)
+  - Frontend: `frontend/js/ui.js` (converted to radio buttons in createFileRow, renderFileList, getSelectedFiles, clearSelection; lines 14-56, 73-179, 221-234, 240-246)
+  - Frontend: `frontend/pages/explorer.html` (removed checkboxes from table headers, lines 53, 115)
+
+**Result**: ✅ Path A restricted to relative paths only; ✅ Single-selection radio buttons replace multi-select checkboxes; ✅ Address bar updates on navigation (already working)
+
+**Design Notes**: Changes follow KISS principle - validation in both backend (security) and frontend (UX), minimal changes to existing code, backward-compatible API
+
 ### 2026-02-04 - Fix File Manager API 503 Error (Nested error_details)
 **Issue**: After recent changes, file listing (Path A pane) stopped working completely - returned 503 Service Unavailable error
 **Root Cause**:

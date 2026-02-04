@@ -131,6 +131,41 @@ async def health_check_endpoint():
 # File Operations
 # =============================================================================
 
+def validate_path_a(path: str) -> None:
+    """
+    Validate that path is a valid Path A path.
+
+    Path A paths must:
+    - Start with 'A:' or 'a:'
+    - Not contain other drive letters (B:, C:, etc.)
+    - Be treated as relative paths from Path A root
+
+    Raises HTTPException if validation fails.
+    """
+    if not path:
+        raise HTTPException(status_code=400, detail="Path cannot be empty")
+
+    # Normalize path to uppercase for comparison
+    path_upper = path.upper()
+
+    # Path must start with A:
+    if not path_upper.startswith('A:'):
+        raise HTTPException(
+            status_code=400,
+            detail="Path A operations must use paths starting with 'A:'. Other drive letters (B:, C:) are not allowed."
+        )
+
+    # Check for other drive letters in the path (B:, C:, D:, etc.)
+    # This prevents paths like "A:/some/B:/path"
+    path_after_a = path[2:]  # Remove "A:" prefix
+    for letter in 'BCDEFGHIJKLMNOPQRSTUVWXYZ':
+        if f'{letter}:' in path_after_a.upper():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid path: Drive letter '{letter}:' not allowed in Path A. Use relative paths only."
+            )
+
+
 @app.get("/api/files/list", response_model=DirectoryListResponse)
 async def list_directory(
     worker_id: int,
@@ -142,6 +177,9 @@ async def list_directory(
     limit: int = 1000,
 ):
     """List directory contents on worker."""
+    # Validate Path A
+    validate_path_a(path)
+
     worker = await get_worker_by_id(worker_id, db)
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -234,6 +272,9 @@ async def search_files(
     limit: int = 100,
 ):
     """Search for files on worker using Elasticsearch or worker service."""
+    # Validate Path A
+    validate_path_a(path)
+
     worker = await get_worker_by_id(worker_id, db)
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -526,6 +567,9 @@ async def push_operation(
 
     VF Redesign: This replaces the dual-pane copy operation.
     """
+    # Validate Path A
+    validate_path_a(request_data.source_path)
+
     worker_service = WorkerService(settings)
     operation_service = OperationService(settings, worker_service)
 
