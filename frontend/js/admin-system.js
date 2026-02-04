@@ -376,15 +376,19 @@ class AdminSystem {
                 }
             }
 
-            // Format full timestamp
-            const fullTimestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            }) : 'N/A';
+            // Format full timestamp as YYYY-MM-DD HH:mm:SS.milliseconds
+            let fullTimestamp = 'N/A';
+            if (log.timestamp) {
+                const date = new Date(log.timestamp);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+                fullTimestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+            }
 
             // Format timestamp as relative time
             const relativeTime = this.formatRelativeTime(log.timestamp);

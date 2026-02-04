@@ -26,7 +26,7 @@
 **Issue**: System logs in Admin Panel showed minimal information without proper table structure. Logs displayed only basic data and lacked source/target directory information for PUSH/PULL operations.
 
 **Requirements**: Display comprehensive log information in a structured table:
-- Full timestamp (MM/DD/YYYY, HH:MM:SS format)
+- Full timestamp (YYYY-MM-DD HH:mm:SS.milliseconds format)
 - Relative timestamp (Just now, X mins ago, X hours ago)
 - Operation type (push, pull, login_success, worker_provision, etc.)
 - Source directory (for push/pull operations)
@@ -43,10 +43,10 @@
    - Added pagination info display
    - Maintains existing log controls (filters, refresh, export)
 
-2. **Admin JS - Logs Rendering** (admin-system.js:354-407):
+2. **Admin JS - Logs Rendering** (admin-system.js:354-415):
    - Updated `renderLogs()` to extract source_directory and target_directory from details_json
    - Shows '-' for non-PUSH/PULL operations where directories aren't applicable
-   - Displays full timestamp (MM/DD/YYYY, HH:MM:SS format) as first column
+   - Displays full timestamp (YYYY-MM-DD HH:mm:SS.milliseconds format) as first column
    - Displays relative timestamps using formatRelativeTime() method as second column
    - Shows username or 'System' when user information not available
    - Updated column span from 6 to 8 for "No logs found" message
@@ -59,7 +59,7 @@
 
 **Files Modified**:
 - `frontend/pages/admin.html` (lines 489-504: replaced log-entries div with 8-column table structure)
-- `frontend/js/admin-system.js` (lines 354-407: updated renderLogs with full timestamp; lines 570-603: added formatRelativeTime)
+- `frontend/js/admin-system.js` (lines 354-415: updated renderLogs with YYYY-MM-DD HH:mm:SS.milliseconds timestamp formatting; lines 578-611: added formatRelativeTime)
 
 **Result**:
 ✅ System logs display in structured table with all required columns
@@ -72,12 +72,12 @@
 
 **Example Display**:
 ```
-Timestamp            Time        Operation         Source Dir    Target Dir    User ID  Username  IP Address
-02/04/2026, 10:30:45 Just now    pull              B:/data       A:/data       2        john      192.168.200.7
-02/04/2026, 10:30:42 Just now    push              A:/test       B:/test       2        john      192.168.200.7
-02/04/2026, 10:29:15 1 min ago   login_success     -             -             2        john      192.168.200.7
-02/04/2026, 10:28:52 1 min ago   worker_provision  -             -             1        admin     192.168.200.7
-02/04/2026, 10:28:10 2 mins ago  user_create       -             -             1        admin     192.168.200.7
+Timestamp                   Time        Operation         Source Dir    Target Dir    User ID  Username  IP Address
+2026-02-04 10:30:45.123     Just now    pull              B:/data       A:/data       2        john      192.168.200.7
+2026-02-04 10:30:42.456     Just now    push              A:/test       B:/test       2        john      192.168.200.7
+2026-02-04 10:29:15.789     1 min ago   login_success     -             -             2        john      192.168.200.7
+2026-02-04 10:28:52.012     1 min ago   worker_provision  -             -             1        admin     192.168.200.7
+2026-02-04 10:28:10.345     2 mins ago  user_create       -             -             1        admin     192.168.200.7
 ```
 
 **Design Notes**: KISS approach - simple table structure with data extraction from existing details_json; DRY - reusable formatRelativeTime() method consistent with existing utils.js patterns; Dual timestamp display provides both precise time (for audit trail) and relative time (for quick reference); Maintains existing backend API contract - no backend changes needed as details_json already contains all required information
