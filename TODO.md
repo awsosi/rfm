@@ -27,7 +27,69 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
-### 2026-02-05 - Implement Remote Authentication API Integration
+### 2026-02-05 - Fix Login Failure After Fresh Start (Frontend Auth Method Bug)
+**Issue**: After PRs #99 and #100 (PolkaSQL rename), users couldn't login to the app after fresh start. Login returned 401 Unauthorized even with correct credentials for local admin user.
+
+**Root Cause**: Frontend auth method selector bug caused login failures even when PolkaSQL was disabled:
+1. The auth method `<select>` element defaults to first `<option>` which is `"polka"` (line 22 in login.html)
+2. When PolkaSQL is disabled, frontend hides the selector (line 86) but doesn't change its value
+3. On form submit, `authMethodSelect.value` is still `"polka"` even though selector is hidden (line 103)
+4. Backend receives `auth_method: "polka"` and tries PolkaSQL auth, which is disabled
+5. Backend doesn't fall back to local auth because `auth_method == "polka"` (not "auto")
+6. Backend returns 401 even though the admin user exists and password is correct
+
+**Additional Issue**: Missing imports in auth.py would have caused NameError if PolkaSQL was enabled:
+- `func` from sqlalchemy (used on line 209 for case-insensitive username lookup)
+- `UserRole` from models (used on line 223 when auto-creating users)
+
+**Fixes Applied**:
+
+1. **Frontend - Auth Method Default** (frontend/pages/login.html:87, 93):
+   - When hiding auth method selector, explicitly set value to `'local'`
+   - Applied to both main hide logic (polka_auth_enabled == false) and error handler
+   - Ensures hidden selector doesn't send `"polka"` value when PolkaSQL is disabled
+
+2. **Backend - Missing Imports** (backend/api/routes/auth.py:16, 24):
+   - Added `func` to sqlalchemy import (line 16)
+   - Added `UserRole` to models import (line 24)
+   - Prevents NameError when PolkaSQL auth creates new users with case-insensitive lookup
+
+**Files Modified**:
+- `frontend/pages/login.html` (lines 87, 93: set authMethodSelect.value = 'local' when hiding selector)
+- `backend/api/routes/auth.py` (line 16: added func to imports; line 24: added UserRole to imports)
+
+**Result**:
+✅ Local users can login successfully when PolkaSQL is disabled
+✅ Auth method selector properly defaults to 'local' when hidden
+✅ Backend imports are complete and won't cause NameError
+✅ PolkaSQL auth still works correctly when enabled
+
+**CRITICAL LESSON LEARNED - ALWAYS TEST HIDDEN FORM ELEMENTS**:
+**When hiding form inputs dynamically:**
+1. ✅ **ALWAYS reset hidden element values to safe defaults** - Don't assume hidden elements won't submit their values
+2. ✅ **Test with feature flags disabled** - If UI hides features based on config, test with feature OFF, not just ON
+3. ✅ **Verify imports for all code paths** - Even if code isn't executed in default config, imports must be complete
+4. ✅ **Check select element defaults** - `<select>` defaults to first `<option>`, not empty/undefined
+5. ✅ **Test form submission with hidden fields** - Hidden fields still submit unless explicitly reset
+
+**How to never make this mistake again:**
+- When hiding a `<select>` element, explicitly set its value to a safe default (e.g., 'local', 'auto')
+- Don't rely on `|| 'default'` fallback if element value could be non-empty but wrong
+- Test authentication with all feature flags in both enabled and disabled states
+- Always run import verification even for code paths that aren't executed in default config
+- Use browser DevTools to inspect form data BEFORE submission to verify hidden field values
+- Consider using disabled attribute instead of hiding, or clear value when hiding
+
+**Testing Recommendations**:
+1. Test login with PolkaSQL disabled (default .env) - should use local auth
+2. Test login with PolkaSQL enabled but unreachable - should show appropriate error
+3. Test login with PolkaSQL enabled and working - should allow both polka and local auth
+4. Test auth method selector visibility based on polka_auth_enabled status
+5. Verify imports are complete by attempting PolkaSQL auth with auto-user-creation
+
+---
+
+### 2026-02-05 - Implement Remote Authentication API Integration (renamed to PolkaSQL)
 **Issue**: Need to support remote authentication against external API (PolkaSQL/RFM_Auth) with case-insensitive credentials and auto-user-creation.
 
 **Requirements**:
