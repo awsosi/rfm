@@ -27,7 +27,100 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
-### 2026-02-05 - Fix PolkaSQL Auth .env Ignored and Admin Panel Not Persisting (Config Key Mismatch)
+### 2026-02-05 - Fix PolkaSQL Settings Not Persisting in WebUI (Missed Inline Script During Refactor)
+**Issue**: After PR #103, PolkaSQL settings still not persisting in Admin Panel despite being saved to database and working in backend:
+1. User saves Polka auth settings in Admin Panel → settings work (remote auth succeeds) ✓
+2. Database contains correct values ✓
+3. Backend reads and uses settings correctly ✓
+4. But on page reload, Admin Panel form fields show empty (settings don't persist in webui) ✗
+
+**Root Cause**:
+PR #103 fixed backend (config.py, auth.py, .env.example) and admin.js, but **MISSED** the inline JavaScript in admin.html that also loads config into form fields.
+
+**Problem Location** (frontend/pages/admin.html:1037-1040):
+- The inline `loadConfig()` function had outdated Sybase fieldMapping from the original Sybase→Polka refactor
+- It was looking for: `enable_sybase_auth`, `sybase_auth_url`, `sybase_auth_timeout`, `sybase_auth_stored_proc`
+- Should have been: `polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout`
+- Result: On page load or tab switch, inline script tried to populate Polka form fields using Sybase config keys (wrong keys), so fields remained empty
+
+**Why This Was Missed**:
+1. PR #103 focused on backend config.py, auth.py, and .env - didn't search frontend HTML files
+2. admin.js was updated correctly (lines 504-507), but admin.html has DUPLICATE inline code that was overlooked
+3. There are TWO separate implementations of config loading:
+   - admin.js `populateConfigForm()` (correct, updated in PR #102)
+   - admin.html inline `loadConfig()` (incorrect, still had Sybase keys from original refactor)
+4. The inline script in admin.html overrides or runs alongside admin.js code
+
+**Fix Applied** (frontend/pages/admin.html:1037-1040):
+- Replaced outdated Sybase fieldMapping with Polka fieldMapping:
+  ```javascript
+  // OLD (wrong):
+  'config-sybase-enabled': 'enable_sybase_auth',
+  'config-sybase-url': 'sybase_auth_url',
+  'config-sybase-timeout': 'sybase_auth_timeout',
+  'config-sybase-proc': 'sybase_auth_stored_proc',
+
+  // NEW (correct):
+  'config-polka-auth-enabled': 'polka_auth_enabled',
+  'config-polka-auth-url': 'polka_auth_url',
+  'config-polka-auth-api-key': 'polka_auth_api_key',
+  'config-polka-auth-timeout': 'polka_auth_timeout',
+  ```
+
+**Files Modified**:
+- `frontend/pages/admin.html` (lines 1037-1040: replaced Sybase with Polka in inline loadConfig fieldMapping)
+
+**Result**:
+✅ Admin Panel now correctly populates Polka auth fields on page load
+✅ Settings persist in webui after save and reload
+✅ Complete consistency: backend, admin.js, and admin.html all use correct Polka field names
+
+**CRITICAL LESSON LEARNED - SEARCH EVERYWHERE DURING REFACTORS**:
+**When renaming/refactoring features across a codebase:**
+
+1. ✅ **SEARCH HTML FILES TOO** - Don't just grep .js/.py files; inline JavaScript in .html files is CODE TOO
+   - Use: `rg -i "old_feature_name"` (searches ALL file types by default)
+   - Don't use: `rg -i "old_feature_name" --type js --type py` (misses HTML!)
+
+2. ✅ **LOOK FOR DUPLICATE IMPLEMENTATIONS** - If you find config loading in admin.js, check if admin.html also has inline config loading
+   - Inline `<script>` blocks in HTML often duplicate functionality from .js files
+   - Check for: inline event handlers, inline API calls, inline form population logic
+
+3. ✅ **REFACTOR CHECKLIST MUST INCLUDE HTML FILES**:
+   - [ ] Backend models/services (.py files)
+   - [ ] API routes and config (.py files)
+   - [ ] Frontend JavaScript (.js files)
+   - [ ] **Frontend HTML inline scripts (.html <script> blocks)** ← OFTEN MISSED!
+   - [ ] Database migrations
+   - [ ] .env.example
+   - [ ] Schema verification scripts
+
+4. ✅ **TEST THE ACTUAL UI** - Don't just verify API responses; open the Admin Panel and test:
+   - Save settings → reload page → verify fields still populated
+   - This would have caught the issue immediately
+
+5. ✅ **ELIMINATE DUPLICATE CODE** - If both admin.js AND admin.html have config loading logic:
+   - Consider removing inline code and using only the .js module
+   - Or document why duplication exists and keep them in sync
+   - Current state: admin.html inline code should probably be removed, let admin.js handle it
+
+**How to NEVER make this mistake again**:
+1. When refactoring, use `rg -i "old_name"` WITHOUT file type filters to catch ALL occurrences
+2. Search for patterns like `loadConfig`, `saveConfig`, `fieldMapping` to find duplicate implementations
+3. Check EVERY HTML file that might have inline `<script>` tags related to the feature
+4. Create refactor checklist that explicitly includes "inline HTML scripts"
+5. Test UI functionality end-to-end after refactors (not just API tests)
+6. Consider moving ALL JavaScript from inline HTML to .js modules for better maintainability
+
+**Root Cause of Root Cause**:
+This bug exists because admin.html has duplicate/conflicting logic instead of using a single source of truth (admin.js). The real fix would be to eliminate the inline code entirely, but for minimal changes, we just synchronized the fieldMappings.
+
+**Future Improvement**:
+Refactor admin.html to remove inline `loadConfig()` and `save-config-btn` event listener, let admin.js handle everything through the AdminSystem class. This would follow DRY principle and prevent future sync issues.
+
+---
+
+### 2026-02-05 - Fix PolkaSQL Auth .env Ignored and Admin Panel Not Persisting (Config Key Mismatch) [PARTIAL FIX - See above for complete fix]
 **Issue**: PolkaSQL authentication had two critical bugs after the Sybase→PolkaSQL rename:
 1. Environment variables (ENABLE_POLKA_AUTH, POLKA_AUTH_URL, POLKA_AUTH_API_KEY, POLKA_AUTH_TIMEOUT) completely ignored
 2. Admin Panel settings saved successfully but didn't show on page reload (form fields remained empty)
