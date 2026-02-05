@@ -28,6 +28,35 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 ph = PasswordHasher()
 
 
+@router.get("/status")
+async def get_auth_status(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Get authentication configuration status (public endpoint).
+
+    Returns whether remote authentication is enabled.
+    Used by frontend to show/hide auth method selector.
+    """
+    from models import Config
+
+    # Check database config first
+    stmt = select(Config).where(Config.key == 'remote_auth_enabled')
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if config:
+        enabled = config.value.lower() in ('true', '1', 'yes')
+    else:
+        # Fallback to .env
+        settings = get_settings()
+        enabled = settings.enable_remote_auth
+
+    return {
+        "remote_auth_enabled": enabled
+    }
+
+
 async def verify_sybase_credentials(
     username: str,
     password: str,
@@ -197,13 +226,25 @@ async def _perform_login(
     - Local authentication (password hash)
     - External Sybase authentication
     - Remote authentication API (case-insensitive, auto-create users)
+
+    Auth method selection:
+    - "auto": Try remote first (if enabled), fallback to local
+    - "remote": Only remote authentication
+    - "local": Only local/Sybase authentication
     """
-    # Try remote authentication first (if enabled)
-    remote_authenticated, remote_user_data = await verify_remote_credentials(
-        login_data.username,
-        login_data.password,
-        db,
-    )
+    # Determine auth method
+    auth_method = login_data.auth_method or "auto"
+
+    # Try remote authentication (if requested)
+    remote_authenticated = False
+    remote_user_data = None
+
+    if auth_method in ["auto", "remote"]:
+        remote_authenticated, remote_user_data = await verify_remote_credentials(
+            login_data.username,
+            login_data.password,
+            db,
+        )
 
     if remote_authenticated:
         # Remote auth successful - find or create user
@@ -263,7 +304,15 @@ async def _perform_login(
         password_valid = True
 
     else:
-        # Remote auth not enabled or failed - try local/Sybase auth
+        # Remote auth not enabled, failed, or not requested
+        # If auth_method is "remote", fail here (no fallback)
+        if auth_method == "remote":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Remote authentication failed",
+            )
+
+        # Try local/Sybase auth (auth_method is "auto" or "local")
         # Get user from database (exact match for local users)
         stmt = select(User).where(User.username == login_data.username)
         result = await db.execute(stmt)

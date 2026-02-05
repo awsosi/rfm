@@ -17,21 +17,22 @@ const TOKEN_EXPIRY_KEY = 'token_expiry';
  * Login user with username and password
  * @param {string} username - Username
  * @param {string} password - Password
+ * @param {string} authMethod - Authentication method: 'auto', 'remote', or 'local'
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function login(username, password) {
+export async function login(username, password, authMethod = 'auto') {
     try {
-        // Prepare form data for OAuth2 password flow
-        const formData = new URLSearchParams();
-        formData.append('username', username);
-        formData.append('password', password);
-
-        const response = await fetch(`${API_BASE_URL}/auth/token`, {
+        // Use JSON-based login endpoint to support auth_method parameter
+        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: formData
+            body: JSON.stringify({
+                username: username,
+                password: password,
+                auth_method: authMethod
+            })
         });
 
         if (!response.ok) {
@@ -52,7 +53,7 @@ export async function login(username, password) {
         sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
 
         // Fetch and store user data
-        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${data.access_token}`
             }
@@ -159,7 +160,7 @@ export async function refreshToken() {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${currentToken}`

@@ -76,14 +76,29 @@
    - Updated JavaScript fieldMappings to include remote auth config keys
    - Config automatically saved to database on "Save Configuration" button click
 
+7. **Auth Method Selector** (backend/api/schemas.py, backend/api/routes/auth.py, frontend):
+   - Added `auth_method` parameter to `LoginRequest` schema with validator
+   - Auth methods: "auto" (try remote first, fallback to local), "remote" (only remote), "local" (only local)
+   - Added GET `/api/auth/status` endpoint to check if remote auth is enabled
+   - Updated `_perform_login()` to respect auth_method choice
+   - If auth_method="remote" and remote auth fails, don't fallback (fail immediately)
+   - If auth_method="local", skip remote auth entirely
+   - Login UI shows auth method selector dropdown ONLY when remote auth is enabled
+   - Selector defaults to "Remote" when visible, hidden when remote auth disabled
+   - Updated auth.js to accept authMethod parameter and use JSON login endpoint
+   - JavaScript checks `/api/auth/status` on page load to show/hide selector
+
 **Files Modified**:
 - `.env.example` (lines 155-163: added remote auth env vars)
 - `backend/api/config.py` (lines 98-102: added Settings fields)
 - `backend/models.py` (lines 85-87, 109-110: updated User model docstring and fields)
 - `backend/alembic/versions/007_add_remote_auth.py` (new migration file)
-- `backend/api/routes/auth.py` (lines 73-341: added verify_remote_credentials and updated _perform_login)
+- `backend/api/schemas.py` (lines 26-44: added auth_method to LoginRequest with validator)
+- `backend/api/routes/auth.py` (lines 31-57: added get_auth_status endpoint; lines 73-183: verify_remote_credentials; lines 215-380: updated _perform_login with auth_method logic)
 - `backend/api/routes/admin.py` (lines 465-673: added config endpoints and create_or_update)
 - `frontend/pages/admin.html` (lines 162-188: added UI section; lines 1117-1120: added fieldMappings)
+- `frontend/pages/login.html` (lines 19-28: added auth method selector; lines 73-96: added checkAuthStatus function; lines 103,115: pass authMethod to login)
+- `frontend/js/auth.js` (lines 23-36: updated login function to accept authMethod; lines 26,56,163: fixed API paths to /api/auth/*)
 
 **Result**:
 ✅ Remote authentication fully implemented
@@ -95,6 +110,10 @@
 ✅ Database config prioritized over .env settings
 ✅ Graceful error handling for timeouts and network errors
 ✅ Audit logging for remote user creation
+✅ Auth method selector shown only when remote auth is enabled
+✅ Defaults to "Remote" when selector visible, allows switching to "Local"
+✅ Local database auth always possible regardless of remote auth status
+✅ Users can choose between remote and local authentication
 
 **Design Notes**:
 - KISS approach: Reused existing config management pattern, simple async HTTP client
@@ -131,6 +150,16 @@
 8. Test user auto-creation (first login should create user with is_remote_auth=True)
 9. Test subsequent logins (remote_user_id should update if changed)
 10. Test admin panel config save/load (verify all fields persist correctly)
+11. **Test auth method selector UI**:
+    - With remote auth disabled: selector should be hidden, only local auth works
+    - With remote auth enabled: selector should be visible and default to "Remote"
+    - Switch selector to "Local": should authenticate against local database
+    - Switch selector to "Remote": should authenticate against remote API
+12. **Test auth method API logic**:
+    - auth_method="remote": should ONLY try remote, fail if remote auth fails (no fallback)
+    - auth_method="local": should ONLY try local, skip remote entirely
+    - auth_method="auto": should try remote first, fallback to local if remote fails
+13. **Test /api/auth/status endpoint**: should return correct remote_auth_enabled value
 
 ---
 
