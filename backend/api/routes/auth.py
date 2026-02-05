@@ -13,7 +13,7 @@ from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 import jwt
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
@@ -21,7 +21,7 @@ from api.middleware.auth import get_current_user
 from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import LoginRequest, LoginResponse
 from database import get_db
-from models import Session as SessionModel, User
+from models import Session as SessionModel, User, UserRole
 
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])

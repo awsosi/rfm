@@ -82,13 +82,15 @@
                     // Default to PolkaSQL
                     authMethodSelect.value = 'polka';
                 } else {
-                    // Hide auth method selector
+                    // Hide auth method selector and set to local
                     authMethodGroup.style.display = 'none';
+                    authMethodSelect.value = 'local';
                 }
             } catch (error) {
                 console.error('Failed to check auth status:', error);
                 // Hide selector on error (safe default)
                 authMethodGroup.style.display = 'none';
+                authMethodSelect.value = 'local';
             }
         }
 
