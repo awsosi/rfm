@@ -319,7 +319,7 @@ export function showPrompt(message, defaultValue = '', title = 'Input Required')
 /**
  * Show toast notification
  * @param {string} message - Notification message
- * @param {string} type - Notification type (success, error, info)
+ * @param {string} type - Notification type (success, error, info, warning)
  * @param {number} duration - Duration in milliseconds
  */
 export function showToast(message, type = 'info', duration = 3000) {
@@ -331,7 +331,7 @@ export function showToast(message, type = 'info', duration = 3000) {
         bottom: 20px;
         right: 20px;
         padding: 12px 20px;
-        background-color: ${type === 'success' ? '#16a34a' : type === 'error' ? '#dc2626' : '#0891b2'};
+        background-color: ${type === 'success' ? '#16a34a' : type === 'error' ? '#dc2626' : type === 'warning' ? '#f59e0b' : '#0891b2'};
         color: white;
         border-radius: 8px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -347,6 +347,16 @@ export function showToast(message, type = 'info', duration = 3000) {
             document.body.removeChild(toast);
         }, 300);
     }, duration);
+}
+
+/**
+ * Show notification (alias for showToast for backward compatibility)
+ * @param {string} message - Notification message
+ * @param {string} type - Notification type (success, error, info, warning)
+ * @param {number} duration - Duration in milliseconds
+ */
+export function showNotification(message, type = 'info', duration = 3000) {
+    return showToast(message, type, duration);
 }
 
 /**
