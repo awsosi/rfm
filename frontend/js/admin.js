@@ -889,17 +889,9 @@ function debounce(func, wait) {
     };
 }
 
-// Initialize admin panel when DOM is ready
-let adminPanel;
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        adminPanel = new AdminPanel();
-        window.adminPanel = adminPanel; // Make globally accessible
-    });
-} else {
-    adminPanel = new AdminPanel();
-    window.adminPanel = adminPanel;
-}
+// Note: AdminPanel class is available for export but NOT auto-initialized
+// admin.html has its own implementation and only imports the standalone config functions
+// Auto-initialization was causing duplicate rendering of users and workers tables
 
 export default AdminPanel;
 

@@ -1582,3 +1582,25 @@ sc query FileManagerWorker
 ---
 
 *Maintained following KISS and DRY principles throughout the codebase.*
+
+---
+
+## 🐛 LESSONS LEARNED
+
+### Avoid Auto-Initialization in Imported Modules (2026-02-05)
+**Problem**: Admin Panel showed duplicate entries for Users and Workers tables.
+
+**Root Cause**: 
+- `frontend/js/admin.js` had auto-initialization code that ran when the module was imported
+- `frontend/pages/admin.html` imported admin.js for standalone config functions
+- Both admin.js (via AdminPanel class) and admin.html (via inline functions) were rendering the same tables
+- Result: Every entry appeared twice
+
+**Fix**: 
+- Removed auto-initialization code from admin.js (lines 893-902)
+- admin.html already had complete implementations and didn't need AdminPanel class
+- AdminPanel class remains available for export but doesn't auto-run
+
+**Prevention Rule**: 
+**NEVER auto-initialize/auto-execute class instances or render functions in modules that are imported for specific utilities/functions. Always let the importing page/module control initialization explicitly. Side effects in imported modules cause hard-to-debug duplicate renders and race conditions.**
+
