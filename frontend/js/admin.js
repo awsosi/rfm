@@ -902,3 +902,135 @@ if (document.readyState === 'loading') {
 }
 
 export default AdminPanel;
+
+/**
+ * Standalone configuration loading function
+ * Can be used independently without instantiating AdminPanel
+ */
+export async function loadConfigurationData() {
+    try {
+        const configs = await API.get('/api/admin/config');
+
+        // Convert array to map for easy access
+        const configMap = {};
+        configs.forEach(cfg => {
+            configMap[cfg.key] = cfg;
+        });
+
+        // Populate form fields - map element IDs to config keys
+        const fieldMappings = {
+            'config-max-concurrent-users': 'max_concurrent_users',
+            'config-session-lifetime': 'session_lifetime_days',
+            'config-polka-auth-enabled': 'polka_auth_enabled',
+            'config-polka-auth-url': 'polka_auth_url',
+            'config-polka-auth-api-key': 'polka_auth_api_key',
+            'config-polka-auth-timeout': 'polka_auth_timeout',
+            'config-log-retention': 'log_retention_days',
+            'config-log-compression': 'enable_log_compression',
+            'config-syslog-enabled': 'enable_syslog',
+            'config-syslog-host': 'syslog_host',
+            'config-syslog-port': 'syslog_port',
+            'config-syslog-protocol': 'syslog_protocol',
+            'config-remote-audit-enabled': 'enable_remote_audit_api',
+            'config-remote-audit-url': 'remote_audit_api_url',
+            'config-remote-audit-token': 'remote_audit_api_token',
+            'config-remote-audit-timeout': 'remote_audit_api_timeout',
+            'config-path-a-prefix': 'global_path_a_prefix',
+            'config-path-b-prefix': 'global_path_b_prefix',
+            'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
+            'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
+            'config-worker-timeout': 'worker_timeout',
+            'config-worker-retry': 'worker_retry_attempts',
+            'config-operation-timeout': 'operation_timeout',
+            'config-auto-rollback': 'enable_auto_rollback',
+            'config-max-listing-items': 'max_file_listing_items',
+            'config-lazy-loading': 'enable_lazy_loading',
+            'config-ip-whitelist': 'enable_ip_whitelist',
+            'config-ip-whitelist-list': 'ip_whitelist',
+            'config-rate-limiting': 'enable_rate_limiting',
+            'config-rate-limit': 'rate_limit_requests_per_minute',
+            'config-maintenance-mode': 'maintenance_mode',
+            'config-maintenance-message': 'maintenance_message'
+        };
+
+        for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+            const element = document.getElementById(elementId);
+            if (!element) continue;
+
+            const cfg = configMap[configKey];
+            if (!cfg) continue;
+
+            if (element.type === 'checkbox') {
+                element.checked = cfg.value?.toLowerCase() === 'true';
+            } else {
+                element.value = cfg.value || '';
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load configuration:', error);
+        throw error;
+    }
+}
+
+/**
+ * Standalone configuration saving function
+ * Can be used independently without instantiating AdminPanel
+ */
+export async function saveConfigurationData() {
+    // Map element IDs to config keys
+    const fieldMappings = {
+        'config-max-concurrent-users': 'max_concurrent_users',
+        'config-session-lifetime': 'session_lifetime_days',
+        'config-polka-auth-enabled': 'polka_auth_enabled',
+        'config-polka-auth-url': 'polka_auth_url',
+        'config-polka-auth-api-key': 'polka_auth_api_key',
+        'config-polka-auth-timeout': 'polka_auth_timeout',
+        'config-log-retention': 'log_retention_days',
+        'config-log-compression': 'enable_log_compression',
+        'config-syslog-enabled': 'enable_syslog',
+        'config-syslog-host': 'syslog_host',
+        'config-syslog-port': 'syslog_port',
+        'config-syslog-protocol': 'syslog_protocol',
+        'config-remote-audit-enabled': 'enable_remote_audit_api',
+        'config-remote-audit-url': 'remote_audit_api_url',
+        'config-remote-audit-token': 'remote_audit_api_token',
+        'config-remote-audit-timeout': 'remote_audit_api_timeout',
+        'config-path-a-prefix': 'global_path_a_prefix',
+        'config-path-b-prefix': 'global_path_b_prefix',
+        'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
+        'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
+        'config-worker-timeout': 'worker_timeout',
+        'config-worker-retry': 'worker_retry_attempts',
+        'config-operation-timeout': 'operation_timeout',
+        'config-auto-rollback': 'enable_auto_rollback',
+        'config-max-listing-items': 'max_file_listing_items',
+        'config-lazy-loading': 'enable_lazy_loading',
+        'config-ip-whitelist': 'enable_ip_whitelist',
+        'config-ip-whitelist-list': 'ip_whitelist',
+        'config-rate-limiting': 'enable_rate_limiting',
+        'config-rate-limit': 'rate_limit_requests_per_minute',
+        'config-maintenance-mode': 'maintenance_mode',
+        'config-maintenance-message': 'maintenance_message'
+    };
+
+    const configs = {};
+    for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+        const element = document.getElementById(elementId);
+        if (!element) continue;
+
+        if (element.type === 'checkbox') {
+            configs[configKey] = element.checked ? 'true' : 'false';
+        } else {
+            configs[configKey] = element.value;
+        }
+    }
+
+    try {
+        await API.post('/api/admin/config/bulk', { configs });
+        showNotification('Configuration saved successfully', 'success');
+    } catch (error) {
+        console.error('Failed to save configuration:', error);
+        showNotification(error.message || 'Failed to save configuration', 'error');
+        throw error;
+    }
+}
