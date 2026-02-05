@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     sybase_auth_timeout: int = 2
     sybase_auth_stored_proc: Optional[str] = None
 
+    # Remote Authentication API (RFM Authentication)
+    enable_remote_auth: bool = False
+    remote_auth_url: Optional[str] = None
+    remote_auth_api_key: Optional[str] = None
+    remote_auth_timeout: int = 5
+
     enable_syslog: bool = False
     syslog_host: Optional[str] = None
     syslog_port: int = 514

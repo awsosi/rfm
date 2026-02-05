@@ -28,6 +28,20 @@ class LoginRequest(BaseModel):
 
     username: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=1)
+    auth_method: Optional[str] = Field(
+        default="auto",
+        description="Authentication method: 'auto' (try remote first, fallback to local), 'remote' (only remote), 'local' (only local)"
+    )
+
+    @field_validator('auth_method')
+    @classmethod
+    def validate_auth_method(cls, v: Optional[str]) -> str:
+        """Validate auth_method is one of allowed values."""
+        if v is None:
+            return "auto"
+        if v not in ["auto", "remote", "local"]:
+            raise ValueError("auth_method must be one of: auto, remote, local")
+        return v
 
 
 class LoginResponse(BaseModel):

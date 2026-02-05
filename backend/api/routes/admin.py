@@ -462,6 +462,38 @@ async def delete_worker(
 # =============================================================================
 
 
+@router.get("/config", response_model=List[ConfigResponse])
+async def list_all_configs(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List all configuration entries."""
+    stmt = select(Config)
+    result = await db.execute(stmt)
+    configs = result.scalars().all()
+    return [ConfigResponse.model_validate(c) for c in configs]
+
+
+@router.get("/config/{key}", response_model=ConfigResponse)
+async def get_config(
+    key: str,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get a specific configuration entry."""
+    stmt = select(Config).where(Config.key == key)
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Configuration key '{key}' not found",
+        )
+
+    return ConfigResponse.model_validate(config)
+
+
 @router.put("/config/{key}", response_model=ConfigResponse)
 async def update_config(
     key: str,
@@ -570,3 +602,72 @@ async def bulk_update_config(
         message=message,
         detail=f"{updated_count}/{len(bulk_data.configs)} entries updated",
     )
+
+
+@router.post("/config/{key}", response_model=ConfigResponse, status_code=status.HTTP_201_CREATED)
+async def create_or_update_config(
+    key: str,
+    config_data: ConfigUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Create or update a configuration entry."""
+    # Check if config exists
+    stmt = select(Config).where(Config.key == key)
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if config:
+        # Update existing config
+        old_value = config.value
+        update_data = {"value": config_data.value}
+        if config_data.type is not None:
+            update_data["type"] = config_data.type
+        if config_data.description is not None:
+            update_data["description"] = config_data.description
+
+        stmt = (
+            update(Config)
+            .where(Config.key == key)
+            .values(**update_data)
+        )
+        await db.execute(stmt)
+        await db.commit()
+        await db.refresh(config)
+
+        action = "config_update"
+        details = {
+            "config_key": key,
+            "old_value": old_value,
+            "new_value": config.value,
+        }
+    else:
+        # Create new config
+        config = Config(
+            key=key,
+            value=config_data.value,
+            type=config_data.type or "STRING",
+            description=config_data.description,
+        )
+        db.add(config)
+        await db.commit()
+        await db.refresh(config)
+
+        action = "config_create"
+        details = {
+            "config_key": key,
+            "value": config.value,
+        }
+
+    # Audit log
+    await AuditLogger.log_admin_action(
+        user_id=current_user.id,
+        action=action,
+        target="config",
+        details=details,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    return ConfigResponse.model_validate(config)

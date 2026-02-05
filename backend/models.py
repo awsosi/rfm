@@ -81,6 +81,10 @@ class User(Base):
 
     Passwords are stored as Argon2 hashes. Role-based access control
     determines what operations users can perform.
+
+    Remote auth users: Users authenticated via remote API are created
+    automatically with is_remote_auth=True and remote_user_id set.
+    Their passwords are verified against the remote API on each login.
     """
     __tablename__ = "users"
 
@@ -100,6 +104,10 @@ class User(Base):
         onupdate=func.now(),
     )
     is_active = Column(Boolean, nullable=False, default=True)
+
+    # Remote authentication fields
+    is_remote_auth = Column(Boolean, nullable=False, default=False, index=True)
+    remote_user_id = Column(Integer, nullable=True, index=True)  # External user ID from remote API
 
     # Relationships
     sessions = relationship(

@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development ✅
-> **Last Updated:** 2026-02-04
+> **Last Updated:** 2026-02-05
 
 ---
 
@@ -17,10 +17,151 @@
 - [ ] Admin Panel: Change PATH_B and PATH_C → verify new operations use new paths
 - [ ] Admin Panel: Verify non-admin users cannot change paths
 - [ ] Worker: Integration testing in staging environment
+- [ ] Remote Authentication: Test login with remote API enabled
+- [ ] Remote Authentication: Verify case-insensitive username/password matching
+- [ ] Remote Authentication: Verify auto-creation of users on first remote auth
+- [ ] Remote Authentication: Verify database config takes priority over .env
+- [ ] Remote Authentication: Test timeout and error handling
 
 ---
 
 ## 🔧 RECENT FIXES (Last 7 Days)
+
+### 2026-02-05 - Implement Remote Authentication API Integration
+**Issue**: Need to support remote authentication against external API (PolkaSQL/RFM_Auth) with case-insensitive credentials and auto-user-creation.
+
+**Requirements**:
+1. Configure via .env and AdminPanel (database config takes priority)
+2. Auto-create users when authenticated remotely
+3. Verify password on each login against remote API
+4. Username and password case-insensitive (unusual requirement but mandated by remote API)
+5. Read-only mode - no password changes in RFM app
+
+**Implementation**:
+
+1. **Configuration** (.env.example, backend/api/config.py):
+   - Added `ENABLE_REMOTE_AUTH`, `REMOTE_AUTH_URL`, `REMOTE_AUTH_API_KEY`, `REMOTE_AUTH_TIMEOUT`
+   - Settings class updated to load from environment
+   - Database config table used for runtime configuration (takes priority over .env)
+
+2. **Database Schema** (backend/models.py, backend/alembic/versions/007_add_remote_auth.py):
+   - Added `is_remote_auth` boolean field to User model
+   - Added `remote_user_id` integer field (stores external user ID from remote API)
+   - Created migration 007_add_remote_auth with indexes for efficient lookups
+
+3. **Remote Auth Service** (backend/api/routes/auth.py:73-183):
+   - Created `verify_remote_credentials()` async function
+   - Checks database config first (priority), then falls back to .env settings
+   - Makes GET request to remote API with ApiKey, UserName, Password query params
+   - API returns JSON with success, authenticated, user_id, username fields
+   - Handles timeouts, network errors gracefully
+
+4. **Login Logic Update** (backend/api/routes/auth.py:186-341):
+   - Modified `_perform_login()` to try remote auth first (if enabled)
+   - Uses case-insensitive username lookup: `func.lower(User.username) == func.lower(login_data.username)`
+   - Auto-creates users with `is_remote_auth=True` and random password_hash (not used for auth)
+   - Updates `remote_user_id` if changed on subsequent logins
+   - Falls back to local/Sybase auth if remote auth disabled or fails
+
+5. **Admin API Endpoints** (backend/api/routes/admin.py):
+   - Added GET `/api/admin/config` to list all configs
+   - Added GET `/api/admin/config/{key}` to get specific config
+   - Added POST `/api/admin/config/{key}` to create or update config
+   - Existing PUT and bulk endpoints already support remote auth config keys
+
+6. **Admin Panel UI** (frontend/pages/admin.html):
+   - Added "Remote Authentication (RFM API)" section in Configuration tab
+   - Fields: enabled checkbox, API URL, API key (password field), timeout
+   - Added help text explaining case-insensitive and read-only behavior
+   - Updated JavaScript fieldMappings to include remote auth config keys
+   - Config automatically saved to database on "Save Configuration" button click
+
+7. **Auth Method Selector** (backend/api/schemas.py, backend/api/routes/auth.py, frontend):
+   - Added `auth_method` parameter to `LoginRequest` schema with validator
+   - Auth methods: "auto" (try remote first, fallback to local), "remote" (only remote), "local" (only local)
+   - Added GET `/api/auth/status` endpoint to check if remote auth is enabled
+   - Updated `_perform_login()` to respect auth_method choice
+   - If auth_method="remote" and remote auth fails, don't fallback (fail immediately)
+   - If auth_method="local", skip remote auth entirely
+   - Login UI shows auth method selector dropdown ONLY when remote auth is enabled
+   - Selector defaults to "Remote" when visible, hidden when remote auth disabled
+   - Updated auth.js to accept authMethod parameter and use JSON login endpoint
+   - JavaScript checks `/api/auth/status` on page load to show/hide selector
+
+**Files Modified**:
+- `.env.example` (lines 155-163: added remote auth env vars)
+- `backend/api/config.py` (lines 98-102: added Settings fields)
+- `backend/models.py` (lines 85-87, 109-110: updated User model docstring and fields)
+- `backend/alembic/versions/007_add_remote_auth.py` (new migration file)
+- `backend/api/schemas.py` (lines 26-44: added auth_method to LoginRequest with validator)
+- `backend/api/routes/auth.py` (lines 31-57: added get_auth_status endpoint; lines 73-183: verify_remote_credentials; lines 215-380: updated _perform_login with auth_method logic)
+- `backend/api/routes/admin.py` (lines 465-673: added config endpoints and create_or_update)
+- `frontend/pages/admin.html` (lines 162-188: added UI section; lines 1117-1120: added fieldMappings)
+- `frontend/pages/login.html` (lines 19-28: added auth method selector; lines 73-96: added checkAuthStatus function; lines 103,115: pass authMethod to login)
+- `frontend/js/auth.js` (lines 23-36: updated login function to accept authMethod; lines 26,56,163: fixed API paths to /api/auth/*)
+
+**Result**:
+✅ Remote authentication fully implemented
+✅ Configurable via .env (default) and AdminPanel (priority)
+✅ Case-insensitive username/password matching
+✅ Auto-creates users on first remote auth (is_remote_auth=True)
+✅ Verifies password against remote API on each login
+✅ Read-only mode - password_hash is random placeholder, not used for auth
+✅ Database config prioritized over .env settings
+✅ Graceful error handling for timeouts and network errors
+✅ Audit logging for remote user creation
+✅ Auth method selector shown only when remote auth is enabled
+✅ Defaults to "Remote" when selector visible, allows switching to "Local"
+✅ Local database auth always possible regardless of remote auth status
+✅ Users can choose between remote and local authentication
+
+**Design Notes**:
+- KISS approach: Reused existing config management pattern, simple async HTTP client
+- DRY: Config loading logic checks database first, falls back to .env consistently
+- Security: API key stored in password field in admin UI, transmitted securely to backend
+- Backward compatible: Existing local and Sybase auth still work, remote auth is opt-in
+- Read-only enforcement: Remote users have random password_hash that's never used for verification
+- Case-insensitivity handled by: 1) database lookup with `func.lower()`, 2) API itself handles case-insensitive matching
+
+**CRITICAL LESSON LEARNED - ALWAYS VERIFY CONFIGURATION PRIORITY**:
+**When implementing dual-config systems (env + database):**
+1. ✅ **ALWAYS check database config first** - Database should take priority for runtime configurability
+2. ✅ **Provide clear fallback chain** - Database → .env → default, document it clearly
+3. ✅ **Test both config sources** - Verify env-only, db-only, and db-priority scenarios
+4. ✅ **Document priority in UI** - Admin panel should indicate that database config overrides .env
+5. ✅ **Audit config changes** - Log all config updates for security and compliance
+
+**How to never make configuration mistakes again:**
+- Always implement config loading as: check DB → check env → use default
+- Add clear comments in code explaining priority chain
+- Test with: 1) no config, 2) env only, 3) db only, 4) both (db should win)
+- Document config priority in admin UI help text
+- Use separate functions for loading from each source, compose them clearly
+- Never mutate config objects - use immutable reads from each source
+
+**Testing Recommendations** (for when docker is available):
+1. Test remote auth with valid credentials (should create user and login)
+2. Test remote auth with invalid credentials (should reject)
+3. Test case-insensitive username (john vs JOHN vs JoHn should all match)
+4. Test case-insensitive password (different cases should authenticate)
+5. Test database config priority (set in both .env and DB, DB should win)
+6. Test timeout handling (set very short timeout, verify graceful failure)
+7. Test network error handling (invalid URL, verify fallback to local auth)
+8. Test user auto-creation (first login should create user with is_remote_auth=True)
+9. Test subsequent logins (remote_user_id should update if changed)
+10. Test admin panel config save/load (verify all fields persist correctly)
+11. **Test auth method selector UI**:
+    - With remote auth disabled: selector should be hidden, only local auth works
+    - With remote auth enabled: selector should be visible and default to "Remote"
+    - Switch selector to "Local": should authenticate against local database
+    - Switch selector to "Remote": should authenticate against remote API
+12. **Test auth method API logic**:
+    - auth_method="remote": should ONLY try remote, fail if remote auth fails (no fallback)
+    - auth_method="local": should ONLY try local, skip remote entirely
+    - auth_method="auto": should try remote first, fallback to local if remote fails
+13. **Test /api/auth/status endpoint**: should return correct remote_auth_enabled value
+
+---
 
 ### 2026-02-04 - Fix Missing Audit Logs (Element ID Mismatch)
 **Issue**: After the previous system logs enhancement, the audit logs table appeared completely empty in the Admin Panel. No logs were displayed at all, even though the API was functioning correctly and returning data.

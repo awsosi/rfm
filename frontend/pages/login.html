@@ -16,6 +16,17 @@
             <div id="error-message" class="error-message hidden"></div>
 
             <form id="login-form">
+                <div class="form-group" id="auth-method-group" style="display: none;">
+                    <label for="auth-method">Authentication Method</label>
+                    <select id="auth-method" name="auth-method" class="form-control">
+                        <option value="remote">Remote Authentication</option>
+                        <option value="local">Local Authentication</option>
+                    </select>
+                    <small style="color: #666; margin-top: 5px; display: block;">
+                        Select authentication method. Remote uses external API (case-insensitive), Local uses database.
+                    </small>
+                </div>
+
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" class="form-control" required autocomplete="username">
@@ -56,12 +67,40 @@
         const loginForm = document.getElementById('login-form');
         const errorMessage = document.getElementById('error-message');
         const loginBtn = document.getElementById('login-btn');
+        const authMethodGroup = document.getElementById('auth-method-group');
+        const authMethodSelect = document.getElementById('auth-method');
+
+        // Check auth status and show/hide auth method selector
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/auth/status');
+                const data = await response.json();
+
+                if (data.remote_auth_enabled) {
+                    // Show auth method selector
+                    authMethodGroup.style.display = 'block';
+                    // Default to remote
+                    authMethodSelect.value = 'remote';
+                } else {
+                    // Hide auth method selector
+                    authMethodGroup.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to check auth status:', error);
+                // Hide selector on error (safe default)
+                authMethodGroup.style.display = 'none';
+            }
+        }
+
+        // Check auth status on page load
+        checkAuthStatus();
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const authMethod = authMethodSelect.value || 'local';
 
             // Clear previous errors
             errorMessage.classList.add('hidden');
@@ -72,7 +111,8 @@
             loginBtn.textContent = 'Signing in...';
 
             try {
-                const result = await login(username, password);
+                // Pass auth_method to login function
+                const result = await login(username, password, authMethod);
 
                 if (result.success) {
                     // Redirect to explorer
