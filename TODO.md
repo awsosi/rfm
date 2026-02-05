@@ -27,6 +27,37 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-05 - Remove Duplicate Config Loading Logic (DRY Principle)
+**Issue**: admin.html had duplicate config loading/saving logic that was out of sync with admin.js, violating DRY principle and causing maintenance issues.
+
+**Root Cause**:
+- admin.html contained inline JavaScript with `loadConfig()` function (73 lines) and `save-config-btn` event listener (59 lines)
+- admin.js had AdminPanel class with proper config methods (loadConfiguration, saveConfiguration) but was never used
+- This duplication required maintaining identical logic in two places, leading to sync issues in previous bugs
+
+**Fix Applied**:
+1. **admin.js**: Added standalone export functions `loadConfigurationData()` and `saveConfigurationData()` that can be imported independently
+2. **admin.html**:
+   - Imported the standalone functions from admin.js
+   - Removed duplicate `loadConfig()` function (~73 lines removed)
+   - Removed duplicate save-config-btn event listener (~59 lines removed)
+   - Updated `loadTabData()` to call `loadConfigurationData()`
+   - Replaced save button handler with simple call to `saveConfigurationData()`
+3. **Result**: Single source of truth in admin.js, ~130 lines of duplicate code eliminated
+
+**Files Modified**:
+- `frontend/js/admin.js` (added lines 906-1036: standalone export functions)
+- `frontend/pages/admin.html` (line 587: added import; line 656: updated loadTabData call; lines 1012-1020: replaced 135 lines of duplicate code with 9 lines calling imported functions)
+
+**Result**:
+✅ Configuration loading/saving now in single location (admin.js)
+✅ ~130 lines of duplicate code eliminated
+✅ Future config changes only need to be made in one place
+✅ Follows DRY principle properly
+✅ Reduced maintenance burden and eliminated sync issues
+
+---
+
 ### 2026-02-05 - Fix PolkaSQL Settings Not Persisting in WebUI (Missed Inline Script During Refactor)
 **Issue**: After PR #103, PolkaSQL settings still not persisting in Admin Panel despite being saved to database and working in backend:
 1. User saves Polka auth settings in Admin Panel → settings work (remote auth succeeds) ✓
@@ -1191,6 +1222,58 @@ Syslog (RFC 5424):
 **Changes**: Dual-pane file manager → PUSH/PULL operations with PATH_B (archive) and PATH_C (archive)
 **Architecture**: Single PATH_A view, queue-based operations, pull-based worker communication
 **Files**: Full frontend and backend refactor
+
+---
+
+## 🎯 PERMANENT LESSONS - CODE QUALITY PRINCIPLES
+
+### ⚠️ CRITICAL: Preventing Duplicate Code (DRY Principle Violations)
+
+**BEFORE writing any new function, component, or module:**
+
+1. **✅ SEARCH FIRST** - Always search the entire codebase for existing implementations
+   ```bash
+   # Search for similar functions/features
+   rg -i "function_name|feature_name" --type js --type py
+
+   # Check inline HTML scripts for duplicates
+   rg -i "addEventListener|async function" frontend/pages/*.html
+   ```
+
+2. **✅ CHECK BOTH HTML AND JS** - Inline scripts in HTML often duplicate .js modules
+   - Before adding inline JavaScript in .html files, check if a .js module already exists
+   - If both exist, the .js module should be the single source of truth
+   - HTML should import and call .js functions, not reimplement them
+
+3. **✅ EXTRACT, DON'T DUPLICATE** - If you find similar code in multiple places:
+   - Extract to a shared module/function
+   - Export as standalone functions if needed (like loadConfigurationData/saveConfigurationData)
+   - Import and reuse, never copy-paste
+
+4. **✅ REFACTOR CHECKLIST** - When modifying functionality:
+   - [ ] Search entire codebase for ALL references (use `rg -i` without file filters)
+   - [ ] Check .html files for inline `<script>` blocks
+   - [ ] Check .js modules for similar functions
+   - [ ] If duplicates found, consolidate into single source of truth
+   - [ ] Update all call sites to use consolidated version
+
+5. **✅ CODE REVIEW RED FLAGS** - These indicate DRY violations:
+   - Same fieldMapping/config object in multiple files
+   - Same event listener logic in .html and .js
+   - Similar function names (loadConfig vs loadConfiguration)
+   - Copy-pasted code blocks with minor differences
+
+**How This Principle Prevented Bugs:**
+- Previous bug: admin.html inline script had outdated Sybase fields → Polka settings didn't persist
+- Root cause: Two separate implementations (admin.html inline + admin.js) got out of sync
+- Solution: Remove duplicate, use single source of truth (admin.js)
+- Future: Any config changes only need to happen in ONE place
+
+**Remember:**
+- "Don't Repeat Yourself" (DRY) isn't just about code size
+- It's about maintainability: ONE place to fix bugs, ONE place to add features
+- Always ask: "Does this already exist somewhere else?"
+- If yes: refactor to reuse. If no: make it reusable from the start.
 
 ---
 
