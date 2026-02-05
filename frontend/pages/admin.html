@@ -139,52 +139,32 @@
 
                             <!-- Authentication Settings -->
                             <div class="config-section">
-                                <h3>Authentication</h3>
+                                <h3>PolkaSQL Authentication (Sybase SQL Anywhere 17)</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" id="config-sybase-enabled" name="enable_sybase_auth">
-                                        Enable Sybase External Authentication
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-sybase-url">Sybase API URL</label>
-                                    <input type="text" id="config-sybase-url" name="sybase_auth_url" class="form-control" placeholder="https://sybase.example.com/api/auth">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-sybase-timeout">Sybase Timeout (seconds)</label>
-                                    <input type="number" id="config-sybase-timeout" name="sybase_auth_timeout" class="form-control" min="1" max="30">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-sybase-proc">Sybase Stored Procedure</label>
-                                    <input type="text" id="config-sybase-proc" name="sybase_auth_stored_proc" class="form-control" placeholder="sp_authenticate_user">
-                                </div>
-
-                                <h4 style="margin-top: 20px;">Remote Authentication (RFM API)</h4>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="config-remote-auth-enabled" name="remote_auth_enabled">
-                                        Enable Remote Authentication API
+                                        <input type="checkbox" id="config-polka-auth-enabled" name="polka_auth_enabled">
+                                        Enable PolkaSQL Authentication API
                                     </label>
                                     <small style="display: block; margin-top: 5px; color: #666;">
-                                        When enabled, users are authenticated against remote API (e.g., PolkaSQL).
+                                        Authenticate users against PolkaSQL/Sybase database via RFM_Auth WebService.
                                         Users are automatically created in RFM. Passwords are verified on each login.
                                         <br><strong>Note:</strong> Username and password are case-insensitive. Read-only mode - passwords cannot be changed in RFM.
                                     </small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-remote-auth-url">Remote Auth API URL</label>
-                                    <input type="text" id="config-remote-auth-url" name="remote_auth_url" class="form-control" placeholder="http://polkaserver.local/RFM_Auth">
+                                    <label for="config-polka-auth-url">PolkaSQL Auth API URL</label>
+                                    <input type="text" id="config-polka-auth-url" name="polka_auth_url" class="form-control" placeholder="http://polkaserver.local/RFM_Auth">
                                     <small>Example: http://polkaserver.local/RFM_Auth</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-remote-auth-api-key">Remote Auth API Key</label>
-                                    <input type="password" id="config-remote-auth-api-key" name="remote_auth_api_key" class="form-control" placeholder="SecureUUID1">
-                                    <small>API key for authenticating requests to the remote API</small>
+                                    <label for="config-polka-auth-api-key">PolkaSQL Auth API Key</label>
+                                    <input type="password" id="config-polka-auth-api-key" name="polka_auth_api_key" class="form-control" placeholder="SecureUUID1">
+                                    <small>API key for authenticating requests to PolkaSQL API</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="config-remote-auth-timeout">Remote Auth Timeout (seconds)</label>
-                                    <input type="number" id="config-remote-auth-timeout" name="remote_auth_timeout" class="form-control" min="1" max="30" value="5">
-                                    <small>Timeout for remote authentication API requests</small>
+                                    <label for="config-polka-auth-timeout">PolkaSQL Auth Timeout (seconds)</label>
+                                    <input type="number" id="config-polka-auth-timeout" name="polka_auth_timeout" class="form-control" min="1" max="30" value="5">
+                                    <small>Timeout for PolkaSQL authentication API requests</small>
                                 </div>
                             </div>
 
@@ -1110,14 +1090,10 @@
             const fieldMappings = {
                 'config-max-concurrent-users': 'max_concurrent_users',
                 'config-session-lifetime': 'session_lifetime_days',
-                'config-sybase-enabled': 'enable_sybase_auth',
-                'config-sybase-url': 'sybase_auth_url',
-                'config-sybase-timeout': 'sybase_auth_timeout',
-                'config-sybase-proc': 'sybase_auth_stored_proc',
-                'config-remote-auth-enabled': 'remote_auth_enabled',
-                'config-remote-auth-url': 'remote_auth_url',
-                'config-remote-auth-api-key': 'remote_auth_api_key',
-                'config-remote-auth-timeout': 'remote_auth_timeout',
+                'config-polka-auth-enabled': 'polka_auth_enabled',
+                'config-polka-auth-url': 'polka_auth_url',
+                'config-polka-auth-api-key': 'polka_auth_api_key',
+                'config-polka-auth-timeout': 'polka_auth_timeout',
                 'config-log-retention': 'log_retention_days',
                 'config-log-compression': 'enable_log_compression',
                 'config-syslog-enabled': 'enable_syslog',

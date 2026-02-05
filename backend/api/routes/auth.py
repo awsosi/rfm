@@ -1,7 +1,7 @@
 """
 Authentication routes for login, logout, and session management.
 
-Includes optional integration with external Sybase authentication API.
+Includes optional integration with PolkaSQL/Sybase authentication API.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -35,13 +35,13 @@ async def get_auth_status(
     """
     Get authentication configuration status (public endpoint).
 
-    Returns whether remote authentication is enabled.
+    Returns whether PolkaSQL authentication is enabled.
     Used by frontend to show/hide auth method selector.
     """
     from models import Config
 
     # Check database config first
-    stmt = select(Config).where(Config.key == 'remote_auth_enabled')
+    stmt = select(Config).where(Config.key == 'polka_auth_enabled')
     result = await db.execute(stmt)
     config = result.scalar_one_or_none()
 
@@ -50,65 +50,23 @@ async def get_auth_status(
     else:
         # Fallback to .env
         settings = get_settings()
-        enabled = settings.enable_remote_auth
+        enabled = settings.enable_polka_auth
 
     return {
-        "remote_auth_enabled": enabled
+        "polka_auth_enabled": enabled
     }
 
 
-async def verify_sybase_credentials(
-    username: str,
-    password: str,
-    settings: Settings,
-) -> bool:
-    """
-    Verify credentials against external Sybase API.
-
-    Args:
-        username: Username to verify
-        password: Password to verify
-        settings: Application settings
-
-    Returns:
-        True if credentials are valid, False otherwise
-    """
-    if not settings.enable_sybase_auth or not settings.sybase_auth_url:
-        return False
-
-    try:
-        async with httpx.AsyncClient(timeout=settings.sybase_auth_timeout) as client:
-            response = await client.post(
-                settings.sybase_auth_url,
-                json={
-                    "username": username,
-                    "password": password,
-                    "stored_proc": settings.sybase_auth_stored_proc,
-                },
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("authenticated", False)
-
-            return False
-
-    except httpx.TimeoutException:
-        return False
-    except Exception:
-        return False
-
-
-async def verify_remote_credentials(
+async def verify_polka_credentials(
     username: str,
     password: str,
     db: AsyncSession,
 ) -> tuple[bool, dict | None]:
     """
-    Verify credentials against remote authentication API.
+    Verify credentials against PolkaSQL/Sybase RFM_Auth API.
 
     Checks database config first (priority), then falls back to .env settings.
-    Username and password are case-insensitive per API requirements.
+    Username and password are case-insensitive per PolkaSQL API requirements.
 
     Args:
         username: Username to verify (case-insensitive)
@@ -124,15 +82,15 @@ async def verify_remote_credentials(
 
     # Load configuration from database (priority) or .env (fallback)
     stmt = select(Config).where(Config.key.in_([
-        'remote_auth_enabled',
-        'remote_auth_url',
-        'remote_auth_api_key'
+        'polka_auth_enabled',
+        'polka_auth_url',
+        'polka_auth_api_key'
     ]))
     result = await db.execute(stmt)
     db_configs = {config.key: config.value for config in result.scalars()}
 
-    # Check if remote auth is enabled
-    enabled_str = db_configs.get('remote_auth_enabled')
+    # Check if PolkaSQL auth is enabled
+    enabled_str = db_configs.get('polka_auth_enabled')
     if enabled_str:
         # Database config takes priority
         enabled = enabled_str.lower() in ('true', '1', 'yes')
@@ -140,27 +98,27 @@ async def verify_remote_credentials(
         # Fallback to .env
         from api.config import get_settings
         settings = get_settings()
-        enabled = settings.enable_remote_auth
+        enabled = settings.enable_polka_auth
 
     if not enabled:
         return False, None
 
-    # Get remote auth URL
-    remote_url = db_configs.get('remote_auth_url')
-    if not remote_url:
+    # Get PolkaSQL auth URL
+    polka_url = db_configs.get('polka_auth_url')
+    if not polka_url:
         from api.config import get_settings
         settings = get_settings()
-        remote_url = settings.remote_auth_url
+        polka_url = settings.polka_auth_url
 
-    if not remote_url:
+    if not polka_url:
         return False, None
 
     # Get API key
-    api_key = db_configs.get('remote_auth_api_key')
+    api_key = db_configs.get('polka_auth_api_key')
     if not api_key:
         from api.config import get_settings
         settings = get_settings()
-        api_key = settings.remote_auth_api_key
+        api_key = settings.polka_auth_api_key
 
     if not api_key:
         return False, None
@@ -168,7 +126,7 @@ async def verify_remote_credentials(
     # Get timeout
     from api.config import get_settings
     settings = get_settings()
-    timeout = settings.remote_auth_timeout
+    timeout = settings.polka_auth_timeout
 
     try:
         # Build query parameters (API uses GET request with query params)
@@ -180,7 +138,7 @@ async def verify_remote_credentials(
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(
-                remote_url,
+                polka_url,
                 params=params,
                 headers={"Accept": "application/json"},
             )
@@ -224,37 +182,36 @@ async def _perform_login(
 
     Supports:
     - Local authentication (password hash)
-    - External Sybase authentication
-    - Remote authentication API (case-insensitive, auto-create users)
+    - PolkaSQL/Sybase authentication (RFM_Auth API, case-insensitive, auto-create users)
 
     Auth method selection:
-    - "auto": Try remote first (if enabled), fallback to local
-    - "remote": Only remote authentication
-    - "local": Only local/Sybase authentication
+    - "auto": Try PolkaSQL first (if enabled), fallback to local
+    - "polka": Only PolkaSQL authentication
+    - "local": Only local authentication
     """
     # Determine auth method
     auth_method = login_data.auth_method or "auto"
 
-    # Try remote authentication (if requested)
-    remote_authenticated = False
-    remote_user_data = None
+    # Try PolkaSQL authentication (if requested)
+    polka_authenticated = False
+    polka_user_data = None
 
-    if auth_method in ["auto", "remote"]:
-        remote_authenticated, remote_user_data = await verify_remote_credentials(
+    if auth_method in ["auto", "polka"]:
+        polka_authenticated, polka_user_data = await verify_polka_credentials(
             login_data.username,
             login_data.password,
             db,
         )
 
-    if remote_authenticated:
-        # Remote auth successful - find or create user
-        # Use case-insensitive lookup for remote auth users
+    if polka_authenticated:
+        # PolkaSQL auth successful - find or create user
+        # Use case-insensitive lookup for PolkaSQL auth users
         stmt = select(User).where(func.lower(User.username) == func.lower(login_data.username))
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
 
         if not user:
-            # Create new user from remote auth
+            # Create new user from PolkaSQL auth
             # Generate a random password hash (won't be used for auth)
             import secrets
             random_password = secrets.token_urlsafe(32)
@@ -263,10 +220,10 @@ async def _perform_login(
             user = User(
                 username=login_data.username.lower(),  # Store as lowercase
                 password_hash=password_hash,
-                role=UserRole.USER,  # Default role for remote users
+                role=UserRole.USER,  # Default role for PolkaSQL users
                 is_active=True,
-                is_remote_auth=True,
-                remote_user_id=remote_user_data["user_id"],
+                is_polka_auth=True,
+                polka_user_id=polka_user_data["user_id"],
             )
 
             db.add(user)
@@ -276,21 +233,21 @@ async def _perform_login(
             # Log user creation
             await AuditLogger.log_admin_action(
                 user_id=None,
-                action="user_create_remote_auth",
+                action="user_create_polka_auth",
                 target="user",
                 details={
                     "username": user.username,
-                    "remote_user_id": remote_user_data["user_id"],
-                    "source": "remote_authentication",
+                    "polka_user_id": polka_user_data["user_id"],
+                    "source": "polka_authentication",
                 },
                 ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
             )
 
         else:
-            # Existing remote auth user - update remote_user_id if changed
-            if user.is_remote_auth and user.remote_user_id != remote_user_data["user_id"]:
-                user.remote_user_id = remote_user_data["user_id"]
+            # Existing PolkaSQL auth user - update polka_user_id if changed
+            if user.is_polka_auth and user.polka_user_id != polka_user_data["user_id"]:
+                user.polka_user_id = polka_user_data["user_id"]
                 await db.commit()
 
         # Check if user is active
@@ -304,15 +261,15 @@ async def _perform_login(
         password_valid = True
 
     else:
-        # Remote auth not enabled, failed, or not requested
-        # If auth_method is "remote", fail here (no fallback)
-        if auth_method == "remote":
+        # PolkaSQL auth not enabled, failed, or not requested
+        # If auth_method is "polka", fail here (no fallback)
+        if auth_method == "polka":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Remote authentication failed",
+                detail="PolkaSQL authentication failed",
             )
 
-        # Try local/Sybase auth (auth_method is "auto" or "local")
+        # Try local auth (auth_method is "auto" or "local")
         # Get user from database (exact match for local users)
         stmt = select(User).where(User.username == login_data.username)
         result = await db.execute(stmt)
@@ -330,37 +287,11 @@ async def _perform_login(
                 detail="Account is disabled",
             )
 
-        # Verify password
+        # Verify password - local password hash verification only
         password_valid = False
 
-        # Try Sybase auth if enabled
-        if settings.enable_sybase_auth:
-            sybase_valid = await verify_sybase_credentials(
-                login_data.username,
-                login_data.password,
-                settings,
-            )
-
-            if not sybase_valid:
-                # External auth failed - DENY (no fallback to local)
-                await AuditLogger.log_authentication(
-                    user_id=user.id,
-                    action="login_failed_external_auth",
-                    success=False,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get("user-agent"),
-                    details={"username": login_data.username, "reason": "external_auth_failed"},
-                )
-
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="External authentication failed",
-                )
-
-            password_valid = True
-
-        # Local password verification (only if external auth not enabled)
-        if not settings.enable_sybase_auth and not password_valid:
+        # Local password verification
+        if not password_valid:
             try:
                 ph.verify(user.password_hash, login_data.password)
                 password_valid = True
