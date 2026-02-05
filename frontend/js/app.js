@@ -134,6 +134,20 @@ async function init() {
         document.getElementById('admin-btn').style.display = 'block';
     }
 
+    // Load and apply user theme preference
+    try {
+        const { getPreferences } = await import('./api.js');
+        const preferences = await getPreferences();
+        applyTheme(preferences.ui_theme || 'system');
+    } catch (error) {
+        console.error('Failed to load theme preference:', error);
+        // Fall back to system theme if preferences fail to load
+        applyTheme('system');
+    }
+
+    // Setup listener for system theme changes
+    setupSystemThemeListener();
+
     // Setup auto token refresh
     setupAutoRefresh();
 
@@ -143,15 +157,38 @@ async function init() {
     // VF Redesign: Check if we're on the redesigned layout
     const isVFRedesign = document.body.classList.contains('vf-redesign');
 
+    // Determine initial path for Path A (use last visited if remember_last_paths is enabled)
+    let initialPathA = 'A:';
+    try {
+        const { getPreferences } = await import('./api.js');
+        const preferences = await getPreferences();
+        if (preferences.remember_last_paths && preferences.last_path_a) {
+            initialPathA = preferences.last_path_a;
+        }
+    } catch (error) {
+        console.error('Failed to load last path preference:', error);
+    }
+
     if (isVFRedesign) {
         // Initialize single pane (Path A only)
-        await loadDirectory('a', 'A:');
+        try {
+            await loadDirectory('a', initialPathA);
+        } catch (error) {
+            console.error('Failed to load last path, falling back to root:', error);
+            // Graceful fallback: if last path doesn't exist, load root
+            await loadDirectory('a', 'A:');
+        }
 
         // Load operation history
         await loadOperationHistory();
     } else {
         // Initialize both panes (legacy dual-pane)
-        await loadDirectory('a', 'A:');
+        try {
+            await loadDirectory('a', initialPathA);
+        } catch (error) {
+            console.error('Failed to load last path, falling back to root:', error);
+            await loadDirectory('a', 'A:');
+        }
         await loadDirectory('b', 'B:');
     }
 
@@ -592,6 +629,23 @@ async function loadDirectory(paneId, path) {
 
         // Update sort arrows in header
         updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
+
+        // Save last visited path if remember_last_paths is enabled (for Path A only)
+        if (paneId === 'a') {
+            try {
+                const { getPreferences, updatePreferences } = await import('./api.js');
+                const preferences = await getPreferences();
+                if (preferences.remember_last_paths) {
+                    // Only update if path has changed to avoid unnecessary API calls
+                    if (preferences.last_path_a !== normalizedPath) {
+                        await updatePreferences({ last_path_a: normalizedPath });
+                    }
+                }
+            } catch (error) {
+                // Silently fail - this is a convenience feature, not critical
+                console.debug('Failed to save last path preference:', error);
+            }
+        }
 
     } catch (error) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
@@ -1113,6 +1167,46 @@ function isWebSocketConnected() {
 /**
  * Open settings modal and load current preferences
  */
+/**
+ * Detect system theme preference (light or dark)
+ */
+function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+    return 'light';
+}
+
+/**
+ * Apply theme to the page
+ */
+function applyTheme(theme) {
+    const effectiveTheme = theme === 'system' ? getSystemTheme() : theme;
+    document.body.setAttribute('data-theme', effectiveTheme);
+
+    // Store current theme setting for system theme change listener
+    window._currentThemeSetting = theme;
+}
+
+/**
+ * Setup system theme change listener
+ * If user has selected 'system' theme, automatically update when OS/browser theme changes
+ */
+function setupSystemThemeListener() {
+    if (window.matchMedia) {
+        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        darkModeQuery.addEventListener('change', (e) => {
+            // Only apply if user has system theme selected
+            if (window._currentThemeSetting === 'system') {
+                document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+}
+
+/**
+ * Open settings modal and load current preferences
+ */
 async function openSettingsModal() {
     try {
         const { getPreferences, updatePreferences, resetPreferences } = await import('./api.js');
@@ -1129,8 +1223,8 @@ async function openSettingsModal() {
         const preferences = await getPreferences();
 
         // Populate form with current preferences
-        document.getElementById('ui-theme').value = preferences.ui_theme || 'light';
-        document.getElementById('pane-layout').value = preferences.pane_layout || 'horizontal';
+        document.getElementById('ui-theme').value = preferences.ui_theme || 'system';
+        document.getElementById('ui-language').value = preferences.ui_language || 'en';
         document.getElementById('show-hidden-files').checked = preferences.show_hidden_files || false;
         document.getElementById('default-sort-by').value = preferences.default_sort_by || 'name';
         document.getElementById('default-sort-order').value = preferences.default_sort_order || 'asc';
@@ -1145,7 +1239,7 @@ async function openSettingsModal() {
             try {
                 const updatedPreferences = {
                     ui_theme: document.getElementById('ui-theme').value,
-                    pane_layout: document.getElementById('pane-layout').value,
+                    ui_language: document.getElementById('ui-language').value,
                     show_hidden_files: document.getElementById('show-hidden-files').checked,
                     default_sort_by: document.getElementById('default-sort-by').value,
                     default_sort_order: document.getElementById('default-sort-order').value,
@@ -1159,7 +1253,7 @@ async function openSettingsModal() {
 
                 // Apply theme immediately if changed
                 if (updatedPreferences.ui_theme !== preferences.ui_theme) {
-                    document.body.setAttribute('data-theme', updatedPreferences.ui_theme);
+                    applyTheme(updatedPreferences.ui_theme);
                 }
             } catch (error) {
                 showError('Failed to save settings: ' + error.message);
@@ -1174,16 +1268,16 @@ async function openSettingsModal() {
                     showSuccess('Settings reset to defaults');
 
                     // Re-populate form with defaults
-                    document.getElementById('ui-theme').value = defaultPrefs.ui_theme;
-                    document.getElementById('pane-layout').value = defaultPrefs.pane_layout;
-                    document.getElementById('show-hidden-files').checked = defaultPrefs.show_hidden_files;
-                    document.getElementById('default-sort-by').value = defaultPrefs.default_sort_by;
-                    document.getElementById('default-sort-order').value = defaultPrefs.default_sort_order;
-                    document.getElementById('items-per-page').value = defaultPrefs.items_per_page;
-                    document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths;
+                    document.getElementById('ui-theme').value = defaultPrefs.ui_theme || 'system';
+                    document.getElementById('ui-language').value = defaultPrefs.ui_language || 'en';
+                    document.getElementById('show-hidden-files').checked = defaultPrefs.show_hidden_files || false;
+                    document.getElementById('default-sort-by').value = defaultPrefs.default_sort_by || 'name';
+                    document.getElementById('default-sort-order').value = defaultPrefs.default_sort_order || 'asc';
+                    document.getElementById('items-per-page').value = defaultPrefs.items_per_page || 100;
+                    document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths !== false;
 
                     // Apply theme
-                    document.body.setAttribute('data-theme', defaultPrefs.ui_theme);
+                    applyTheme(defaultPrefs.ui_theme || 'system');
                 } catch (error) {
                     showError('Failed to reset settings: ' + error.message);
                 }

@@ -388,6 +388,7 @@ class UserPreferencesResponse(BaseModel):
     last_path_a: Optional[str]
     last_path_b: Optional[str]
     ui_theme: str
+    ui_language: str
     pane_layout: str
     show_hidden_files: bool
     default_sort_by: str
@@ -404,7 +405,8 @@ class UserPreferencesUpdate(BaseModel):
     remember_last_paths: Optional[bool] = None
     last_path_a: Optional[str] = Field(None, max_length=1000)
     last_path_b: Optional[str] = Field(None, max_length=1000)
-    ui_theme: Optional[str] = Field(None, pattern="^(light|dark)$")
+    ui_theme: Optional[str] = Field(None, pattern="^(system|light|dark)$")
+    ui_language: Optional[str] = Field(None, pattern="^[a-z]{2}$")  # ISO 639-1 language codes
     pane_layout: Optional[str] = Field(None, pattern="^(horizontal|vertical)$")
     show_hidden_files: Optional[bool] = None
     default_sort_by: Optional[str] = Field(None, pattern="^(name|size|date)$")

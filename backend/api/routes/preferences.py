@@ -93,7 +93,8 @@ async def reset_my_preferences(
         preferences.remember_last_paths = True
         preferences.last_path_a = None
         preferences.last_path_b = None
-        preferences.ui_theme = "light"
+        preferences.ui_theme = "system"
+        preferences.ui_language = "en"
         preferences.pane_layout = "horizontal"
         preferences.show_hidden_files = False
         preferences.default_sort_by = "name"

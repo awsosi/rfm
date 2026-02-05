@@ -540,7 +540,8 @@ class UserPreferences(Base):
     last_path_b = Column(String(1000), nullable=True)
 
     # Layout preferences
-    ui_theme = Column(String(50), nullable=False, default="light")  # light, dark
+    ui_theme = Column(String(50), nullable=False, default="system")  # system, light, dark
+    ui_language = Column(String(10), nullable=False, default="en")  # en (more coming with i18n)
     pane_layout = Column(String(50), nullable=False, default="horizontal")  # horizontal, vertical
     show_hidden_files = Column(Boolean, nullable=False, default=False)
     default_sort_by = Column(String(50), nullable=False, default="name")  # name, size, date
