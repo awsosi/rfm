@@ -1,7 +1,7 @@
 """Add remote authentication fields to users table
 
-Revision ID: 007_add_remote_auth
-Revises: 006_add_path_c_prefix
+Revision ID: 007
+Revises: 006
 Create Date: 2026-02-05
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '007_add_remote_auth'
-down_revision = '006_add_path_c_prefix'
+revision = '007'
+down_revision = '006'
 branch_labels = None
 depends_on = None
 
