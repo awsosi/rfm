@@ -84,7 +84,8 @@ async def verify_polka_credentials(
     stmt = select(Config).where(Config.key.in_([
         'polka_auth_enabled',
         'polka_auth_url',
-        'polka_auth_api_key'
+        'polka_auth_api_key',
+        'polka_auth_timeout'
     ]))
     result = await db.execute(stmt)
     db_configs = {config.key: config.value for config in result.scalars()}
@@ -123,10 +124,19 @@ async def verify_polka_credentials(
     if not api_key:
         return False, None
 
-    # Get timeout
-    from api.config import get_settings
-    settings = get_settings()
-    timeout = settings.polka_auth_timeout
+    # Get timeout (database config priority, fallback to .env)
+    timeout_str = db_configs.get('polka_auth_timeout')
+    if timeout_str:
+        try:
+            timeout = int(timeout_str)
+        except (ValueError, TypeError):
+            from api.config import get_settings
+            settings = get_settings()
+            timeout = settings.polka_auth_timeout
+    else:
+        from api.config import get_settings
+        settings = get_settings()
+        timeout = settings.polka_auth_timeout
 
     try:
         # Build query parameters (API uses GET request with query params)
