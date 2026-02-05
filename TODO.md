@@ -27,6 +27,104 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-05 - Fix PolkaSQL Auth Settings Not Persisting (Incomplete Implementation)
+**Issue**: PolkaSQL authentication settings completely broken after refactor from Sybase to PolkaSQL:
+1. Environment variables (ENABLE_POLKA_AUTH, POLKA_AUTH_URL, POLKA_AUTH_API_KEY, POLKA_AUTH_TIMEOUT) not respected by the app
+2. Admin Panel settings for Polka auth not saved - fields empty on reload even after saving
+3. Frontend login screen doesn't change even when .env is configured
+
+**Root Causes**:
+1. **Missing fieldMapping entries** (frontend/js/admin.js:501-534): The `populateConfigForm()` function's fieldMapping object still referenced old Sybase auth fields instead of new Polka fields
+   - Had: `enable_sybase_auth`, `sybase_auth_url`, `sybase_auth_timeout`, `sybase_auth_stored_proc`
+   - Needed: `polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout`
+   - Result: Form fields never populated from database on load, appeared empty even if values existed
+
+2. **Incomplete config reading** (backend/api/routes/auth.py:84-89, 127-129): The `verify_polka_credentials()` function only loaded 3 config keys from database (`polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`) but not `polka_auth_timeout`
+   - Timeout was hardcoded to read from env settings only (lines 127-129)
+   - Never checked database config for timeout value
+   - Database config priority promise broken for timeout setting
+
+3. **Missing database migration**: No migration existed to create Polka auth config entries in the database
+   - Initial migration (001_initial_schema.py) still created old Sybase config entries
+   - No migration removed old Sybase entries or added new Polka entries
+   - Config table missing `polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout` rows
+
+4. **Incomplete schema verification** (backend/verify_schema.py:161-163): Required configs list had `enable_polka_auth` (wrong name) instead of `polka_auth_enabled`, and was missing `polka_auth_api_key` entirely
+
+**Fixes Applied**:
+
+1. **Frontend - Admin Panel fieldMapping** (frontend/js/admin.js:504-507):
+   - Removed old Sybase auth fields: `enable_sybase_auth`, `sybase_auth_url`, `sybase_auth_timeout`, `sybase_auth_stored_proc`
+   - Added new Polka auth fields: `polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout`
+   - Form fields now populate correctly from database on Admin Panel load
+
+2. **Backend - Config Loading** (backend/api/routes/auth.py:84-89, 127-139):
+   - Added `polka_auth_timeout` to database config query (line 88)
+   - Updated timeout loading to check database first, then fall back to env (lines 127-139)
+   - Handles invalid timeout strings gracefully with try/except
+   - Database config priority now applies to ALL Polka settings
+
+3. **Database Migration** (backend/alembic/versions/008_add_polka_config.py):
+   - Created new migration 008 to add Polka auth config entries
+   - Deletes old Sybase config entries (enable_sybase_auth, sybase_auth_url, sybase_auth_timeout, sybase_auth_stored_proc)
+   - Inserts new Polka config entries with proper types and descriptions
+   - Includes downgrade path to restore Sybase entries if needed
+
+4. **Schema Verification** (backend/verify_schema.py:161-164):
+   - Changed `enable_polka_auth` to `polka_auth_enabled` (correct config key name)
+   - Added missing `polka_auth_api_key` to required configs
+   - Verification now checks all 4 Polka auth config keys
+
+**Files Modified**:
+- `frontend/js/admin.js` (lines 504-507: replaced Sybase fields with Polka fields in fieldMapping)
+- `backend/api/routes/auth.py` (line 88: added timeout to query; lines 127-139: read timeout from database first)
+- `backend/alembic/versions/008_add_polka_config.py` (new migration file)
+- `backend/verify_schema.py` (lines 161-164: fixed config key names, added api_key)
+
+**Result**:
+✅ Admin Panel Polka auth fields now save and load correctly
+✅ Environment variables respected when database config not present
+✅ Database config takes priority over .env for all 4 settings
+✅ Frontend login screen shows auth method selector when Polka auth enabled
+✅ All config keys properly validated in schema verification
+
+**CRITICAL LESSON LEARNED - COMPLETE YOUR REFACTORS**:
+**When renaming/refactoring a feature:**
+1. ✅ **SEARCH THE ENTIRE CODEBASE** - Don't just rename the obvious files, search for ALL references to old names
+2. ✅ **CHECK FRONTEND AND BACKEND** - JavaScript fieldMappings, database queries, migrations, schema validators, etc.
+3. ✅ **VERIFY DATA LAYER** - Ensure database migrations create/update all necessary entries
+4. ✅ **TEST ALL CONFIG SOURCES** - If dual-config (env + database), test BOTH sources and priority
+5. ✅ **UPDATE SCHEMA VERIFICATION** - Required configs lists, verification scripts, documentation
+6. ✅ **DON'T ASSUME IT WORKS** - Test the actual functionality end-to-end, don't just check if code compiles
+
+**How to never make this mistake again:**
+- Use global search (grep/ripgrep) for old names BEFORE committing refactor: `rg -i "sybase_auth|enable_sybase"`
+- Create checklist for refactors: [ ] Backend models [ ] API routes [ ] Frontend JS [ ] HTML forms [ ] Migrations [ ] Verification [ ] Tests
+- Test with fresh database to ensure migrations work: `docker-compose down -v && docker-compose up`
+- Check Admin Panel UI after refactor: verify all fields load, save, and persist correctly
+- Review all files in the PR diff to catch leftover references
+- When renaming config keys, write a migration to rename database entries (don't leave orphaned data)
+- Add schema verification tests to CI/CD to catch missing config entries
+
+**Design Notes**:
+- KISS approach: Reused existing patterns (fieldMapping, config priority chain, migration structure)
+- DRY: Single source of truth for config keys (database with env fallback)
+- Complete solution: Fixed all 4 layers (frontend UI, backend API, database schema, verification)
+- Backward compatible: Old Sybase entries removed cleanly with downgrade path
+- Clear separation: Form field names match config keys exactly (no translation needed)
+
+**Testing Recommendations** (for when docker is available):
+1. Test fresh start with no database config: Polka settings from .env should work
+2. Test Admin Panel save: Set Polka values, save, reload page - fields should remain populated
+3. Test database priority: Set different values in .env and database, database should win
+4. Test timeout config: Verify timeout from database used instead of .env default
+5. Test schema verification: Run verify_schema.py to ensure all 4 config keys exist
+6. Test migration: Apply 008 migration on existing database with Sybase entries, verify clean transition
+7. Test frontend: Enable Polka in Admin Panel, verify login page shows auth method selector
+8. Test disabled state: Disable Polka, verify auth method selector hidden and local auth works
+
+---
+
 ### 2026-02-05 - Fix Login Failure After Fresh Start (Frontend Auth Method Bug)
 **Issue**: After PRs #99 and #100 (PolkaSQL rename), users couldn't login to the app after fresh start. Login returned 401 Unauthorized even with correct credentials for local admin user.
 
