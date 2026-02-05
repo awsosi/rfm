@@ -45,12 +45,13 @@ async def get_auth_status(
     result = await db.execute(stmt)
     config = result.scalar_one_or_none()
 
-    if config:
-        enabled = config.value.lower() in ('true', '1', 'yes')
+    if config and config.value.lower() in ('true', '1', 'yes'):
+        # Database config explicitly enables it
+        enabled = True
     else:
-        # Fallback to .env
+        # Fallback to .env (treats 'false' in DB as "not set", allowing .env to take precedence)
         settings = get_settings()
-        enabled = settings.enable_polka_auth
+        enabled = settings.polka_auth_enabled
 
     return {
         "polka_auth_enabled": enabled
@@ -92,19 +93,19 @@ async def verify_polka_credentials(
 
     # Check if PolkaSQL auth is enabled
     enabled_str = db_configs.get('polka_auth_enabled')
-    if enabled_str:
-        # Database config takes priority
-        enabled = enabled_str.lower() in ('true', '1', 'yes')
+    if enabled_str and enabled_str.lower() in ('true', '1', 'yes'):
+        # Database config explicitly enables it
+        enabled = True
     else:
-        # Fallback to .env
+        # Fallback to .env (treats 'false' in DB as "not set", allowing .env to take precedence)
         from api.config import get_settings
         settings = get_settings()
-        enabled = settings.enable_polka_auth
+        enabled = settings.polka_auth_enabled
 
     if not enabled:
         return False, None
 
-    # Get PolkaSQL auth URL
+    # Get PolkaSQL auth URL (database config takes priority)
     polka_url = db_configs.get('polka_auth_url')
     if not polka_url:
         from api.config import get_settings

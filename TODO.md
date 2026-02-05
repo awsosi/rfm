@@ -27,7 +27,95 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
-### 2026-02-05 - Fix PolkaSQL Auth Settings Not Persisting (Incomplete Implementation)
+### 2026-02-05 - Fix PolkaSQL Auth .env Ignored and Admin Panel Not Persisting (Config Key Mismatch)
+**Issue**: PolkaSQL authentication had two critical bugs after the Sybase→PolkaSQL rename:
+1. Environment variables (ENABLE_POLKA_AUTH, POLKA_AUTH_URL, POLKA_AUTH_API_KEY, POLKA_AUTH_TIMEOUT) completely ignored
+2. Admin Panel settings saved successfully but didn't show on page reload (form fields remained empty)
+
+**Root Causes**:
+1. **Settings class field name mismatch** (backend/api/config.py:94): Settings class used `enable_polka_auth` but database config used `polka_auth_enabled`
+   - Database migration 008 creates: `polka_auth_enabled`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout`
+   - Settings class defined: `enable_polka_auth`, `polka_auth_url`, `polka_auth_api_key`, `polka_auth_timeout`
+   - Frontend fieldMapping (admin.js:504-507): `polka_auth_enabled` (correct)
+   - .env.example: `ENABLE_POLKA_AUTH` (mapped to `enable_polka_auth` by pydantic - WRONG!)
+   - Result: .env values loaded into `settings.enable_polka_auth`, but auth.py looked for `settings.polka_auth_enabled`
+
+2. **Database default override behavior** (backend/api/routes/auth.py:95-102): Migration creates `polka_auth_enabled='false'` as default
+   - Logic was: `if enabled_str:` then use database value, else use .env
+   - Since `'false'` is truthy (non-empty string), database always took priority over .env
+   - Result: .env values ignored even when database had migration defaults
+
+**Fixes Applied**:
+
+1. **Settings Class Field Rename** (backend/api/config.py:94):
+   - Changed `enable_polka_auth` → `polka_auth_enabled` to match database keys
+   - Now pydantic maps `POLKA_AUTH_ENABLED` env var → `polka_auth_enabled` field
+
+2. **Updated .env.example** (.env.example:154):
+   - Changed `ENABLE_POLKA_AUTH` → `POLKA_AUTH_ENABLED` to match new field name
+
+3. **Fixed Fallback Logic** (backend/api/routes/auth.py:95-102, 48-54):
+   - Old: `if enabled_str:` (treats 'false' as set) → `enabled = parse('false')` → False
+   - New: `if enabled_str and enabled_str in ('true', '1', 'yes'):` → `enabled = True` else fall back to .env
+   - Now migration default `'false'` treated as "not explicitly set", allowing .env to override
+   - Applied to both `verify_polka_credentials()` and `get_auth_status()` endpoints
+
+4. **Updated Auth.py References** (backend/api/routes/auth.py:102, 54):
+   - Changed `settings.enable_polka_auth` → `settings.polka_auth_enabled` (2 occurrences)
+
+**Files Modified**:
+- `backend/api/config.py` (line 94: renamed field)
+- `.env.example` (line 154: renamed env var)
+- `backend/api/routes/auth.py` (lines 48-54: fixed /status endpoint fallback; lines 95-102: fixed verify_polka fallback; lines 102, 54: updated settings references)
+
+**Result**:
+✅ .env values now respected when database has migration defaults
+✅ Admin Panel settings save and persist correctly (form fields populate on reload)
+✅ Database config `'true'` takes priority (explicit enable)
+✅ Database config `'false'`/empty treated as "not set", .env takes priority
+✅ Field names consistent across Settings class, database, frontend, and .env
+
+**CRITICAL LESSON LEARNED - CONFIG FIELD NAME CONSISTENCY**:
+**When implementing dual-config systems (env + database):**
+1. ✅ **IDENTICAL FIELD NAMES EVERYWHERE** - Settings class, database keys, frontend fieldMapping, .env vars must ALL match
+2. ✅ **USE SNAKE_CASE CONSISTENTLY** - Don't mix `enable_polka_auth` and `polka_auth_enabled` - pick ONE pattern
+3. ✅ **CHECK ALL LAYERS** - Config.py Settings class, database migration inserts, frontend JavaScript fieldMapping, .env.example
+4. ✅ **MIGRATION DEFAULTS DON'T OVERRIDE .ENV** - Use NULL or treat defaults as "not set" so .env can override
+5. ✅ **TEST BOTH CONFIG SOURCES** - Verify .env works, database works, and database priority works
+6. ✅ **VERIFY FORM POPULATION** - After saving in Admin Panel, reload page and check fields still show values
+
+**How to never make this mistake again:**
+- When renaming config fields, use global search to find ALL references: `rg -i "enable_polka|polka.*enabled"`
+- Create checklist for config fields:
+  - [ ] Settings class field name (config.py)
+  - [ ] Database migration key (alembic/versions/*.py)
+  - [ ] Frontend fieldMapping (admin.js)
+  - [ ] .env.example variable name
+  - [ ] Backend code that reads Settings (auth.py, etc.)
+  - [ ] Schema verification (verify_schema.py)
+- Use consistent naming: prefer `feature_enabled` over `enable_feature` for boolean flags
+- Document config priority chain in code comments: "Database → .env → default"
+- Write integration test: set .env value, verify it works; set DB value, verify it overrides
+- Use NULL in migrations instead of hardcoded defaults to allow .env fallback
+- If using hardcoded defaults in migrations, treat them as "not set" in fallback logic (like we did with 'false')
+
+**Design Notes**:
+- KISS: Simple fallback logic, consistent naming across all layers
+- DRY: Single source of truth for field names (Settings class definition drives everything)
+- Backward compatible: Existing database values still work, just added proper .env fallback
+- Clear priority: Database 'true' > .env > Database 'false'/empty/NULL
+
+**Testing Recommendations** (when docker available):
+1. Test .env only: Set `POLKA_AUTH_ENABLED=true` in .env, no DB override → should enable
+2. Test database priority: Set .env=false, DB='true' → should enable (DB wins)
+3. Test migration defaults: Fresh DB with migration → .env values should work
+4. Test Admin Panel: Save settings, reload page → fields should remain populated
+5. Test form empty values: Clear fields in Admin Panel, save → should fall back to .env
+6. Test all 4 settings: enabled, url, api_key, timeout from both .env and database
+
+---
+
+### 2026-02-05 - Fix PolkaSQL Auth Settings Not Persisting (Incomplete Implementation) [SUPERSEDED BY ABOVE]
 **Issue**: PolkaSQL authentication settings completely broken after refactor from Sybase to PolkaSQL:
 1. Environment variables (ENABLE_POLKA_AUTH, POLKA_AUTH_URL, POLKA_AUTH_API_KEY, POLKA_AUTH_TIMEOUT) not respected by the app
 2. Admin Panel settings for Polka auth not saved - fields empty on reload even after saving

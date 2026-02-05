@@ -91,7 +91,7 @@ class Settings(BaseSettings):
 
     # External Integrations
     # PolkaSQL Authentication (Sybase SQL Anywhere 17 - RFM_Auth WebService)
-    enable_polka_auth: bool = False
+    polka_auth_enabled: bool = False
     polka_auth_url: Optional[str] = None
     polka_auth_api_key: Optional[str] = None
     polka_auth_timeout: int = 5
