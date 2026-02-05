@@ -27,6 +27,120 @@
 
 ## 🔧 RECENT FIXES (Last 7 Days)
 
+### 2026-02-05 - Fix User Settings Modal Crash (Missing HTML Element)
+**Issue**: Regular users and admins couldn't access Settings modal - clicking Settings button caused JavaScript error and modal never opened.
+
+**Root Cause**:
+- JavaScript function `openSettingsModal()` in app.js (line 1133) tried to access `document.getElementById('pane-layout')`
+- This element didn't exist in explorer.html Settings modal HTML
+- Null reference error crashed the modal initialization before it could open
+- Users saw no error message, just no response when clicking Settings button
+
+**Why This Happened**:
+- The `pane-layout` field was likely removed from HTML during previous refactor but JavaScript still referenced it
+- Similar to previous duplicate code issues - HTML and JS got out of sync
+- No validation/check for element existence before trying to set its value
+
+**Fixes Applied**:
+
+1. **Removed pane-layout references** (frontend/js/app.js:1133, 1148, 1177, 1183):
+   - Removed all `document.getElementById('pane-layout')` calls from openSettingsModal()
+   - Removed pane_layout from updatedPreferences object
+   - Removed pane_layout from defaultPrefs population
+
+2. **Added system theme option** (frontend/pages/explorer.html:191-195, frontend/js/app.js:1119-1164):
+   - Added "System (Auto)" as first option in theme selector (default)
+   - Implemented `getSystemTheme()` to detect browser/OS preference using `prefers-color-scheme`
+   - Implemented `applyTheme()` to handle system/light/dark themes
+   - Added `setupSystemThemeListener()` to auto-update when OS theme changes
+   - Theme now defaults to system preference instead of hardcoded light
+
+3. **Added language selection field** (frontend/pages/explorer.html:198-204, backend models/schemas):
+   - Added ui_language dropdown (currently English only)
+   - Added help text: "More languages coming soon (i18n implementation planned)"
+   - Backend updated to support ui_language field in UserPreferences model
+   - Migration 009 created to add ui_language column
+   - Ready for future modular i18n implementation
+
+4. **Implemented Path A directory remembering** (frontend/js/app.js:160-193, 633-648):
+   - Init function now checks preferences.remember_last_paths and preferences.last_path_a
+   - On page load, navigates to last visited directory if setting enabled
+   - Graceful fallback: if last path doesn't exist, loads root 'A:' instead
+   - After successful directory navigation, saves current path to preferences.last_path_a
+   - Only saves if path changed to avoid unnecessary API calls
+   - Fails silently if save fails (convenience feature, not critical)
+
+5. **Updated backend defaults** (backend/models.py:543-544, backend/api/schemas.py:408-409, backend/api/routes/preferences.py:96-97):
+   - Changed default ui_theme from "light" to "system"
+   - Added ui_language field with default "en"
+   - Updated validation pattern to accept system|light|dark
+   - Added ISO 639-1 language code validation pattern
+
+6. **Added theme initialization on page load** (frontend/js/app.js:137-149):
+   - Init function loads user preferences and applies theme immediately
+   - Falls back to system theme if preferences fail to load
+   - Theme applied before UI renders to prevent flash of wrong theme
+
+**Files Modified**:
+- `frontend/pages/explorer.html` (lines 184-251: updated Settings modal form)
+- `frontend/js/app.js` (lines 137-149: theme init; 160-193: last path restore; 633-648: save last path; 1119-1233: theme functions and Settings modal)
+- `backend/models.py` (lines 543-544: added ui_language, changed default theme)
+- `backend/api/schemas.py` (lines 390-391, 408-409: added ui_language field and validation)
+- `backend/api/routes/preferences.py` (lines 96-97: updated reset defaults)
+- `backend/alembic/versions/009_add_ui_language_system_theme.py` (new migration)
+
+**Result**:
+✅ Settings modal opens successfully for all users (regular and admin)
+✅ System theme option works and follows browser/OS preference
+✅ Theme auto-updates when user changes OS dark/light mode (if system theme selected)
+✅ Language selection ready for future i18n implementation
+✅ Last visited Path A directory remembered and restored on login
+✅ Graceful fallback if remembered path no longer exists
+✅ All settings save and persist correctly
+✅ Theme applied immediately on page load (no flash)
+
+**CRITICAL LESSON LEARNED - ALWAYS VERIFY ELEMENT EXISTENCE**:
+
+**When writing JavaScript that manipulates DOM elements:**
+
+1. ✅ **VERIFY ELEMENTS EXIST** - Before calling `getElementById()`, ensure element exists in HTML
+   - Use browser DevTools or grep to confirm: `rg -i "id=\"element-name\"" frontend/pages/*.html`
+   - Add defensive checks: `const el = document.getElementById('x'); if (!el) { console.error('Missing element'); return; }`
+
+2. ✅ **TEST WITH BROWSER CONSOLE** - Open Settings modal and check for JavaScript errors
+   - This issue would have been immediately visible as: `Cannot read properties of null (reading 'value')`
+   - User-facing features should be click-tested after changes
+
+3. ✅ **KEEP HTML AND JS IN SYNC** - When removing HTML elements, search for all JavaScript references
+   - Use: `rg -i "getElementById.*pane-layout" frontend/js/`
+   - Or: `rg -i "pane.layout|pane_layout" frontend/`
+
+4. ✅ **CONSIDER DRY FOR FORMS** - If form fields appear in multiple places (HTML, JS, backend):
+   - Document the schema somewhere central (e.g., JSDoc, README)
+   - Use validation libraries that share schema between frontend/backend
+   - Or generate forms from schema definition
+
+5. ✅ **GRACEFUL DEGRADATION** - Settings should load with sensible defaults if individual fields fail
+   - Don't crash entire modal if one field has issues
+   - Use try/catch for individual field population
+
+**How to never make this mistake again**:
+1. Before removing HTML elements, search codebase for JavaScript references: `rg -i "element-id"`
+2. When adding new form fields, add to HTML first, then update JavaScript (not the reverse)
+3. Use browser console to test interactive features after any changes
+4. Add JSDoc comments listing all required element IDs for a function
+5. Consider framework with component validation (React, Vue) for larger apps
+
+**Root Cause of Root Cause**:
+This bug exists because HTML and JavaScript are in separate files with no type checking. The solution is either:
+- Use defensive checks (`if (!element) return;`)
+- Move to component-based framework with TypeScript
+- Document required DOM structure in JSDoc/comments
+
+**Remember**: "Settings not working" = check for JS errors in browser console first!
+
+---
+
 ### 2026-02-05 - Remove Duplicate Config Loading Logic (DRY Principle)
 **Issue**: admin.html had duplicate config loading/saving logic that was out of sync with admin.js, violating DRY principle and causing maintenance issues.
 

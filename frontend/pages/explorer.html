@@ -188,9 +188,19 @@
                         <div class="form-group">
                             <label for="ui-theme">Theme:</label>
                             <select id="ui-theme" name="ui_theme" class="form-control">
+                                <option value="system">System (Auto)</option>
                                 <option value="light">Light</option>
                                 <option value="dark">Dark</option>
                             </select>
+                            <small class="form-text">System theme follows your browser/OS preference</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ui-language">Language:</label>
+                            <select id="ui-language" name="ui_language" class="form-control">
+                                <option value="en">English</option>
+                            </select>
+                            <small class="form-text">More languages coming soon (i18n implementation planned)</small>
                         </div>
 
                         <div class="form-group">
@@ -232,9 +242,10 @@
 
                         <div class="form-group">
                             <label for="remember-last-paths">
-                                <input type="checkbox" id="remember-last-paths" name="remember_last_paths">
-                                Remember last visited path
+                                <input type="checkbox" id="remember-last-paths" name="remember_last_paths" checked>
+                                Remember last visited Path A subdirectory
                             </label>
+                            <small class="form-text">When enabled, your last visited directory will be restored on login. If the path no longer exists, you'll be taken to the root.</small>
                         </div>
                     </div>
                 </form>
