@@ -1,12 +1,12 @@
 """
 Main authentication module for Modular File Manager.
 
-Provides authentication against local database with optional external Sybase API
+Provides authentication against local database with optional PolkaSQL/Sybase API
 integration. Includes admin emergency login via .env credentials.
 
 Features:
 - Local user database authentication
-- Optional Sybase 17 external API integration (2s timeout)
+- Optional PolkaSQL/Sybase authentication (RFM_Auth API)
 - Admin fallback authentication via .env
 - JWT session management (30-day long-lived tokens)
 - Argon2 password hashing

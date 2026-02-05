@@ -19,11 +19,11 @@
                 <div class="form-group" id="auth-method-group" style="display: none;">
                     <label for="auth-method">Authentication Method</label>
                     <select id="auth-method" name="auth-method" class="form-control">
-                        <option value="remote">Remote Authentication</option>
+                        <option value="polka">PolkaSQL Authentication</option>
                         <option value="local">Local Authentication</option>
                     </select>
                     <small style="color: #666; margin-top: 5px; display: block;">
-                        Select authentication method. Remote uses external API (case-insensitive), Local uses database.
+                        Select authentication method. PolkaSQL uses Sybase database (case-insensitive), Local uses RFM database.
                     </small>
                 </div>
 
@@ -76,11 +76,11 @@
                 const response = await fetch('/api/auth/status');
                 const data = await response.json();
 
-                if (data.remote_auth_enabled) {
+                if (data.polka_auth_enabled) {
                     // Show auth method selector
                     authMethodGroup.style.display = 'block';
-                    // Default to remote
-                    authMethodSelect.value = 'remote';
+                    // Default to PolkaSQL
+                    authMethodSelect.value = 'polka';
                 } else {
                     // Hide auth method selector
                     authMethodGroup.style.display = 'none';

@@ -30,7 +30,7 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1)
     auth_method: Optional[str] = Field(
         default="auto",
-        description="Authentication method: 'auto' (try remote first, fallback to local), 'remote' (only remote), 'local' (only local)"
+        description="Authentication method: 'auto' (try PolkaSQL first, fallback to local), 'polka' (only PolkaSQL), 'local' (only local)"
     )
 
     @field_validator('auth_method')
@@ -39,8 +39,8 @@ class LoginRequest(BaseModel):
         """Validate auth_method is one of allowed values."""
         if v is None:
             return "auto"
-        if v not in ["auto", "remote", "local"]:
-            raise ValueError("auth_method must be one of: auto, remote, local")
+        if v not in ["auto", "polka", "local"]:
+            raise ValueError("auth_method must be one of: auto, polka, local")
         return v
 
 

@@ -90,16 +90,11 @@ class Settings(BaseSettings):
     worker_heartbeat_timeout: int = 90
 
     # External Integrations
-    enable_sybase_auth: bool = False
-    sybase_auth_url: Optional[str] = None
-    sybase_auth_timeout: int = 2
-    sybase_auth_stored_proc: Optional[str] = None
-
-    # Remote Authentication API (RFM Authentication)
-    enable_remote_auth: bool = False
-    remote_auth_url: Optional[str] = None
-    remote_auth_api_key: Optional[str] = None
-    remote_auth_timeout: int = 5
+    # PolkaSQL Authentication (Sybase SQL Anywhere 17 - RFM_Auth WebService)
+    enable_polka_auth: bool = False
+    polka_auth_url: Optional[str] = None
+    polka_auth_api_key: Optional[str] = None
+    polka_auth_timeout: int = 5
 
     enable_syslog: bool = False
     syslog_host: Optional[str] = None
