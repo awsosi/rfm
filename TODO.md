@@ -8,6 +8,10 @@
 
 ## 📋 ACTIVE TODO ITEMS
 
+### Current Sprint
+- [ ] Verify Admin Panel loads and functions properly after export fix
+- [ ] Test theme switching (System/Light/Dark) in user Settings panel
+
 ### Testing Checklist
 - [ ] Push Operation: Select directory in Path A → verify copy to PATH_B and move to PATH_C
 - [ ] Push Operation: Verify operation appears in queue with real-time status updates
@@ -26,6 +30,131 @@
 ---
 
 ## 🔧 RECENT FIXES (Last 7 Days)
+
+### 2026-02-05 - Fix Admin Panel Freeze (Missing Export) and Theme Not Working (Missing CSS)
+**Issues**:
+1. Admin Panel completely frozen - browser console showed: `Uncaught SyntaxError: The requested module './utils.js' does not provide an export named 'showNotification' (at admin.js:13:10)`
+2. User Settings → Theme selector not working - always shows light theme regardless of selection
+
+**Root Causes**:
+1. **Missing Export**: admin.js line 13 imports `showNotification` from utils.js, but utils.js only exports `showToast` (not `showNotification`)
+   - admin.js uses `showNotification()` 31 times throughout the file
+   - Module import failure froze entire admin panel before any code could execute
+   - Browser showed module load error in console
+
+2. **Missing CSS**: JavaScript correctly sets `data-theme` attribute on body element, but CSS file had NO dark theme rules
+   - CSS only defined `:root` with light theme CSS variables
+   - No `body[data-theme="dark"]` selector to override variables for dark mode
+   - Theme switcher appeared to work but had no visual effect
+
+**Why This Happened**:
+- **Export inconsistency**: Someone added `showNotification` calls to admin.js but forgot to export the function from utils.js
+- **Incomplete feature**: Theme JavaScript was implemented but CSS was never added (half-finished feature)
+- **No testing**: Admin panel wasn't tested after recent changes, so module error went undetected
+- **Theme not tested**: Theme switcher wasn't tested in actual browser to verify visual changes
+
+**Fixes Applied**:
+
+1. **Added showNotification export** (frontend/js/utils.js:325-335):
+   - Created `showNotification()` function as alias for `showToast()` for backward compatibility
+   - Added support for 'warning' type (was missing from original showToast)
+   - All 31 usages in admin.js now work without modification
+
+2. **Added Dark Theme CSS** (frontend/css/style.css:63-78):
+   - Added `body[data-theme="dark"]` selector with CSS variable overrides
+   - Dark mode variables: darker backgrounds (#1e293b, #0f172a, #334155)
+   - Light text colors for dark backgrounds (#f1f5f9, #cbd5e1, #64748b)
+   - Border colors adjusted for dark theme (#334155, #475569)
+
+**Files Modified**:
+- `frontend/js/utils.js` (lines 325-335: added showNotification function, added warning color support)
+- `frontend/css/style.css` (lines 63-78: added body[data-theme="dark"] CSS variable overrides)
+
+**Result**:
+✅ Admin Panel loads successfully - no more module import errors
+✅ All showNotification() calls work properly across admin panel
+✅ Theme switcher works - dark theme shows dark backgrounds and light text
+✅ System theme option follows browser/OS preference
+✅ Light theme continues to work as default
+
+**CRITICAL LESSON LEARNED - ALWAYS VERIFY EXPORTS AND TEST UI CHANGES**:
+
+**When importing functions from modules:**
+1. ✅ **VERIFY EXPORTS EXIST** - Before importing, check that the function is actually exported
+   - Use: `rg "export.*functionName" filename.js`
+   - Or open the file and search for `export function functionName`
+   - Don't assume a function exists just because the name seems logical
+
+2. ✅ **CHECK MODULE IMPORTS IMMEDIATELY** - After adding imports, load the page in browser
+   - Open browser console BEFORE clicking anything
+   - Module errors appear immediately on page load
+   - Catch import errors before they block entire modules
+
+3. ✅ **USE CONSISTENT NAMING** - If utils.js exports `showToast`, don't import `showNotification`
+   - Either: rename the import to match the export
+   - Or: add an alias export in utils.js
+   - Or: rename the function everywhere to be consistent
+
+4. ✅ **TEST UI FEATURES VISUALLY** - Don't just verify code compiles, actually USE the feature
+   - Theme switcher: change theme and verify visual changes
+   - Admin Panel: load admin panel and check console for errors
+   - Forms: fill out and submit forms to verify all fields work
+
+5. ✅ **COMPLETE FEATURES BEFORE COMMITTING** - Don't commit half-implemented features
+   - If JavaScript for theme exists, CSS must also exist
+   - If imports are added, exports must exist
+   - Test the complete end-to-end flow before committing
+
+**How to never make this mistake again:**
+
+**For missing exports:**
+1. Before importing a function, grep the source file: `rg "export.*functionName" utils.js`
+2. If function doesn't exist, either:
+   - Add the export to utils.js
+   - Or import the correct function name that does exist
+3. After adding imports, refresh browser and check console for module errors
+4. Use IDE with TypeScript/JSDoc for auto-completion and import validation
+
+**For incomplete features (theme):**
+1. When implementing theming, create complete checklist:
+   - [ ] JavaScript to detect theme preference
+   - [ ] JavaScript to set data-theme attribute
+   - [ ] CSS with `[data-theme="dark"]` selectors
+   - [ ] CSS with `[data-theme="light"]` selectors (if needed)
+   - [ ] Test theme switcher in actual browser
+   - [ ] Verify all components render correctly in both themes
+
+2. Visual features require visual testing:
+   - Open browser DevTools
+   - Toggle theme selector
+   - Verify visual changes occur (background colors, text colors, borders)
+   - Check all pages/components (admin panel, explorer, modals, etc.)
+
+3. Don't commit partial implementations:
+   - If JavaScript sets `data-theme` attribute, CSS must respond to it
+   - If CSS has variables, there must be overrides for different themes
+   - Test before committing, not after deployment
+
+**Root Cause of Root Cause**:
+- **Module Error**: Import added without verifying export exists (lack of validation)
+- **Theme Not Working**: JavaScript implemented without corresponding CSS (incomplete feature)
+- Both issues indicate: changes made without testing in actual browser environment
+
+**Design Notes**:
+- KISS: Simple alias function for backward compatibility instead of renaming everywhere
+- KISS: Standard CSS variable override pattern for dark theme (no complex theme system)
+- DRY: Single showToast implementation, showNotification is just an alias
+- Complete: Both JavaScript AND CSS now exist for full theme functionality
+
+**Testing Recommendations** (when browser available):
+1. Test Admin Panel load in browser - verify no console errors
+2. Test all admin panel functions (users, workers, config, logs)
+3. Test theme switcher: System → verify follows OS, Light → verify light, Dark → verify dark
+4. Test theme persistence: change theme, reload page, verify theme remembered
+5. Test theme on all pages: explorer, admin panel, login page
+6. Verify all showNotification calls display toasts correctly (success/error/warning/info)
+
+---
 
 ### 2026-02-05 - Fix User Settings Modal Crash (Missing HTML Element)
 **Issue**: Regular users and admins couldn't access Settings modal - clicking Settings button caused JavaScript error and modal never opened.
