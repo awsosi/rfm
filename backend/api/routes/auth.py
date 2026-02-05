@@ -70,6 +70,119 @@ async def verify_sybase_credentials(
         return False
 
 
+async def verify_remote_credentials(
+    username: str,
+    password: str,
+    db: AsyncSession,
+) -> tuple[bool, dict | None]:
+    """
+    Verify credentials against remote authentication API.
+
+    Checks database config first (priority), then falls back to .env settings.
+    Username and password are case-insensitive per API requirements.
+
+    Args:
+        username: Username to verify (case-insensitive)
+        password: Password to verify (case-insensitive)
+        db: Database session for loading config
+
+    Returns:
+        Tuple of (authenticated, user_data):
+        - authenticated: True if credentials are valid, False otherwise
+        - user_data: Dict with user_id and username if authenticated, None otherwise
+    """
+    from models import Config
+
+    # Load configuration from database (priority) or .env (fallback)
+    stmt = select(Config).where(Config.key.in_([
+        'remote_auth_enabled',
+        'remote_auth_url',
+        'remote_auth_api_key'
+    ]))
+    result = await db.execute(stmt)
+    db_configs = {config.key: config.value for config in result.scalars()}
+
+    # Check if remote auth is enabled
+    enabled_str = db_configs.get('remote_auth_enabled')
+    if enabled_str:
+        # Database config takes priority
+        enabled = enabled_str.lower() in ('true', '1', 'yes')
+    else:
+        # Fallback to .env
+        from api.config import get_settings
+        settings = get_settings()
+        enabled = settings.enable_remote_auth
+
+    if not enabled:
+        return False, None
+
+    # Get remote auth URL
+    remote_url = db_configs.get('remote_auth_url')
+    if not remote_url:
+        from api.config import get_settings
+        settings = get_settings()
+        remote_url = settings.remote_auth_url
+
+    if not remote_url:
+        return False, None
+
+    # Get API key
+    api_key = db_configs.get('remote_auth_api_key')
+    if not api_key:
+        from api.config import get_settings
+        settings = get_settings()
+        api_key = settings.remote_auth_api_key
+
+    if not api_key:
+        return False, None
+
+    # Get timeout
+    from api.config import get_settings
+    settings = get_settings()
+    timeout = settings.remote_auth_timeout
+
+    try:
+        # Build query parameters (API uses GET request with query params)
+        params = {
+            "ApiKey": api_key,
+            "UserName": username,  # API handles case-insensitivity
+            "Password": password,  # API handles case-insensitivity
+        }
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                remote_url,
+                params=params,
+                headers={"Accept": "application/json"},
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+
+                # Check if API call was successful
+                if not result.get("success"):
+                    return False, None
+
+                # Check if user was authenticated
+                if not result.get("authenticated"):
+                    return False, None
+
+                # Return user data
+                user_data = {
+                    "user_id": result.get("user_id"),
+                    "username": result.get("username"),
+                }
+
+                return True, user_data
+
+            return False, None
+
+    except httpx.TimeoutException:
+        return False, None
+    except Exception:
+        return False, None
+
+
 async def _perform_login(
     request: Request,
     login_data: LoginRequest,
@@ -79,82 +192,153 @@ async def _perform_login(
     """
     Internal function to perform login logic.
     Used by both /token and /login endpoints.
+
+    Supports:
+    - Local authentication (password hash)
+    - External Sybase authentication
+    - Remote authentication API (case-insensitive, auto-create users)
     """
-    # Get user from database
-    stmt = select(User).where(User.username == login_data.username)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    # Try remote authentication first (if enabled)
+    remote_authenticated, remote_user_data = await verify_remote_credentials(
+        login_data.username,
+        login_data.password,
+        db,
+    )
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
+    if remote_authenticated:
+        # Remote auth successful - find or create user
+        # Use case-insensitive lookup for remote auth users
+        stmt = select(User).where(func.lower(User.username) == func.lower(login_data.username))
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled",
-        )
+        if not user:
+            # Create new user from remote auth
+            # Generate a random password hash (won't be used for auth)
+            import secrets
+            random_password = secrets.token_urlsafe(32)
+            password_hash = ph.hash(random_password)
 
-    # Verify password
-    password_valid = False
+            user = User(
+                username=login_data.username.lower(),  # Store as lowercase
+                password_hash=password_hash,
+                role=UserRole.USER,  # Default role for remote users
+                is_active=True,
+                is_remote_auth=True,
+                remote_user_id=remote_user_data["user_id"],
+            )
 
-    # Try Sybase auth if enabled
-    if settings.enable_sybase_auth:
-        sybase_valid = await verify_sybase_credentials(
-            login_data.username,
-            login_data.password,
-            settings,
-        )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
 
-        if not sybase_valid:
-            # External auth failed - DENY (no fallback to local)
+            # Log user creation
+            await AuditLogger.log_admin_action(
+                user_id=None,
+                action="user_create_remote_auth",
+                target="user",
+                details={
+                    "username": user.username,
+                    "remote_user_id": remote_user_data["user_id"],
+                    "source": "remote_authentication",
+                },
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            )
+
+        else:
+            # Existing remote auth user - update remote_user_id if changed
+            if user.is_remote_auth and user.remote_user_id != remote_user_data["user_id"]:
+                user.remote_user_id = remote_user_data["user_id"]
+                await db.commit()
+
+        # Check if user is active
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is disabled",
+            )
+
+        # Continue to session creation (skip password verification)
+        password_valid = True
+
+    else:
+        # Remote auth not enabled or failed - try local/Sybase auth
+        # Get user from database (exact match for local users)
+        stmt = select(User).where(User.username == login_data.username)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is disabled",
+            )
+
+        # Verify password
+        password_valid = False
+
+        # Try Sybase auth if enabled
+        if settings.enable_sybase_auth:
+            sybase_valid = await verify_sybase_credentials(
+                login_data.username,
+                login_data.password,
+                settings,
+            )
+
+            if not sybase_valid:
+                # External auth failed - DENY (no fallback to local)
+                await AuditLogger.log_authentication(
+                    user_id=user.id,
+                    action="login_failed_external_auth",
+                    success=False,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                    details={"username": login_data.username, "reason": "external_auth_failed"},
+                )
+
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="External authentication failed",
+                )
+
+            password_valid = True
+
+        # Local password verification (only if external auth not enabled)
+        if not settings.enable_sybase_auth and not password_valid:
+            try:
+                ph.verify(user.password_hash, login_data.password)
+                password_valid = True
+
+                # Rehash if parameters changed
+                if ph.check_needs_rehash(user.password_hash):
+                    user.password_hash = ph.hash(login_data.password)
+                    await db.commit()
+
+            except VerifyMismatchError:
+                pass
+
+        if not password_valid:
+            # Log failed attempt
             await AuditLogger.log_authentication(
                 user_id=user.id,
-                action="login_failed_external_auth",
+                action="login_failed",
                 success=False,
                 ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
-                details={"username": login_data.username, "reason": "external_auth_failed"},
+                details={"username": login_data.username},
             )
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="External authentication failed",
+                detail="Invalid username or password",
             )
-
-        password_valid = True
-
-    # Local password verification (only if external auth not enabled)
-    if not settings.enable_sybase_auth and not password_valid:
-        try:
-            ph.verify(user.password_hash, login_data.password)
-            password_valid = True
-
-            # Rehash if parameters changed
-            if ph.check_needs_rehash(user.password_hash):
-                user.password_hash = ph.hash(login_data.password)
-                await db.commit()
-
-        except VerifyMismatchError:
-            pass
-
-    if not password_valid:
-        # Log failed attempt
-        await AuditLogger.log_authentication(
-            user_id=user.id,
-            action="login_failed",
-            success=False,
-            ip_address=get_client_ip(request),
-            user_agent=request.headers.get("user-agent"),
-            details={"username": login_data.username},
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
 
     # Create session
     expires_at = datetime.now(timezone.utc) + timedelta(
