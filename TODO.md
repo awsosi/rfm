@@ -26,6 +26,7 @@ None.
 - [ ] Verify Admin Panel after DRY refactor (all tabs: Users, Workers, Config, System, Logs)
 - [ ] Verify worker Remove button works after refactor
 - [ ] Verify worker Suspend/Activate buttons work
+- [ ] Verify fresh deployment with `POLKA_AUTH_ENABLED=true` in `.env` — PolkaSQL auth should be active without touching Admin Panel
 
 ### Future Work
 - [ ] Worker: Integration testing of C# FileManagerWorker in staging (ops/deployment — push/pull round-trip)
@@ -34,6 +35,11 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-06 - Fix .env Variables Not Respected on Fresh Deployment
+- **Root cause:** `docker-compose.yml` passed wrong env var names to the API container — used old Sybase names (`ENABLE_SYBASE_AUTH`, `SYBASE_AUTH_URL`) instead of current Polka names (`POLKA_AUTH_ENABLED`, `POLKA_AUTH_URL`), and was missing `POLKA_AUTH_API_KEY` and `POLKA_AUTH_TIMEOUT` entirely. Since the `.env` file is not inside the container (only `backend/` is copied), Pydantic Settings relies solely on env vars passed via docker-compose — the mismatch meant values from `.env` never reached the app.
+- **Fix 1 — `docker-compose.yml`:** Replaced `ENABLE_SYBASE_AUTH`/`SYBASE_AUTH_URL` with `POLKA_AUTH_ENABLED`/`POLKA_AUTH_URL`/`POLKA_AUTH_API_KEY`/`POLKA_AUTH_TIMEOUT`. Also added missing passthrough for `SYSLOG_PORT`, `SYSLOG_PROTOCOL`, `REMOTE_AUDIT_API_TOKEN`, `REMOTE_AUDIT_API_TIMEOUT`.
+- **Fix 2 — migration `008_add_polka_config.py`:** Changed hardcoded DB seed values to read from environment variables (`os.environ.get()`), so fresh deployments seed the config table with actual `.env` values. Uses parameterized SQL to avoid injection. Existing deployments unaffected (`ON CONFLICT DO NOTHING`).
 
 ### 2026-02-06 - Fix All Active Bugs
 - Fixed PathC not saved during worker registration: added `path_c_prefix` to `WorkerRegister` schema (`schemas.py`), existing-worker update block and new-worker constructor in `app.py`
