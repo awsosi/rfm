@@ -1225,10 +1225,6 @@ async function openSettingsModal() {
         // Populate form with current preferences
         document.getElementById('ui-theme').value = preferences.ui_theme || 'system';
         document.getElementById('ui-language').value = preferences.ui_language || 'en';
-        document.getElementById('show-hidden-files').checked = preferences.show_hidden_files || false;
-        document.getElementById('default-sort-by').value = preferences.default_sort_by || 'name';
-        document.getElementById('default-sort-order').value = preferences.default_sort_order || 'asc';
-        document.getElementById('items-per-page').value = preferences.items_per_page || 100;
         document.getElementById('remember-last-paths').checked = preferences.remember_last_paths !== false;
 
         // Show modal
@@ -1240,10 +1236,6 @@ async function openSettingsModal() {
                 const updatedPreferences = {
                     ui_theme: document.getElementById('ui-theme').value,
                     ui_language: document.getElementById('ui-language').value,
-                    show_hidden_files: document.getElementById('show-hidden-files').checked,
-                    default_sort_by: document.getElementById('default-sort-by').value,
-                    default_sort_order: document.getElementById('default-sort-order').value,
-                    items_per_page: parseInt(document.getElementById('items-per-page').value),
                     remember_last_paths: document.getElementById('remember-last-paths').checked
                 };
 
@@ -1270,10 +1262,6 @@ async function openSettingsModal() {
                     // Re-populate form with defaults
                     document.getElementById('ui-theme').value = defaultPrefs.ui_theme || 'system';
                     document.getElementById('ui-language').value = defaultPrefs.ui_language || 'en';
-                    document.getElementById('show-hidden-files').checked = defaultPrefs.show_hidden_files || false;
-                    document.getElementById('default-sort-by').value = defaultPrefs.default_sort_by || 'name';
-                    document.getElementById('default-sort-order').value = defaultPrefs.default_sort_order || 'asc';
-                    document.getElementById('items-per-page').value = defaultPrefs.items_per_page || 100;
                     document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths !== false;
 
                     // Apply theme
