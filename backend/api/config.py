@@ -8,7 +8,7 @@ with type validation and default values.
 import secrets
 from typing import Optional
 
-from pydantic import Field, field_validator, PostgresDsn
+from pydantic import AliasChoices, Field, field_validator, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -91,7 +91,11 @@ class Settings(BaseSettings):
 
     # External Integrations
     # PolkaSQL Authentication (Sybase SQL Anywhere 17 - RFM_Auth WebService)
-    polka_auth_enabled: bool = False
+    # Accepts both ENABLE_POLKA_AUTH and POLKA_AUTH_ENABLED env vars
+    polka_auth_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices('enable_polka_auth', 'polka_auth_enabled'),
+    )
     polka_auth_url: Optional[str] = None
     polka_auth_api_key: Optional[str] = None
     polka_auth_timeout: int = 5

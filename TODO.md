@@ -17,6 +17,10 @@
 5. **Single source of truth for config: DB at runtime, env on startup.** Environment variables (`.env` → docker-compose → container env) are synced INTO the DB `config` table on every API startup (`_sync_env_config_to_db`). Runtime code reads ONLY from DB. Never add fallback-to-env logic in request handlers — that creates a dual-source-of-truth bug where DB and env can disagree silently.
    - If you need a new env-driven config: add it to `_sync_env_config_to_db()` in `app.py`, seed it in the migration, and read it from DB in handlers.
 6. **Alembic `ON CONFLICT DO NOTHING` means "seed once, never update."** The migration's config seed only runs on first deployment. Changing `.env` values after that won't update the DB through the migration alone — that's why `_sync_env_config_to_db()` exists. Never rely on the migration to propagate env changes on re-deployment.
+7. **Env var names must match the project's naming convention — or accept both.**
+   Most boolean toggles in this project use `ENABLE_*` prefix (`ENABLE_SYSLOG`, `ENABLE_REMOTE_AUDIT_API`, `ENABLE_JSON_LOGS`). If a new toggle uses a *different* pattern (e.g. `POLKA_AUTH_ENABLED` — suffix instead of prefix), users WILL type the wrong name (`ENABLE_POLKA_AUTH`) because that matches every other toggle they see. Pydantic's `extra="ignore"` silently drops unrecognized env vars, and docker-compose's `${VAR:-default}` silently falls back to the default. **Result: the user sets the value, everything looks correct, but the app ignores it with zero errors.**
+   - **Prevention:** When adding a boolean env var, always use the `ENABLE_*` prefix convention. If you inherit a name that doesn't match, add `validation_alias=AliasChoices(...)` in the Settings field so BOTH names work. Also update docker-compose substitution to check both: `${ENABLE_X:-${X_ENABLED:-false}}`.
+   - **This bug is invisible** — no error, no warning, no log. The only symptom is "the setting doesn't work." Always grep `.env.example` for naming consistency when adding new toggles.
 
 ---
 
@@ -32,8 +36,9 @@ None.
 - [ ] Verify Admin Panel after DRY refactor (all tabs: Users, Workers, Config, System, Logs)
 - [ ] Verify worker Remove button works after refactor
 - [ ] Verify worker Suspend/Activate buttons work
-- [ ] Verify fresh deployment with `POLKA_AUTH_ENABLED=true` in `.env` — PolkaSQL auth should be active without touching Admin Panel
-- [ ] Verify re-deployment: change `POLKA_AUTH_ENABLED` from `false` to `true` in `.env`, restart — should take effect immediately
+- [ ] Verify fresh deployment with `ENABLE_POLKA_AUTH=true` in `.env` — PolkaSQL auth should be active without touching Admin Panel
+- [ ] Verify re-deployment: change `ENABLE_POLKA_AUTH` from `false` to `true` in `.env`, restart — should take effect immediately
+- [ ] Verify backward compat: `POLKA_AUTH_ENABLED=true` in `.env` still works (old name)
 - [ ] Verify worker PathC: run `/config` wizard, set custom Path C, register worker — admin panel should show the correct Path C value
 - [ ] Verify fresh deployment after migration consolidation — `docker-compose up` should create all tables from single `001_initial_schema.py`
 
@@ -44,6 +49,11 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-06 - Fix ENABLE_POLKA_AUTH env var silently ignored
+- **Bug:** User sets `ENABLE_POLKA_AUTH=true` in `.env` (following the `ENABLE_*` convention used by every other toggle). Silently ignored because: (1) Pydantic field `polka_auth_enabled` maps to env var `POLKA_AUTH_ENABLED` (suffix, not prefix), (2) docker-compose `${POLKA_AUTH_ENABLED:-false}` doesn't match `ENABLE_POLKA_AUTH`, defaults to `false`, (3) Pydantic `extra="ignore"` drops the unrecognized var with zero warnings.
+- **Fix:** Added `validation_alias=AliasChoices('enable_polka_auth', 'polka_auth_enabled')` to Settings field — accepts both env var names. Updated docker-compose to `${ENABLE_POLKA_AUTH:-${POLKA_AUTH_ENABLED:-false}}`. Updated migration seed to check both names. Updated `.env.example` to use `ENABLE_POLKA_AUTH` (consistent convention).
+- **Root cause:** Inconsistent naming convention. Added Rule 7 to prevent recurrence.
 
 ### 2026-02-06 - Fix env config ignored + worker PathC not sent
 - **Bug 1 — POLKA_AUTH_ENABLED in .env ignored after first deploy:** The migration seeds config with `ON CONFLICT DO NOTHING`, so `.env` changes after initial deploy never reached the DB. Auth code had fragile fallback logic (DB false → check env) creating a dual-source-of-truth. **Fix:** Added `_sync_env_config_to_db()` in `app.py` lifespan — syncs `POLKA_AUTH_*` env vars into DB `config` table on every startup. Simplified auth.py to read ONLY from DB (no fallback to env).
