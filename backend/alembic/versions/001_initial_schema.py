@@ -289,7 +289,7 @@ def upgrade() -> None:
 
     # --- Seed default config ---
     # PolkaSQL config values are seeded from environment (docker-compose passthrough)
-    polka_enabled = os.environ.get('POLKA_AUTH_ENABLED', 'false').lower()
+    polka_enabled = os.environ.get('ENABLE_POLKA_AUTH', os.environ.get('POLKA_AUTH_ENABLED', 'false')).lower()
     polka_url = os.environ.get('POLKA_AUTH_URL', '')
     polka_api_key = os.environ.get('POLKA_AUTH_API_KEY', '')
     polka_timeout = os.environ.get('POLKA_AUTH_TIMEOUT', '5')
