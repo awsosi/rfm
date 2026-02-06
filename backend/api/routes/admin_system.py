@@ -593,12 +593,6 @@ async def get_system_stats(
     )
     active_users = (await db.execute(active_sessions_stmt)).scalar() or 0
 
-    # Count samba paths
-    samba_paths_stmt = select(sql_func.count(SambaPath.id)).where(
-        SambaPath.is_active == True
-    )
-    samba_paths_active = (await db.execute(samba_paths_stmt)).scalar() or 0
-
     # Count audit logs
     audit_logs_stmt = select(sql_func.count(AuditLog.id))
     total_audit_logs = (await db.execute(audit_logs_stmt)).scalar() or 0
@@ -635,7 +629,6 @@ async def get_system_stats(
         avg_operation_duration_seconds=float(avg_duration) if avg_duration else None,
         database_healthy=True,
         redis_healthy=True,
-        samba_paths_active=samba_paths_active,
         total_audit_logs=total_audit_logs,
     )
 
@@ -666,37 +659,45 @@ async def get_system_health(
             "message": "Database connection failed",
         })
 
-    # Check Redis (placeholder)
-    components["redis"] = {
+    # Check Elasticsearch
+    try:
+        from api.services.elasticsearch_service import get_elasticsearch_service
+        es_service = await get_elasticsearch_service()
+        if es_service.is_enabled:
+            try:
+                es_healthy = await es_service._client.ping()
+            except Exception:
+                es_healthy = False
+            components["elasticsearch"] = {
+                "status": "healthy" if es_healthy else "warning",
+                "message": "Connected" if es_healthy else "Connection failed",
+            }
+            if not es_healthy:
+                overall_status = "degraded" if overall_status == "healthy" else overall_status
+                alerts.append({
+                    "severity": "warning",
+                    "component": "elasticsearch",
+                    "message": "Elasticsearch connection failed",
+                })
+        else:
+            components["elasticsearch"] = {
+                "status": "warning",
+                "message": "Not enabled",
+            }
+    except Exception:
+        components["elasticsearch"] = {
+            "status": "warning",
+            "message": "Not available",
+        }
+
+    # Check API (always healthy if we reached this point)
+    components["api"] = {
         "status": "healthy",
-        "message": "Connected",
+        "message": "Running",
     }
 
-    # Check workers
-    active_workers_stmt = select(func.count(Worker.id)).where(
-        Worker.status == WorkerStatus.ACTIVE
-    )
-    active_workers_count = (await db.execute(active_workers_stmt)).scalar() or 0
-
-    if active_workers_count == 0:
-        components["workers"] = {
-            "status": "warning",
-            "message": "No active workers",
-        }
-        overall_status = "degraded" if overall_status == "healthy" else overall_status
-        alerts.append({
-            "severity": "warning",
-            "component": "workers",
-            "message": "No active workers available",
-        })
-    else:
-        components["workers"] = {
-            "status": "healthy",
-            "message": f"{active_workers_count} active workers",
-        }
-
-    # Check API
-    components["api"] = {
+    # Check WebUI (always healthy since it's served by the same stack)
+    components["webui"] = {
         "status": "healthy",
         "message": "Running",
     }

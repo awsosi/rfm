@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-02-06
+> **Last Updated:** 2026-02-06 (admin panel overhaul)
 
 ---
 
@@ -33,22 +33,37 @@ None.
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
-- [ ] Verify Admin Panel after DRY refactor (all tabs: Users, Workers, Config, System, Logs)
-- [ ] Verify worker Remove button works after refactor
-- [ ] Verify worker Suspend/Activate buttons work
-- [ ] Verify fresh deployment with `ENABLE_POLKA_AUTH=true` in `.env` — PolkaSQL auth should be active without touching Admin Panel
-- [ ] Verify re-deployment: change `ENABLE_POLKA_AUTH` from `false` to `true` in `.env`, restart — should take effect immediately
-- [ ] Verify backward compat: `POLKA_AUTH_ENABLED=true` in `.env` still works (old name)
-- [ ] Verify worker PathC: run `/config` wizard, set custom Path C, register worker — admin panel should show the correct Path C value
-- [ ] Verify fresh deployment after migration consolidation — `docker-compose up` should create all tables from single `001_initial_schema.py`
+- [ ] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
+- [ ] Verify delete user works (showConfirm modal was missing from admin.html — now added)
+- [ ] Verify PolkaSQL users: can change role/active, cannot change username/password
+- [ ] Verify last-admin protection: cannot delete, demote, or deactivate the sole admin
+- [ ] Verify worker Ping/Status/Provision buttons in Worker Management tab
+- [ ] Verify System Statistics auto-refresh (5s interval when System tab is active)
+- [ ] Verify System Health shows database, elasticsearch, api, webui components
+- [ ] Verify theme is applied on Admin Panel (reads user preference from /api/preferences/me)
+- [ ] Verify fresh deployment with `ENABLE_POLKA_AUTH=true` in `.env`
+- [ ] Verify fresh deployment after migration consolidation
 
 ### Future Work
-- [ ] Worker: Integration testing of C# FileManagerWorker in staging (ops/deployment — push/pull round-trip)
-- [ ] Consider migrating to a component framework (React/Vue) for better DOM/JS sync and type safety — long-term
+- [ ] Worker: Integration testing of C# FileManagerWorker in staging
+- [ ] Consider migrating to a component framework (React/Vue) — long-term
 
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-06 - Admin Panel Overhaul (11 fixes/changes)
+1. **Theme:** Admin Panel now loads and applies user's theme preference (system/light/dark) from Settings/Display Preferences
+2. **Delete user fix:** Added generic modal (`#modal`) to admin.html — `showConfirm()` from utils.js now works (was silently failing because modal DOM elements didn't exist)
+3. **Last admin deletion protection:** Frontend disables Delete button for last admin; backend already had protection
+4. **PolkaSQL user deactivation:** Removed false blocking — `is_active` changes now pass through for PolkaSQL users (only username/password are blocked)
+5. **PolkaSQL credential restriction:** Backend blocks username/password changes for `is_polka_auth` users; frontend disables those fields in edit modal
+6. **PolkaSQL auth indication:** Added "Auth" column to User Management table showing "PolkaSQL" or "Local" badge; added `is_polka_auth` to `UserResponse` schema
+7. **ADMIN role for PolkaSQL users:** Role dropdown works for all users (no PolkaSQL restriction on role changes)
+8. **Last admin role protection:** Backend prevents changing last admin to USER; frontend disables the delete button
+9. **Removed Samba Paths Management:** Removed from System tab HTML and admin-system.js; removed `samba_paths_active` from stats schema/endpoint; backend routes still exist but UI is gone
+10. **Worker Control moved to Workers tab:** Ping, Status, Provision buttons added as actions in Worker Management table; Reload Config removed (not working); Worker Control section removed from System tab
+11. **System Statistics real-time:** Auto-refreshes every 5s when System tab is active; stops when leaving tab. Health endpoint now checks database, elasticsearch, api, webui (removed redis/workers placeholders)
 
 ### 2026-02-06 - Fix ENABLE_POLKA_AUTH env var silently ignored
 - **Bug:** User sets `ENABLE_POLKA_AUTH=true` in `.env` (following the `ENABLE_*` convention used by every other toggle). Silently ignored because: (1) Pydantic field `polka_auth_enabled` maps to env var `POLKA_AUTH_ENABLED` (suffix, not prefix), (2) docker-compose `${POLKA_AUTH_ENABLED:-false}` doesn't match `ENABLE_POLKA_AUTH`, defaults to `false`, (3) Pydantic `extra="ignore"` drops the unrecognized var with zero warnings.

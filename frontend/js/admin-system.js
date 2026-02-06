@@ -2,7 +2,6 @@
  * Admin System Management Module
  *
  * Handles:
- * - Samba paths management
  * - Worker provisioning and real-time control
  * - System monitoring and statistics
  * - Real-time log viewing with WebSocket
@@ -13,105 +12,6 @@ class AdminSystem {
         this.apiClient = apiClient;
         this.websocket = null;
         this.wsReconnectInterval = null;
-        this.statsRefreshInterval = null;
-    }
-
-    // =============================================================================
-    // Samba Paths Management
-    // =============================================================================
-
-    async loadSambaPaths() {
-        try {
-            const response = await this.apiClient.get('/api/admin/samba-paths');
-            this.renderSambaPaths(response);
-        } catch (error) {
-            this.showError('Failed to load Samba paths', error);
-        }
-    }
-
-    renderSambaPaths(paths) {
-        const tbody = document.getElementById('samba-paths-table-body');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-
-        if (paths.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="no-data">No Samba paths configured</td></tr>';
-            return;
-        }
-
-        paths.forEach(path => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${path.id}</td>
-                <td>${this.escapeHtml(path.name)}</td>
-                <td><code>${this.escapeHtml(path.path_prefix)}</code></td>
-                <td>${this.escapeHtml(path.share_type || 'smb')}</td>
-                <td><span class="badge ${path.is_active ? 'badge-success' : 'badge-danger'}">${path.is_active ? 'Active' : 'Inactive'}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-secondary" onclick="adminSystem.editSambaPath(${path.id})">Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="adminSystem.deleteSambaPath(${path.id}, '${this.escapeHtml(path.name)}')">Delete</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
-    async createSambaPath() {
-        const name = prompt('Enter Samba path name:');
-        if (!name) return;
-
-        const pathPrefix = prompt('Enter path prefix (e.g., \\\\server\\share):');
-        if (!pathPrefix) return;
-
-        const description = prompt('Enter description (optional):');
-
-        try {
-            await this.apiClient.post('/api/admin/samba-paths', {
-                name,
-                path_prefix: pathPrefix,
-                description: description || null,
-                is_active: true,
-                share_type: 'smb',
-                requires_auth: true
-            });
-
-            this.showSuccess('Samba path created successfully');
-            await this.loadSambaPaths();
-        } catch (error) {
-            this.showError('Failed to create Samba path', error);
-        }
-    }
-
-    async editSambaPath(pathId) {
-        // TODO: Show modal with form for editing
-        const newName = prompt('Enter new name (or cancel to skip):');
-        if (!newName) return;
-
-        try {
-            await this.apiClient.put(`/api/admin/samba-paths/${pathId}`, {
-                name: newName
-            });
-
-            this.showSuccess('Samba path updated successfully');
-            await this.loadSambaPaths();
-        } catch (error) {
-            this.showError('Failed to update Samba path', error);
-        }
-    }
-
-    async deleteSambaPath(pathId, pathName) {
-        if (!confirm(`Are you sure you want to delete Samba path '${pathName}'?`)) {
-            return;
-        }
-
-        try {
-            await this.apiClient.delete(`/api/admin/samba-paths/${pathId}`);
-            this.showSuccess('Samba path deleted successfully');
-            await this.loadSambaPaths();
-        } catch (error) {
-            this.showError('Failed to delete Samba path', error);
-        }
     }
 
     // =============================================================================
@@ -216,31 +116,6 @@ class AdminSystem {
         }
     }
 
-    async provisionWorker(workerId) {
-        const pathA = prompt('Enter Path A prefix (or leave empty to skip):');
-        const pathB = prompt('Enter Path B prefix (or leave empty to skip):');
-
-        if (!pathA && !pathB) {
-            alert('No changes specified');
-            return;
-        }
-
-        const config = {};
-        if (pathA) config.path_a_prefix = pathA;
-        if (pathB) config.path_b_prefix = pathB;
-
-        try {
-            await this.apiClient.post(`/api/admin/workers/${workerId}/provision`, {
-                config,
-                restart_required: false
-            });
-
-            this.showSuccess('Worker provisioned successfully');
-        } catch (error) {
-            this.showError('Failed to provision worker', error);
-        }
-    }
-
     // =============================================================================
     // System Statistics & Monitoring
     // =============================================================================
@@ -301,33 +176,15 @@ class AdminSystem {
                 <div class="stat-card">
                     <h3>System Health</h3>
                     <div class="stat-value">
-                        ${stats.database_healthy ? '✓' : '✗'} DB |
-                        ${stats.redis_healthy ? '✓' : '✗'} Redis
+                        ${stats.database_healthy ? '&#10003;' : '&#10007;'} DB
                     </div>
                     <div class="stat-label">Components</div>
                     <div class="stat-details">
-                        Samba Paths: ${stats.samba_paths_active} | Audit Logs: ${stats.total_audit_logs}
+                        Audit Logs: ${stats.total_audit_logs}
                     </div>
                 </div>
             </div>
         `;
-    }
-
-    startStatsAutoRefresh(intervalMs = 5000) {
-        if (this.statsRefreshInterval) {
-            clearInterval(this.statsRefreshInterval);
-        }
-
-        this.statsRefreshInterval = setInterval(() => {
-            this.loadSystemStats();
-        }, intervalMs);
-    }
-
-    stopStatsAutoRefresh() {
-        if (this.statsRefreshInterval) {
-            clearInterval(this.statsRefreshInterval);
-            this.statsRefreshInterval = null;
-        }
     }
 
     // =============================================================================
@@ -363,7 +220,6 @@ class AdminSystem {
         }
 
         response.logs.forEach(log => {
-            // Extract source and target directories from details_json for push/pull operations
             let sourceDir = '-';
             let targetDir = '-';
 
@@ -376,7 +232,6 @@ class AdminSystem {
                 }
             }
 
-            // Format full timestamp as YYYY-MM-DD HH:mm:SS.milliseconds
             let fullTimestamp = 'N/A';
             if (log.timestamp) {
                 const date = new Date(log.timestamp);
@@ -390,7 +245,6 @@ class AdminSystem {
                 fullTimestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
             }
 
-            // Format timestamp as relative time
             const relativeTime = this.formatRelativeTime(log.timestamp);
 
             const tr = document.createElement('tr');
@@ -407,16 +261,10 @@ class AdminSystem {
             tbody.appendChild(tr);
         });
 
-        // Update pagination info
         const paginationInfo = document.getElementById('logs-pagination-info');
         if (paginationInfo) {
             paginationInfo.textContent = `Showing ${response.offset + 1} to ${response.offset + response.logs.length} of ${response.total_count}`;
         }
-    }
-
-    showLogDetails(logId) {
-        // TODO: Show modal with full log details
-        alert(`Log details for ID ${logId} - implement modal`);
     }
 
     // =============================================================================
@@ -436,9 +284,6 @@ class AdminSystem {
 
         this.websocket.onopen = () => {
             console.log('WebSocket connected');
-            this.showSuccess('Real-time updates connected');
-
-            // Subscribe to topics
             this.websocket.send(JSON.stringify({ type: 'subscribe', topic: 'operations' }));
             this.websocket.send(JSON.stringify({ type: 'subscribe', topic: 'workers' }));
             this.websocket.send(JSON.stringify({ type: 'subscribe', topic: 'alerts' }));
@@ -462,7 +307,6 @@ class AdminSystem {
             console.log('WebSocket disconnected');
             this.websocket = null;
 
-            // Attempt reconnect after 5 seconds
             if (!this.wsReconnectInterval) {
                 this.wsReconnectInterval = setTimeout(() => {
                     this.wsReconnectInterval = null;
@@ -487,56 +331,22 @@ class AdminSystem {
     handleWebSocketMessage(message) {
         switch (message.event_type) {
             case 'operation_update':
-                this.handleOperationUpdate(message.data);
+                console.log('Operation update:', message.data);
                 break;
             case 'worker_status':
-                this.handleWorkerStatusUpdate(message.data);
+                console.log('Worker status update:', message.data);
                 break;
             case 'system_alert':
-                this.handleSystemAlert(message.data);
+                console.log('System alert:', message.data);
                 break;
             case 'log_entry':
-                this.handleLogEntry(message.data);
+                console.log('New log entry:', message.data);
                 break;
             case 'heartbeat':
-                // Ignore heartbeat messages
                 break;
             default:
                 console.log('Unknown WebSocket message type:', message.event_type);
         }
-    }
-
-    handleOperationUpdate(data) {
-        console.log('Operation update:', data);
-        // TODO: Update UI with operation progress
-    }
-
-    handleWorkerStatusUpdate(data) {
-        console.log('Worker status update:', data);
-        this.showInfo(`Worker ${data.worker_name} changed from ${data.old_status} to ${data.new_status}`);
-        // Refresh worker list if on workers tab
-    }
-
-    handleSystemAlert(data) {
-        const severity = data.severity || 'info';
-        const message = `${data.title}: ${data.message}`;
-
-        switch (severity) {
-            case 'critical':
-            case 'error':
-                this.showError(message);
-                break;
-            case 'warning':
-                this.showWarning(message);
-                break;
-            default:
-                this.showInfo(message);
-        }
-    }
-
-    handleLogEntry(data) {
-        console.log('New log entry:', data);
-        // TODO: Prepend to log table if on logs tab
     }
 
     // =============================================================================
@@ -548,15 +358,6 @@ class AdminSystem {
             case 'ACTIVE': return 'badge-success';
             case 'SUSPENDED': return 'badge-warning';
             case 'PENDING': return 'badge-info';
-            default: return 'badge-secondary';
-        }
-    }
-
-    getLogLevelClass(level) {
-        switch (level.toUpperCase()) {
-            case 'ERROR': return 'badge-danger';
-            case 'WARN': return 'badge-warning';
-            case 'INFO': return 'badge-info';
             default: return 'badge-secondary';
         }
     }
@@ -583,22 +384,14 @@ class AdminSystem {
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
 
-        if (diffMins < 1) {
-            return 'Just now';
-        } else if (diffMins < 60) {
-            return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
-        } else if (diffHours < 24) {
-            return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-        } else if (diffDays < 7) {
-            return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-        }
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
 
         return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
         });
     }
 
@@ -610,28 +403,13 @@ class AdminSystem {
 
     showSuccess(message) {
         console.log('SUCCESS:', message);
-        // TODO: Implement toast notifications
-        alert(message);
     }
 
     showError(message, error = null) {
         console.error('ERROR:', message, error);
-        // TODO: Implement toast notifications
-        alert(`Error: ${message}${error ? '\n' + error : ''}`);
-    }
-
-    showWarning(message) {
-        console.warn('WARNING:', message);
-        // TODO: Implement toast notifications
-    }
-
-    showInfo(message) {
-        console.info('INFO:', message);
-        // TODO: Implement toast notifications
     }
 }
 
-// Export for use in admin page
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = AdminSystem;
 }

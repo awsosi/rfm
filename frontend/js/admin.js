@@ -19,6 +19,49 @@ import AdminSystem from './admin-system.js';
 let adminSystem = null;
 let logsOffset = 0;
 const logsLimit = 100;
+let statsRefreshInterval = null;
+let currentTab = 'users';
+let cachedUsers = null;
+
+// =========================================================================
+// Theme
+// =========================================================================
+
+function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+    return 'light';
+}
+
+function applyTheme(theme) {
+    const effectiveTheme = theme === 'system' ? getSystemTheme() : theme;
+    document.body.setAttribute('data-theme', effectiveTheme);
+    window._currentThemeSetting = theme;
+}
+
+function setupSystemThemeListener() {
+    if (window.matchMedia) {
+        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        darkModeQuery.addEventListener('change', (e) => {
+            if (window._currentThemeSetting === 'system') {
+                document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+}
+
+async function loadAndApplyTheme() {
+    try {
+        const { getPreferences } = await import('./api.js');
+        const preferences = await getPreferences();
+        applyTheme(preferences.ui_theme || 'system');
+    } catch (error) {
+        console.error('Failed to load theme preference:', error);
+        applyTheme('system');
+    }
+    setupSystemThemeListener();
+}
 
 // =========================================================================
 // Initialization
@@ -42,7 +85,10 @@ export function initAdminPanel() {
 
     document.getElementById('user-name').textContent = currentUser.username;
 
-    // Initialize AdminSystem for samba paths and system stats
+    // Load and apply theme
+    loadAndApplyTheme();
+
+    // Initialize AdminSystem for system stats
     const apiClient = {
         get: (endpoint) => apiRequest(endpoint, { method: 'GET' }),
         post: (endpoint, data) => apiRequest(endpoint, { method: 'POST', body: JSON.stringify(data) }),
@@ -97,6 +143,12 @@ function setupTabSwitching() {
             tabPanes.forEach(pane => pane.classList.remove('active'));
             document.getElementById(`tab-${tabName}`).classList.add('active');
 
+            // Stop stats auto-refresh when leaving system tab
+            if (currentTab === 'system' && tabName !== 'system') {
+                stopStatsAutoRefresh();
+            }
+
+            currentTab = tabName;
             loadTabData(tabName);
         });
     });
@@ -153,20 +205,36 @@ async function loadUsers() {
 
     try {
         const users = await getUsers();
+        cachedUsers = users;
         const currentUser = getCurrentUser();
+
+        // Count active admins for last-admin protection
+        const activeAdminCount = users.filter(u =>
+            u.role?.toUpperCase() === 'ADMIN' && u.is_active
+        ).length;
 
         users.forEach(user => {
             const isCurrentUser = currentUser && user.id === currentUser.id;
+            const isLastAdmin = user.role?.toUpperCase() === 'ADMIN' && activeAdminCount <= 1;
+            const isPolkaAuth = user.is_polka_auth;
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${user.id}</td>
                 <td>${escapeHtml(user.username)}</td>
+                <td>${isPolkaAuth
+                    ? '<span class="badge badge-info" title="Authenticated via PolkaSQL">PolkaSQL</span>'
+                    : '<span class="badge badge-secondary">Local</span>'
+                }</td>
                 <td><span class="badge badge-${user.role?.toUpperCase() === 'ADMIN' ? 'primary' : 'secondary'}">${user.role}</span></td>
                 <td><span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td>${formatDate(user.created_at)}</td>
                 <td>
                     <button class="btn btn-sm btn-secondary edit-user-btn" data-id="${user.id}">Edit</button>
-                    <button class="btn btn-sm btn-danger delete-user-btn" data-id="${user.id}" ${isCurrentUser ? 'disabled title="Cannot delete your own account"' : ''}>Delete</button>
+                    <button class="btn btn-sm btn-danger delete-user-btn" data-id="${user.id}"
+                        ${isCurrentUser ? 'disabled title="Cannot delete your own account"' : ''}
+                        ${isLastAdmin ? 'disabled title="Cannot delete last admin user"' : ''}
+                    >Delete</button>
                 </td>
             `;
             tbody.appendChild(row);
@@ -182,7 +250,7 @@ async function loadUsers() {
 
     } catch (error) {
         console.error('Failed to load users:', error);
-        tbody.innerHTML = '<tr><td colspan="6">Error loading users</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">Error loading users</td></tr>';
     } finally {
         loading.classList.add('hidden');
     }
@@ -193,8 +261,17 @@ async function editUser(userId) {
     form.reset();
     document.getElementById('user-modal-title').textContent = 'Edit User';
 
+    const usernameInput = document.getElementById('user-username');
+    const passwordInput = document.getElementById('user-password');
+    const passwordHelp = passwordInput.nextElementSibling;
+
+    // Reset field states
+    usernameInput.disabled = false;
+    passwordInput.disabled = false;
+    if (passwordHelp) passwordHelp.textContent = 'Leave empty to keep current password';
+
     try {
-        const users = await getUsers();
+        const users = cachedUsers || await getUsers();
         const user = users.find(u => u.id === userId);
         if (user) {
             document.getElementById('user-id').value = user.id;
@@ -202,6 +279,13 @@ async function editUser(userId) {
             document.getElementById('user-password').value = '';
             document.getElementById('user-role').value = user.role;
             document.getElementById('user-active').checked = user.is_active;
+
+            // Disable username/password for PolkaSQL users
+            if (user.is_polka_auth) {
+                usernameInput.disabled = true;
+                passwordInput.disabled = true;
+                if (passwordHelp) passwordHelp.textContent = 'Cannot modify credentials for PolkaSQL users';
+            }
         }
     } catch (error) {
         console.error('Failed to load user for edit:', error);
@@ -216,6 +300,15 @@ function openUserModal() {
     document.getElementById('user-modal-title').textContent = 'Add User';
     document.getElementById('user-id').value = '';
     document.getElementById('user-active').checked = true;
+
+    // Reset field states
+    const usernameInput = document.getElementById('user-username');
+    const passwordInput = document.getElementById('user-password');
+    const passwordHelp = passwordInput.nextElementSibling;
+    usernameInput.disabled = false;
+    passwordInput.disabled = false;
+    if (passwordHelp) passwordHelp.textContent = 'Leave empty to keep current password';
+
     document.getElementById('user-modal').classList.remove('hidden');
 }
 
@@ -283,6 +376,7 @@ async function loadWorkers() {
 
         activeWorkers.forEach(worker => {
             const status = worker.status?.toUpperCase();
+            const isActive = status === 'ACTIVE';
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${worker.id}</td>
@@ -295,17 +389,39 @@ async function loadWorkers() {
                     C: ${escapeHtml(worker.path_c_prefix || 'Not set')}</small>
                 </td>
                 <td>
-                    ${status === 'ACTIVE'
+                    ${isActive
                         ? `<button class="btn btn-sm btn-warning suspend-worker-btn" data-id="${worker.id}">Suspend</button>`
                         : `<button class="btn btn-sm btn-success activate-worker-btn" data-id="${worker.id}">Activate</button>`
                     }
                     <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.id}" data-name="${escapeHtml(worker.name || worker.hostname)}">Remove</button>
+                    ${isActive ? `
+                    <button class="btn btn-sm btn-secondary worker-ping-btn" data-id="${worker.id}">Ping</button>
+                    <button class="btn btn-sm btn-secondary worker-status-btn" data-id="${worker.id}">Status</button>
+                    <button class="btn btn-sm btn-primary worker-provision-btn" data-id="${worker.id}">Provision</button>
+                    ` : ''}
                 </td>
             `;
             tbody.appendChild(row);
         });
 
-        // Attach event listeners for active worker buttons
+        // Worker command result row (hidden, shown on demand)
+        activeWorkers.forEach(worker => {
+            if (worker.status?.toUpperCase() === 'ACTIVE') {
+                const resultRow = document.createElement('tr');
+                resultRow.id = `worker-cmd-row-${worker.id}`;
+                resultRow.style.display = 'none';
+                resultRow.innerHTML = `<td colspan="6"><div class="worker-cmd-result" id="worker-cmd-result-${worker.id}"></div></td>`;
+                // Insert after the worker's main row
+                const mainRow = tbody.querySelector(`tr:has(.worker-ping-btn[data-id="${worker.id}"])`);
+                if (mainRow && mainRow.nextSibling) {
+                    tbody.insertBefore(resultRow, mainRow.nextSibling);
+                } else {
+                    tbody.appendChild(resultRow);
+                }
+            }
+        });
+
+        // Attach event listeners
         document.querySelectorAll('.suspend-worker-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 try {
@@ -334,9 +450,8 @@ async function loadWorkers() {
         document.querySelectorAll('.remove-worker-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const workerName = btn.dataset.name;
-                if (!confirm(`Are you sure you want to remove worker "${workerName}"?\n\nThe worker can re-register if it's still active.`)) {
-                    return;
-                }
+                const confirmed = await showConfirm(`Are you sure you want to remove worker "${workerName}"?\n\nThe worker can re-register if it's still active.`);
+                if (!confirmed) return;
                 try {
                     await apiRequest(`/api/admin/workers/${btn.dataset.id}`, { method: 'DELETE' });
                     await loadWorkers();
@@ -344,6 +459,18 @@ async function loadWorkers() {
                     alert('Error removing worker: ' + error.message);
                 }
             });
+        });
+
+        document.querySelectorAll('.worker-ping-btn').forEach(btn => {
+            btn.addEventListener('click', () => sendWorkerCmd(parseInt(btn.dataset.id), 'ping'));
+        });
+
+        document.querySelectorAll('.worker-status-btn').forEach(btn => {
+            btn.addEventListener('click', () => sendWorkerCmd(parseInt(btn.dataset.id), 'get_status'));
+        });
+
+        document.querySelectorAll('.worker-provision-btn').forEach(btn => {
+            btn.addEventListener('click', () => provisionWorkerDialog(parseInt(btn.dataset.id)));
         });
 
         // Pending workers
@@ -394,6 +521,70 @@ async function loadWorkers() {
         tbody.innerHTML = '<tr><td colspan="6">Error loading workers</td></tr>';
     } finally {
         loading.classList.add('hidden');
+    }
+}
+
+// =========================================================================
+// Worker Commands (moved from System tab to Workers tab)
+// =========================================================================
+
+async function sendWorkerCmd(workerId, command) {
+    // Show the result row
+    const resultRow = document.getElementById(`worker-cmd-row-${workerId}`);
+    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+
+    if (resultRow) resultRow.style.display = '';
+    if (resultDiv) resultDiv.innerHTML = '<span class="loading">Sending command...</span>';
+
+    try {
+        const response = await apiRequest(`/api/admin/workers/${workerId}/command`, {
+            method: 'POST',
+            body: JSON.stringify({ command, params: {}, timeout_seconds: 30 })
+        });
+
+        if (response.status === 'success') {
+            resultDiv.innerHTML = `<span class="success">${escapeHtml(command)}: ${escapeHtml(response.message || 'OK')} (${response.duration_ms}ms)</span>`;
+            if (response.data) {
+                resultDiv.innerHTML += `<pre>${escapeHtml(JSON.stringify(response.data, null, 2))}</pre>`;
+            }
+        } else {
+            resultDiv.innerHTML = `<span class="error">${escapeHtml(command)} failed: ${escapeHtml(response.message)}</span>`;
+        }
+    } catch (error) {
+        if (resultDiv) resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
+    }
+}
+
+async function provisionWorkerDialog(workerId) {
+    const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
+    const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
+    const pathC = prompt('Enter new Path C prefix (leave empty to keep current):');
+
+    if (!pathA && !pathB && !pathC) {
+        alert('No changes specified');
+        return;
+    }
+
+    const config = {};
+    if (pathA) config.path_a_prefix = pathA;
+    if (pathB) config.path_b_prefix = pathB;
+    if (pathC) config.path_c_prefix = pathC;
+
+    const resultRow = document.getElementById(`worker-cmd-row-${workerId}`);
+    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+
+    if (resultRow) resultRow.style.display = '';
+    if (resultDiv) resultDiv.innerHTML = '<span class="loading">Provisioning worker...</span>';
+
+    try {
+        await apiRequest(`/api/admin/workers/${workerId}/provision`, {
+            method: 'POST',
+            body: JSON.stringify({ config, restart_required: false })
+        });
+        if (resultDiv) resultDiv.innerHTML = '<span class="success">Worker provisioned successfully</span>';
+        await loadWorkers();
+    } catch (error) {
+        if (resultDiv) resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
     }
 }
 
@@ -545,118 +736,108 @@ export async function saveConfigurationData() {
 // =========================================================================
 
 function setupSystemEvents() {
-    document.getElementById('add-samba-path-btn')?.addEventListener('click', () => {
-        adminSystem.createSambaPath();
-    });
-
     document.getElementById('refresh-stats-btn')?.addEventListener('click', () => {
-        adminSystem.loadSystemStats();
-    });
-
-    document.getElementById('refresh-worker-control-btn')?.addEventListener('click', () => {
-        loadWorkerControlList();
+        loadSystemStats();
     });
 }
 
 async function loadSystemTab() {
-    await Promise.all([
-        adminSystem.loadSambaPaths(),
-        adminSystem.loadSystemStats(),
-        loadWorkerControlList()
-    ]);
+    await loadSystemStats();
+    startStatsAutoRefresh();
 }
 
-async function loadWorkerControlList() {
-    const container = document.getElementById('worker-control-list');
+function startStatsAutoRefresh() {
+    stopStatsAutoRefresh();
+    statsRefreshInterval = setInterval(() => {
+        if (currentTab === 'system') {
+            loadSystemStats();
+        }
+    }, 5000);
+}
+
+function stopStatsAutoRefresh() {
+    if (statsRefreshInterval) {
+        clearInterval(statsRefreshInterval);
+        statsRefreshInterval = null;
+    }
+}
+
+async function loadSystemStats() {
+    try {
+        const [stats, health] = await Promise.all([
+            apiRequest('/api/admin/stats/system'),
+            apiRequest('/api/admin/health')
+        ]);
+        renderSystemStats(stats, health);
+    } catch (error) {
+        console.error('Failed to load system stats:', error);
+    }
+}
+
+function renderSystemStats(stats, health) {
+    const container = document.getElementById('system-stats-container');
     if (!container) return;
 
-    try {
-        const workers = await getWorkers();
-        const activeWorkers = workers.filter(w => w.status === 'ACTIVE' || w.status === 'active');
+    // Build health components display
+    const componentEntries = Object.entries(health.components || {});
+    const healthComponentsHtml = componentEntries.map(([name, info]) => {
+        const statusIcon = info.status === 'healthy' ? '&#10003;' : info.status === 'critical' ? '&#10007;' : '&#9888;';
+        const statusClass = info.status === 'healthy' ? 'success' : info.status === 'critical' ? 'error' : 'warning';
+        return `<div><span class="${statusClass}">${statusIcon}</span> <strong>${escapeHtml(name)}:</strong> ${escapeHtml(info.message || info.status)}</div>`;
+    }).join('');
 
-        if (activeWorkers.length === 0) {
-            container.innerHTML = '<p class="no-data">No active workers available</p>';
-            return;
-        }
-
-        container.innerHTML = activeWorkers.map(worker => `
-            <div class="worker-control-card" data-worker-id="${worker.id}">
-                <div class="worker-control-header">
-                    <h4>${escapeHtml(worker.name || worker.hostname || 'Worker ' + worker.id)}</h4>
-                    <span class="badge badge-${worker.status?.toLowerCase() === 'active' ? 'success' : 'warning'}">${worker.status}</span>
+    container.innerHTML = `
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Operations</h3>
+                <div class="stat-value">${stats.active_operations}</div>
+                <div class="stat-label">Active</div>
+                <div class="stat-details">
+                    In Progress: ${stats.operations_in_progress} | Pending: ${stats.operations_pending}
                 </div>
-                <div class="worker-control-info">
-                    <div><strong>Hostname:</strong> ${escapeHtml(worker.hostname || 'N/A')}</div>
-                    <div><strong>Path A:</strong> ${escapeHtml(worker.path_a_prefix || 'Not set')}</div>
-                    <div><strong>Path B:</strong> ${escapeHtml(worker.path_b_prefix || 'Not set')}</div>
-                    <div><strong>Path C:</strong> ${escapeHtml(worker.path_c_prefix || 'Not set')}</div>
-                    <div><strong>Last Heartbeat:</strong> ${worker.last_heartbeat ? formatDate(worker.last_heartbeat) : 'Never'}</div>
-                </div>
-                <div class="worker-control-actions">
-                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'ping')">Ping</button>
-                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'get_status')">Status</button>
-                    <button class="btn btn-sm btn-primary" onclick="provisionWorkerDialog(${worker.id})">Provision</button>
-                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'reload_config')">Reload Config</button>
-                </div>
-                <div class="worker-cmd-result" id="worker-cmd-result-${worker.id}"></div>
             </div>
-        `).join('');
-    } catch (error) {
-        container.innerHTML = `<p class="error">Error loading workers: ${escapeHtml(error.message)}</p>`;
-    }
-}
 
-async function sendWorkerCmd(workerId, command) {
-    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
-    resultDiv.innerHTML = '<span class="loading">Sending command...</span>';
+            <div class="stat-card">
+                <h3>Workers</h3>
+                <div class="stat-value">${stats.active_workers}</div>
+                <div class="stat-label">Active</div>
+                <div class="stat-details">
+                    Healthy: ${stats.workers_healthy} | Suspended: ${stats.workers_suspended} | Offline: ${stats.workers_offline}
+                    ${stats.pending_workers > 0 ? `<br><strong>${stats.pending_workers} pending approval</strong>` : ''}
+                </div>
+            </div>
 
-    try {
-        const response = await apiRequest(`/api/admin/workers/${workerId}/command`, {
-            method: 'POST',
-            body: JSON.stringify({ command, params: {}, timeout_seconds: 30 })
-        });
+            <div class="stat-card">
+                <h3>Users</h3>
+                <div class="stat-value">${stats.active_users}</div>
+                <div class="stat-label">Active Sessions</div>
+                <div class="stat-details">
+                    Total: ${stats.total_users} (${stats.admin_users} admins, ${stats.viewer_users} users)
+                </div>
+            </div>
 
-        if (response.status === 'success') {
-            resultDiv.innerHTML = `<span class="success">${escapeHtml(command)}: ${escapeHtml(response.message || 'OK')} (${response.duration_ms}ms)</span>`;
-            if (response.data) {
-                resultDiv.innerHTML += `<pre>${escapeHtml(JSON.stringify(response.data, null, 2))}</pre>`;
-            }
-        } else {
-            resultDiv.innerHTML = `<span class="error">${escapeHtml(command)} failed: ${escapeHtml(response.message)}</span>`;
-        }
-    } catch (error) {
-        resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
-    }
-}
+            <div class="stat-card">
+                <h3>Last Hour</h3>
+                <div class="stat-value">${stats.operations_completed_last_hour}</div>
+                <div class="stat-label">Operations Completed</div>
+                <div class="stat-details">
+                    Failed: ${stats.operations_failed_last_hour}
+                    ${stats.avg_operation_duration_seconds ? `<br>Avg Duration: ${stats.avg_operation_duration_seconds.toFixed(1)}s` : ''}
+                </div>
+            </div>
 
-async function provisionWorkerDialog(workerId) {
-    const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
-    const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
-    const pathC = prompt('Enter new Path C prefix (leave empty to keep current):');
-
-    if (!pathA && !pathB && !pathC) {
-        alert('No changes specified');
-        return;
-    }
-
-    const config = {};
-    if (pathA) config.path_a_prefix = pathA;
-    if (pathB) config.path_b_prefix = pathB;
-    if (pathC) config.path_c_prefix = pathC;
-
-    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
-    resultDiv.innerHTML = '<span class="loading">Provisioning worker...</span>';
-
-    try {
-        await apiRequest(`/api/admin/workers/${workerId}/provision`, {
-            method: 'POST',
-            body: JSON.stringify({ config, restart_required: false })
-        });
-        resultDiv.innerHTML = '<span class="success">Worker provisioned successfully</span>';
-        await loadWorkerControlList();
-    } catch (error) {
-        resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
-    }
+            <div class="stat-card">
+                <h3>System Health</h3>
+                <div class="stat-value">
+                    <span class="badge badge-${health.overall_status === 'healthy' ? 'success' : health.overall_status === 'degraded' ? 'warning' : 'danger'}">${health.overall_status}</span>
+                </div>
+                <div class="stat-label">Components</div>
+                <div class="stat-details">
+                    ${healthComponentsHtml}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 // =========================================================================

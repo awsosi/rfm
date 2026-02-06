@@ -139,7 +139,6 @@ class SystemStatsResponse(BaseModel):
     redis_healthy: bool
 
     # Additional metrics
-    samba_paths_active: int
     total_audit_logs: int
 
 
@@ -150,9 +149,9 @@ class SystemHealthResponse(BaseModel):
 
     components: Dict[str, Dict[str, Any]] = {
         "database": {"status": "unknown", "message": ""},
-        "redis": {"status": "unknown", "message": ""},
-        "workers": {"status": "unknown", "message": ""},
+        "elasticsearch": {"status": "unknown", "message": ""},
         "api": {"status": "unknown", "message": ""},
+        "webui": {"status": "unknown", "message": ""},
     }
 
     alerts: List[Dict[str, Any]] = []
