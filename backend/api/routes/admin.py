@@ -107,6 +107,19 @@ async def update_user(
             detail=f"User with ID {user_id} not found",
         )
 
+    # Block username/password changes for PolkaSQL auth users
+    if user.is_polka_auth:
+        if user_data.username is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot modify username for PolkaSQL-authenticated users",
+            )
+        if user_data.password is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot modify password for PolkaSQL-authenticated users",
+            )
+
     # Prevent self-deactivation
     if user.id == current_user.id and user_data.is_active is False:
         raise HTTPException(
@@ -136,6 +149,8 @@ async def update_user(
 
     # Update fields
     update_data = {}
+    if user_data.username is not None:
+        update_data["username"] = user_data.username
     if user_data.password is not None:
         update_data["password_hash"] = hash_password(user_data.password)
     if user_data.role is not None:

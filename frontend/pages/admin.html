@@ -48,6 +48,7 @@
                                 <tr>
                                     <th>ID</th>
                                     <th>Username</th>
+                                    <th>Auth</th>
                                     <th>Role</th>
                                     <th>Active</th>
                                     <th>Created</th>
@@ -369,33 +370,8 @@
 
             <!-- System Tab -->
             <div class="tab-pane" id="tab-system">
-                <!-- Samba Paths Section -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Samba Paths Management</h2>
-                        <button class="btn btn-primary" id="add-samba-path-btn">Add Samba Path</button>
-                    </div>
-                    <div class="panel-body">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Name</th>
-                                    <th>Path Prefix</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="samba-paths-table-body">
-                                <!-- Samba paths will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
                 <!-- System Statistics Section -->
-                <div class="panel" style="margin-top: 20px;">
+                <div class="panel">
                     <div class="panel-header">
                         <h2>System Statistics</h2>
                         <button class="btn btn-secondary" id="refresh-stats-btn">Refresh</button>
@@ -403,19 +379,6 @@
                     <div class="panel-body">
                         <div id="system-stats-container">
                             <!-- System stats will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Worker Control Section -->
-                <div class="panel" style="margin-top: 20px;">
-                    <div class="panel-header">
-                        <h2>Worker Control</h2>
-                        <button class="btn btn-secondary" id="refresh-worker-control-btn">Refresh</button>
-                    </div>
-                    <div class="panel-body">
-                        <div id="worker-control-list">
-                            <!-- Worker control cards will be loaded here -->
                         </div>
                     </div>
                 </div>
@@ -561,19 +524,22 @@
         </div>
     </div>
 
-    <!-- Confirmation Modal -->
-    <div class="modal hidden" id="confirm-modal">
+    <!-- Generic Modal (used by showConfirm/showPrompt from utils.js) -->
+    <div class="modal hidden" id="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="confirm-modal-title">Confirm Action</h3>
-                <button class="modal-close" id="confirm-modal-close">&times;</button>
+                <h3 id="modal-title">Confirm Action</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p id="confirm-modal-message"></p>
+                <p id="modal-message"></p>
+                <div id="modal-input-container" class="hidden">
+                    <input type="text" id="modal-input" class="form-control">
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="confirm-modal-cancel">Cancel</button>
-                <button class="btn btn-danger" id="confirm-modal-confirm">Confirm</button>
+                <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm">Confirm</button>
             </div>
         </div>
     </div>

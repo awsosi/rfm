@@ -85,6 +85,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """User update schema."""
 
+    username: Optional[str] = Field(None, min_length=1, max_length=100)
     password: Optional[str] = Field(None, min_length=8)
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
@@ -97,6 +98,7 @@ class UserResponse(UserBase):
 
     id: int
     is_active: bool
+    is_polka_auth: bool = False
     created_at: datetime
     updated_at: datetime
 
