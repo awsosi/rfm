@@ -948,6 +948,7 @@ async def register_worker(
         existing_worker.public_key = worker_data.public_key
         existing_worker.path_a_prefix = worker_data.path_a_prefix
         existing_worker.path_b_prefix = worker_data.path_b_prefix
+        existing_worker.path_c_prefix = worker_data.path_c_prefix
         existing_worker.version = worker_data.version
         existing_worker.last_heartbeat = datetime.now(timezone.utc)
 
@@ -963,6 +964,7 @@ async def register_worker(
         public_key=worker_data.public_key,
         path_a_prefix=worker_data.path_a_prefix,
         path_b_prefix=worker_data.path_b_prefix,
+        path_c_prefix=worker_data.path_c_prefix,
         version=worker_data.version,
         status=WorkerStatus.PENDING,
         last_heartbeat=datetime.now(timezone.utc),

@@ -6,37 +6,39 @@
 
 ---
 
+## RULES (read before every change)
+
+1. **Schema ↔ Endpoint ↔ Model must stay in sync.** When a DB model has a column, the registration/creation schema AND the endpoint code that builds the ORM object MUST include that field. Pydantic silently strips unknown fields — you will never get an error, just silent data loss.
+   - Checklist before any "add column" change: `models.py` column → `schemas.py` request schema field → endpoint constructor/update kwargs → response schema field.
+2. **Never mark a bug "likely fixed" without a code review.** Read the actual JS/Python that runs the feature end-to-end. "Likely" means "still broken until proven otherwise."
+
+---
+
 ## ACTIVE BUGS
 
-### Worker: PathC not saved during registration
-**Root cause:** `WorkerRegister` schema (`schemas.py:109`) only accepts `path_a_prefix` and `path_b_prefix` — no `path_c_prefix` field. The `register_worker` endpoint (`app.py:960`) never stores `path_c_prefix` when creating a Worker. Even if the C# worker sends it, Pydantic silently strips it.
-**Fix:** Add `path_c_prefix: Optional[str] = Field(None, max_length=500)` to `WorkerRegister` schema, and add `path_c_prefix=worker_data.path_c_prefix` to both the `Worker()` constructor (line 960) and the existing-worker update block (line 949).
-
-### Worker: Remove button not working in Admin Panel
-**Root cause (was):** The old inline script in `admin.html` attached event listeners to `.remove-worker-btn` — should have worked but may have been failing silently (e.g. `apiRequest` throwing, or worker names with special chars breaking HTML attributes).
-**Status:** Likely fixed by admin.html DRY refactor (uses `escapeHtml` on names, cleaner error handling). **Needs verification.**
-
-### Worker: No Suspend/Activate buttons in Workers tab
-**Root cause (was):** The old inline script rendered only a "Remove" button — no Suspend or Activate. Backend endpoints exist: `POST /workers/{id}/suspend` and `PUT /workers/{id}` with `{status: "ACTIVE"}`.
-**Status:** Fixed in admin.js refactor — rows now show "Suspend" for ACTIVE workers, "Activate" for SUSPENDED.
+None.
 
 ---
 
 ## ACTIVE TODO ITEMS
 
-### Verification Needed
+### Verification Needed (requires running app with Docker)
 - [ ] Verify Admin Panel after DRY refactor (all tabs: Users, Workers, Config, System, Logs)
 - [ ] Verify worker Remove button works after refactor
 - [ ] Verify worker Suspend/Activate buttons work
 
 ### Future Work
-- [ ] Fix worker PathC registration (see bug details above)
 - [ ] Worker: Integration testing of C# FileManagerWorker in staging (ops/deployment — push/pull round-trip)
 - [ ] Consider migrating to a component framework (React/Vue) for better DOM/JS sync and type safety — long-term
 
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-06 - Fix All Active Bugs
+- Fixed PathC not saved during worker registration: added `path_c_prefix` to `WorkerRegister` schema (`schemas.py`), existing-worker update block and new-worker constructor in `app.py`
+- Verified Remove button: already working after DRY refactor (`admin.js:334-347` — `escapeHtml` on names, correct `DELETE` call)
+- Verified Suspend/Activate buttons: already working after DRY refactor (`admin.js:284-332` — correct rendering and API calls)
 
 ### 2026-02-06 - Admin Panel DRY Refactor
 - Moved ~600 lines of inline `<script>` from `admin.html` into `admin.js` as single source of truth
