@@ -39,6 +39,38 @@ from api.routes.preferences import router as preferences_router
 from api.routes.worker import router as worker_router
 
 
+async def _sync_env_config_to_db(settings: Settings) -> None:
+    """
+    Sync environment-driven config into the DB config table on every startup.
+
+    This ensures .env changes take effect after restart without touching
+    the admin panel.  DB becomes the single source of truth at runtime.
+    """
+    from database import DatabaseManager
+    from sqlalchemy import text
+
+    env_configs = {
+        "polka_auth_enabled": str(settings.polka_auth_enabled).lower(),
+        "polka_auth_url": settings.polka_auth_url or "",
+        "polka_auth_api_key": settings.polka_auth_api_key or "",
+        "polka_auth_timeout": str(settings.polka_auth_timeout),
+    }
+
+    try:
+        async with DatabaseManager.session() as session:
+            for key, value in env_configs.items():
+                await session.execute(
+                    text("UPDATE config SET value = :value WHERE key = :key"),
+                    {"key": key, "value": value},
+                )
+        logger.info(
+            "Synced env config to DB: polka_auth_enabled={}",
+            env_configs["polka_auth_enabled"],
+        )
+    except Exception as exc:
+        logger.warning(f"Failed to sync env config to DB: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -62,6 +94,9 @@ async def lifespan(app: FastAPI):
         max_overflow=settings.db_max_overflow,
         echo=settings.db_echo,
     )
+
+    # Sync env-driven config into DB so .env changes take effect on restart
+    await _sync_env_config_to_db(settings)
 
     # Initialize Elasticsearch
     from api.services.elasticsearch_service import get_elasticsearch_service

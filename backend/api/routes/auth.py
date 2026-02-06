@@ -40,18 +40,12 @@ async def get_auth_status(
     """
     from models import Config
 
-    # Check database config first
+    # DB is the single source of truth (env vars are synced into DB on startup)
     stmt = select(Config).where(Config.key == 'polka_auth_enabled')
     result = await db.execute(stmt)
     config = result.scalar_one_or_none()
 
-    if config and config.value.lower() in ('true', '1', 'yes'):
-        # Database config explicitly enables it
-        enabled = True
-    else:
-        # Fallback to .env (treats 'false' in DB as "not set", allowing .env to take precedence)
-        settings = get_settings()
-        enabled = settings.polka_auth_enabled
+    enabled = bool(config and config.value.lower() in ('true', '1', 'yes'))
 
     return {
         "polka_auth_enabled": enabled
@@ -66,22 +60,15 @@ async def verify_polka_credentials(
     """
     Verify credentials against PolkaSQL/Sybase RFM_Auth API.
 
-    Checks database config first (priority), then falls back to .env settings.
+    Reads all config from DB (env vars are synced into DB on startup).
     Username and password are case-insensitive per PolkaSQL API requirements.
 
-    Args:
-        username: Username to verify (case-insensitive)
-        password: Password to verify (case-insensitive)
-        db: Database session for loading config
-
     Returns:
-        Tuple of (authenticated, user_data):
-        - authenticated: True if credentials are valid, False otherwise
-        - user_data: Dict with user_id and username if authenticated, None otherwise
+        Tuple of (authenticated, user_data).
     """
     from models import Config
 
-    # Load configuration from database (priority) or .env (fallback)
+    # DB is the single source of truth (env vars are synced into DB on startup)
     stmt = select(Config).where(Config.key.in_([
         'polka_auth_enabled',
         'polka_auth_url',
@@ -92,52 +79,22 @@ async def verify_polka_credentials(
     db_configs = {config.key: config.value for config in result.scalars()}
 
     # Check if PolkaSQL auth is enabled
-    enabled_str = db_configs.get('polka_auth_enabled')
-    if enabled_str and enabled_str.lower() in ('true', '1', 'yes'):
-        # Database config explicitly enables it
-        enabled = True
-    else:
-        # Fallback to .env (treats 'false' in DB as "not set", allowing .env to take precedence)
-        from api.config import get_settings
-        settings = get_settings()
-        enabled = settings.polka_auth_enabled
-
-    if not enabled:
+    enabled_str = db_configs.get('polka_auth_enabled', '')
+    if enabled_str.lower() not in ('true', '1', 'yes'):
         return False, None
 
-    # Get PolkaSQL auth URL (database config takes priority)
-    polka_url = db_configs.get('polka_auth_url')
-    if not polka_url:
-        from api.config import get_settings
-        settings = get_settings()
-        polka_url = settings.polka_auth_url
-
+    polka_url = db_configs.get('polka_auth_url', '')
     if not polka_url:
         return False, None
 
-    # Get API key
-    api_key = db_configs.get('polka_auth_api_key')
-    if not api_key:
-        from api.config import get_settings
-        settings = get_settings()
-        api_key = settings.polka_auth_api_key
-
+    api_key = db_configs.get('polka_auth_api_key', '')
     if not api_key:
         return False, None
 
-    # Get timeout (database config priority, fallback to .env)
-    timeout_str = db_configs.get('polka_auth_timeout')
-    if timeout_str:
-        try:
-            timeout = int(timeout_str)
-        except (ValueError, TypeError):
-            from api.config import get_settings
-            settings = get_settings()
-            timeout = settings.polka_auth_timeout
-    else:
-        from api.config import get_settings
-        settings = get_settings()
-        timeout = settings.polka_auth_timeout
+    try:
+        timeout = int(db_configs.get('polka_auth_timeout', '5'))
+    except (ValueError, TypeError):
+        timeout = 5
 
     try:
         # Build query parameters (API uses GET request with query params)
