@@ -114,6 +114,7 @@ class WorkerRegister(BaseModel):
     public_key: str = Field(..., description="PEM-encoded RSA public key")
     path_a_prefix: Optional[str] = Field(None, max_length=500)
     path_b_prefix: Optional[str] = Field(None, max_length=500)
+    path_c_prefix: Optional[str] = Field(None, max_length=500)
     version: Optional[str] = Field(None, max_length=50)
 
 
