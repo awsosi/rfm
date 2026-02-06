@@ -16,17 +16,6 @@
             <div id="error-message" class="error-message hidden"></div>
 
             <form id="login-form">
-                <div class="form-group" id="auth-method-group" style="display: none;">
-                    <label for="auth-method">Authentication Method</label>
-                    <select id="auth-method" name="auth-method" class="form-control">
-                        <option value="polka">PolkaSQL Authentication</option>
-                        <option value="local">Local Authentication</option>
-                    </select>
-                    <small style="color: #666; margin-top: 5px; display: block;">
-                        Select authentication method. PolkaSQL uses Sybase database (case-insensitive), Local uses RFM database.
-                    </small>
-                </div>
-
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" class="form-control" required autocomplete="username">
@@ -44,14 +33,18 @@
                     </label>
                 </div>
 
+                <div class="form-group" id="auth-method-group" style="display: none;">
+                    <label for="auth-method">Authentication Method</label>
+                    <select id="auth-method" name="auth-method" class="form-control">
+                        <option value="polka">PolkaSQL</option>
+                        <option value="local">Local</option>
+                    </select>
+                </div>
+
                 <button type="submit" class="btn btn-primary" id="login-btn">
                     Sign In
                 </button>
             </form>
-
-            <div class="login-footer">
-                <p>Remote File Manager v1.0</p>
-            </div>
         </div>
     </div>
 

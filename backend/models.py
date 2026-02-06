@@ -543,12 +543,6 @@ class UserPreferences(Base):
     ui_theme = Column(String(50), nullable=False, default="system")  # system, light, dark
     ui_language = Column(String(10), nullable=False, default="en")  # en (more coming with i18n)
     pane_layout = Column(String(50), nullable=False, default="horizontal")  # horizontal, vertical
-    show_hidden_files = Column(Boolean, nullable=False, default=False)
-    default_sort_by = Column(String(50), nullable=False, default="name")  # name, size, date
-    default_sort_order = Column(String(50), nullable=False, default="asc")  # asc, desc
-
-    # Pagination preferences
-    items_per_page = Column(Integer, nullable=False, default=100)
 
     # Additional settings (JSON for flexibility)
     custom_settings = Column(JSON, nullable=True)

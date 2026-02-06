@@ -96,10 +96,6 @@ async def reset_my_preferences(
         preferences.ui_theme = "system"
         preferences.ui_language = "en"
         preferences.pane_layout = "horizontal"
-        preferences.show_hidden_files = False
-        preferences.default_sort_by = "name"
-        preferences.default_sort_order = "asc"
-        preferences.items_per_page = 100
         preferences.custom_settings = None
     else:
         # Create with defaults

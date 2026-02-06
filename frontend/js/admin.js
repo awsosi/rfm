@@ -1,915 +1,428 @@
 /**
  * Admin Panel JavaScript Module
- *
- * Handles all admin panel functionality:
- * - User management (CRUD)
- * - Worker management (approve, suspend, update)
- * - System configuration
- * - Audit logs viewing
+ * Single source of truth for all admin panel functionality.
  */
 
-import { API } from './api.js';
-import { getCurrentUser } from './auth.js';
-import { showNotification, formatDate } from './utils.js';
+import { checkAuth, logout, getCurrentUser } from './auth.js';
+import {
+    getUsers, createUser, updateUser, deleteUser,
+    getWorkers, approveWorker, rejectWorker,
+    getConfig, updateConfig, getLogs, apiRequest
+} from './api.js';
+import { showConfirm, formatDate, escapeHtml, showNotification } from './utils.js';
+import AdminSystem from './admin-system.js';
 
-export class AdminPanel {
-    constructor() {
-        this.currentTab = 'users';
-        this.config = {};
-        this.configKeyMapping = {};
-        this.init();
+// =========================================================================
+// State
+// =========================================================================
+
+let adminSystem = null;
+let logsOffset = 0;
+const logsLimit = 100;
+
+// =========================================================================
+// Initialization
+// =========================================================================
+
+/**
+ * Initialize the admin panel - called from admin.html
+ */
+export function initAdminPanel() {
+    if (!checkAuth()) {
+        window.location.href = 'login.html';
+        return;
     }
 
-    /**
-     * Initialize admin panel
-     */
-    init() {
-        this.setupTabSwitching();
-        this.setupEventListeners();
-        this.loadInitialData();
+    const currentUser = getCurrentUser();
+    if (!currentUser || currentUser.role?.toUpperCase() !== 'ADMIN') {
+        alert('Access denied. Admin role required.');
+        window.location.href = 'explorer.html';
+        return;
     }
 
-    /**
-     * Setup tab switching
-     */
-    setupTabSwitching() {
-        const tabButtons = document.querySelectorAll('.tab-btn');
-        const tabPanes = document.querySelectorAll('.tab-pane');
+    document.getElementById('user-name').textContent = currentUser.username;
 
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const tabName = button.dataset.tab;
+    // Initialize AdminSystem for samba paths and system stats
+    const apiClient = {
+        get: (endpoint) => apiRequest(endpoint, { method: 'GET' }),
+        post: (endpoint, data) => apiRequest(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+        put: (endpoint, data) => apiRequest(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
+        delete: (endpoint) => apiRequest(endpoint, { method: 'DELETE' })
+    };
+    adminSystem = new AdminSystem(apiClient);
+    window.adminSystem = adminSystem;
 
-                // Update active states
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabPanes.forEach(pane => pane.classList.remove('active'));
+    // Expose functions needed by dynamically generated onclick handlers
+    window.sendWorkerCmd = sendWorkerCmd;
+    window.provisionWorkerDialog = provisionWorkerDialog;
 
-                button.classList.add('active');
-                document.getElementById(`tab-${tabName}`).classList.add('active');
+    setupNavigation();
+    setupTabSwitching();
+    setupUserEvents();
+    setupWorkerEvents();
+    setupConfigEvents();
+    setupLogEvents();
+    setupSystemEvents();
 
-                this.currentTab = tabName;
+    // Load initial tab
+    loadTabData('users');
+}
 
-                // Load tab data
-                this.loadTabData(tabName);
+// =========================================================================
+// Navigation & Tabs
+// =========================================================================
+
+function setupNavigation() {
+    document.getElementById('explorer-btn').addEventListener('click', () => {
+        window.location.href = 'explorer.html';
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        logout();
+        window.location.href = 'login.html';
+    });
+}
+
+function setupTabSwitching() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
+
+            tabButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            tabPanes.forEach(pane => pane.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            loadTabData(tabName);
+        });
+    });
+}
+
+async function loadTabData(tabName) {
+    switch (tabName) {
+        case 'users':
+            await loadUsers();
+            break;
+        case 'workers':
+            await loadWorkers();
+            break;
+        case 'config':
+            await loadConfigurationData();
+            break;
+        case 'system':
+            await loadSystemTab();
+            break;
+        case 'logs':
+            await loadLogs();
+            break;
+    }
+}
+
+// =========================================================================
+// User Management
+// =========================================================================
+
+function setupUserEvents() {
+    document.getElementById('add-user-btn').addEventListener('click', () => {
+        openUserModal();
+    });
+
+    document.getElementById('user-modal-close').addEventListener('click', () => {
+        document.getElementById('user-modal').classList.add('hidden');
+    });
+
+    document.getElementById('user-modal-cancel').addEventListener('click', () => {
+        document.getElementById('user-modal').classList.add('hidden');
+    });
+
+    document.getElementById('user-modal-save').addEventListener('click', async () => {
+        await saveUser();
+    });
+}
+
+async function loadUsers() {
+    const tbody = document.getElementById('users-table-body');
+    const loading = document.getElementById('users-loading');
+
+    loading.classList.remove('hidden');
+    tbody.innerHTML = '';
+
+    try {
+        const users = await getUsers();
+        const currentUser = getCurrentUser();
+
+        users.forEach(user => {
+            const isCurrentUser = currentUser && user.id === currentUser.id;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${user.id}</td>
+                <td>${escapeHtml(user.username)}</td>
+                <td><span class="badge badge-${user.role?.toUpperCase() === 'ADMIN' ? 'primary' : 'secondary'}">${user.role}</span></td>
+                <td><span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>${formatDate(user.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary edit-user-btn" data-id="${user.id}">Edit</button>
+                    <button class="btn btn-sm btn-danger delete-user-btn" data-id="${user.id}" ${isCurrentUser ? 'disabled title="Cannot delete your own account"' : ''}>Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => editUser(parseInt(btn.dataset.id)));
+        });
+
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => confirmDeleteUser(parseInt(btn.dataset.id)));
+        });
+
+    } catch (error) {
+        console.error('Failed to load users:', error);
+        tbody.innerHTML = '<tr><td colspan="6">Error loading users</td></tr>';
+    } finally {
+        loading.classList.add('hidden');
+    }
+}
+
+async function editUser(userId) {
+    const form = document.getElementById('user-form');
+    form.reset();
+    document.getElementById('user-modal-title').textContent = 'Edit User';
+
+    try {
+        const users = await getUsers();
+        const user = users.find(u => u.id === userId);
+        if (user) {
+            document.getElementById('user-id').value = user.id;
+            document.getElementById('user-username').value = user.username;
+            document.getElementById('user-password').value = '';
+            document.getElementById('user-role').value = user.role;
+            document.getElementById('user-active').checked = user.is_active;
+        }
+    } catch (error) {
+        console.error('Failed to load user for edit:', error);
+    }
+
+    document.getElementById('user-modal').classList.remove('hidden');
+}
+
+function openUserModal() {
+    const form = document.getElementById('user-form');
+    form.reset();
+    document.getElementById('user-modal-title').textContent = 'Add User';
+    document.getElementById('user-id').value = '';
+    document.getElementById('user-active').checked = true;
+    document.getElementById('user-modal').classList.remove('hidden');
+}
+
+async function saveUser() {
+    const userId = document.getElementById('user-id').value;
+    const username = document.getElementById('user-username').value;
+    const password = document.getElementById('user-password').value;
+    const role = document.getElementById('user-role').value;
+    const isActive = document.getElementById('user-active').checked;
+
+    try {
+        if (userId) {
+            const updateData = { role, is_active: isActive };
+            if (password) updateData.password = password;
+            await updateUser(userId, updateData);
+        } else {
+            if (!password) {
+                alert('Password is required for new users');
+                return;
+            }
+            await createUser({ username, password, role, is_active: isActive });
+        }
+
+        document.getElementById('user-modal').classList.add('hidden');
+        await loadUsers();
+    } catch (error) {
+        alert('Error saving user: ' + error.message);
+    }
+}
+
+async function confirmDeleteUser(userId) {
+    const confirmed = await showConfirm('Are you sure you want to delete this user?');
+    if (confirmed) {
+        try {
+            await deleteUser(userId);
+            await loadUsers();
+        } catch (error) {
+            alert('Error deleting user: ' + error.message);
+        }
+    }
+}
+
+// =========================================================================
+// Worker Management
+// =========================================================================
+
+function setupWorkerEvents() {
+    document.getElementById('refresh-workers-btn').addEventListener('click', loadWorkers);
+}
+
+async function loadWorkers() {
+    const tbody = document.getElementById('workers-table-body');
+    const pendingTbody = document.getElementById('pending-workers-table-body');
+    const loading = document.getElementById('workers-loading');
+
+    loading.classList.remove('hidden');
+    tbody.innerHTML = '';
+    pendingTbody.innerHTML = '';
+
+    try {
+        const workers = await getWorkers();
+
+        const activeWorkers = workers.filter(w => w.status?.toUpperCase() !== 'PENDING');
+        const pendingWorkers = workers.filter(w => w.status?.toUpperCase() === 'PENDING');
+
+        activeWorkers.forEach(worker => {
+            const status = worker.status?.toUpperCase();
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${worker.id}</td>
+                <td>${escapeHtml(worker.hostname || 'N/A')}</td>
+                <td><span class="status-badge status-${worker.status}">${worker.status}</span></td>
+                <td>${formatDate(worker.last_heartbeat)}</td>
+                <td>
+                    <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
+                    B: ${escapeHtml(worker.path_b_prefix || 'Not set')}<br>
+                    C: ${escapeHtml(worker.path_c_prefix || 'Not set')}</small>
+                </td>
+                <td>
+                    ${status === 'ACTIVE'
+                        ? `<button class="btn btn-sm btn-warning suspend-worker-btn" data-id="${worker.id}">Suspend</button>`
+                        : `<button class="btn btn-sm btn-success activate-worker-btn" data-id="${worker.id}">Activate</button>`
+                    }
+                    <button class="btn btn-sm btn-danger remove-worker-btn" data-id="${worker.id}" data-name="${escapeHtml(worker.name || worker.hostname)}">Remove</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Attach event listeners for active worker buttons
+        document.querySelectorAll('.suspend-worker-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    await apiRequest(`/api/admin/workers/${btn.dataset.id}/suspend`, { method: 'POST' });
+                    await loadWorkers();
+                } catch (error) {
+                    alert('Error suspending worker: ' + error.message);
+                }
             });
         });
-    }
 
-    /**
-     * Setup event listeners for buttons and forms
-     */
-    setupEventListeners() {
-        // User management
-        const addUserBtn = document.getElementById('add-user-btn');
-        if (addUserBtn) {
-            addUserBtn.addEventListener('click', () => this.showUserModal());
-        }
-
-        const userForm = document.getElementById('user-form');
-        if (userForm) {
-            userForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveUser();
-            });
-        }
-
-        const userModalClose = document.getElementById('user-modal-close');
-        if (userModalClose) {
-            userModalClose.addEventListener('click', () => this.hideUserModal());
-        }
-
-        // Worker management
-        const refreshWorkersBtn = document.getElementById('refresh-workers-btn');
-        if (refreshWorkersBtn) {
-            refreshWorkersBtn.addEventListener('click', () => this.loadWorkers());
-        }
-
-        // Configuration
-        const saveConfigBtn = document.getElementById('save-config-btn');
-        if (saveConfigBtn) {
-            saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
-        }
-
-        const testVfPathsBtn = document.getElementById('test-vf-paths-btn');
-        if (testVfPathsBtn) {
-            testVfPathsBtn.addEventListener('click', () => this.testVfPaths());
-        }
-
-        // Logs
-        const refreshLogsBtn = document.getElementById('refresh-logs-btn');
-        if (refreshLogsBtn) {
-            refreshLogsBtn.addEventListener('click', () => this.loadLogs());
-        }
-
-        const loadMoreLogsBtn = document.getElementById('load-more-logs');
-        if (loadMoreLogsBtn) {
-            loadMoreLogsBtn.addEventListener('click', () => this.loadMoreLogs());
-        }
-
-        const exportLogsBtn = document.getElementById('export-logs-btn');
-        if (exportLogsBtn) {
-            exportLogsBtn.addEventListener('click', () => this.exportLogs());
-        }
-
-        // Log filters
-        const logLevelFilter = document.getElementById('log-level-filter');
-        if (logLevelFilter) {
-            logLevelFilter.addEventListener('change', () => this.loadLogs());
-        }
-
-        const logTypeFilter = document.getElementById('log-type-filter');
-        if (logTypeFilter) {
-            logTypeFilter.addEventListener('change', () => this.loadLogs());
-        }
-
-        const logSearch = document.getElementById('log-search');
-        if (logSearch) {
-            logSearch.addEventListener('input', debounce(() => this.loadLogs(), 500));
-        }
-
-        // Logging configuration
-        const saveLogConfigBtn = document.getElementById('save-log-config-btn');
-        if (saveLogConfigBtn) {
-            saveLogConfigBtn.addEventListener('click', () => this.saveLogConfiguration());
-        }
-    }
-
-    /**
-     * Load initial data for the current tab
-     */
-    loadInitialData() {
-        this.loadTabData(this.currentTab);
-    }
-
-    /**
-     * Load data for specific tab
-     */
-    loadTabData(tabName) {
-        switch (tabName) {
-            case 'users':
-                this.loadUsers();
-                break;
-            case 'workers':
-                this.loadWorkers();
-                break;
-            case 'config':
-                this.loadConfiguration();
-                break;
-            case 'logs':
-                this.loadLogConfiguration();
-                this.loadLogs();
-                break;
-        }
-    }
-
-    // =========================================================================
-    // User Management
-    // =========================================================================
-
-    /**
-     * Load all users
-     */
-    async loadUsers() {
-        const loadingIndicator = document.getElementById('users-loading');
-        const tableBody = document.getElementById('users-table-body');
-
-        try {
-            if (loadingIndicator) loadingIndicator.classList.remove('hidden');
-
-            const users = await API.get('/api/admin/users');
-            const currentUser = getCurrentUser();
-
-            // Count active admins
-            const activeAdminCount = users.filter(u => u.role === 'ADMIN' && u.is_active).length;
-
-            if (tableBody) {
-                tableBody.innerHTML = users.map(user => {
-                    // Disable delete button if:
-                    // 1. It's the current user, OR
-                    // 2. It's the last active admin
-                    const isCurrentUser = currentUser && user.id === currentUser.id;
-                    const isLastAdmin = user.role === 'ADMIN' && user.is_active && activeAdminCount <= 1;
-                    const canDelete = !isCurrentUser && !isLastAdmin;
-                    const deleteButtonDisabled = canDelete ? '' : 'disabled';
-                    const deleteButtonTitle = isCurrentUser ? 'Cannot delete your own account' :
-                                             isLastAdmin ? 'Cannot delete the last admin user' : '';
-
-                    return `
-                        <tr>
-                            <td>${user.id}</td>
-                            <td>${escapeHtml(user.username)}</td>
-                            <td><span class="badge badge-${user.role.toLowerCase()}">${user.role}</span></td>
-                            <td><span class="badge ${user.is_active ? 'badge-success' : 'badge-danger'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
-                            <td>${formatDate(user.created_at)}</td>
-                            <td>
-                                <button class="btn btn-sm btn-secondary" onclick="adminPanel.editUser(${user.id})">Edit</button>
-                                <button class="btn btn-sm btn-danger" onclick="adminPanel.deleteUser(${user.id}, '${escapeHtml(user.username)}')" ${deleteButtonDisabled} title="${deleteButtonTitle}">Delete</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-        } catch (error) {
-            console.error('Failed to load users:', error);
-            showNotification('Failed to load users', 'error');
-        } finally {
-            if (loadingIndicator) loadingIndicator.classList.add('hidden');
-        }
-    }
-
-    /**
-     * Show user modal for add/edit
-     */
-    showUserModal(userId = null) {
-        const modal = document.getElementById('user-modal');
-        const modalTitle = document.getElementById('user-modal-title');
-        const form = document.getElementById('user-form');
-
-        if (userId) {
-            modalTitle.textContent = 'Edit User';
-            // Load user data
-            this.loadUserForEdit(userId);
-        } else {
-            modalTitle.textContent = 'Add User';
-            form.reset();
-            document.getElementById('user-id').value = '';
-        }
-
-        modal.classList.remove('hidden');
-    }
-
-    /**
-     * Hide user modal
-     */
-    hideUserModal() {
-        const modal = document.getElementById('user-modal');
-        modal.classList.add('hidden');
-    }
-
-    /**
-     * Load user data for editing
-     */
-    async loadUserForEdit(userId) {
-        try {
-            const users = await API.get('/api/admin/users');
-            const user = users.find(u => u.id === userId);
-
-            if (user) {
-                document.getElementById('user-id').value = user.id;
-                document.getElementById('user-username').value = user.username;
-                document.getElementById('user-password').value = '';
-                document.getElementById('user-role').value = user.role;
-                document.getElementById('user-active').checked = user.is_active;
-            }
-        } catch (error) {
-            console.error('Failed to load user:', error);
-            showNotification('Failed to load user data', 'error');
-        }
-    }
-
-    /**
-     * Edit user
-     */
-    editUser(userId) {
-        this.showUserModal(userId);
-    }
-
-    /**
-     * Save user (create or update)
-     */
-    async saveUser() {
-        const userId = document.getElementById('user-id').value;
-        const username = document.getElementById('user-username').value;
-        const password = document.getElementById('user-password').value;
-        const role = document.getElementById('user-role').value.toUpperCase();
-        const isActive = document.getElementById('user-active').checked;
-
-        try {
-            if (userId) {
-                // Update existing user
-                const updateData = {
-                    role: role,
-                    is_active: isActive
-                };
-
-                if (password) {
-                    updateData.password = password;
+        document.querySelectorAll('.activate-worker-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    await apiRequest(`/api/admin/workers/${btn.dataset.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ status: 'ACTIVE' })
+                    });
+                    await loadWorkers();
+                } catch (error) {
+                    alert('Error activating worker: ' + error.message);
                 }
+            });
+        });
 
-                await API.put(`/api/admin/users/${userId}`, updateData);
-                showNotification('User updated successfully', 'success');
-            } else {
-                // Create new user
-                if (!password) {
-                    showNotification('Password is required for new users', 'error');
+        document.querySelectorAll('.remove-worker-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const workerName = btn.dataset.name;
+                if (!confirm(`Are you sure you want to remove worker "${workerName}"?\n\nThe worker can re-register if it's still active.`)) {
                     return;
                 }
-
-                await API.post('/api/admin/users', {
-                    username: username,
-                    password: password,
-                    role: role
-                });
-                showNotification('User created successfully', 'success');
-            }
-
-            this.hideUserModal();
-            this.loadUsers();
-        } catch (error) {
-            console.error('Failed to save user:', error);
-            showNotification(error.message || 'Failed to save user', 'error');
-        }
-    }
-
-    /**
-     * Delete user
-     */
-    async deleteUser(userId, username) {
-        if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
-            return;
-        }
-
-        try {
-            await API.delete(`/api/admin/users/${userId}`);
-            showNotification('User deleted successfully', 'success');
-            this.loadUsers();
-        } catch (error) {
-            console.error('Failed to delete user:', error);
-            showNotification(error.message || 'Failed to delete user', 'error');
-        }
-    }
-
-    // =========================================================================
-    // Worker Management
-    // =========================================================================
-
-    /**
-     * Load all workers
-     */
-    async loadWorkers() {
-        const loadingIndicator = document.getElementById('workers-loading');
-        const tableBody = document.getElementById('workers-table-body');
-        const pendingTableBody = document.getElementById('pending-workers-table-body');
-
-        try {
-            if (loadingIndicator) loadingIndicator.classList.remove('hidden');
-
-            const workers = await API.get('/api/admin/workers?include_pending=true');
-
-            const activeWorkers = workers.filter(w => w.status !== 'PENDING');
-            const pendingWorkers = workers.filter(w => w.status === 'PENDING');
-
-            // Populate active workers table
-            if (tableBody) {
-                tableBody.innerHTML = activeWorkers.map(worker => `
-                    <tr>
-                        <td>${worker.id}</td>
-                        <td>${escapeHtml(worker.hostname || 'N/A')}</td>
-                        <td><span class="badge badge-${worker.status.toLowerCase()}">${worker.status}</span></td>
-                        <td>${worker.last_heartbeat ? formatDate(worker.last_heartbeat) : 'Never'}</td>
-                        <td>
-                            <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
-                            B: ${escapeHtml(worker.path_b_prefix || 'Not set')}</small>
-                        </td>
-                        <td>
-                            ${worker.status === 'ACTIVE' ?
-                                `<button class="btn btn-sm btn-warning" onclick="adminPanel.suspendWorker(${worker.id})">Suspend</button>` :
-                                `<button class="btn btn-sm btn-success" onclick="adminPanel.activateWorker(${worker.id})">Activate</button>`
-                            }
-                            <button class="btn btn-sm btn-danger" onclick="adminPanel.deleteWorker(${worker.id}, '${escapeHtml(worker.name)}')">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            }
-
-            // Populate pending workers table
-            if (pendingTableBody) {
-                if (pendingWorkers.length === 0) {
-                    pendingTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No pending approvals</td></tr>';
-                } else {
-                    pendingTableBody.innerHTML = pendingWorkers.map(worker => `
-                        <tr>
-                            <td>${worker.id}</td>
-                            <td>${escapeHtml(worker.hostname || 'N/A')}</td>
-                            <td>${formatDate(worker.created_at)}</td>
-                            <td>
-                                <button class="btn btn-sm btn-success" onclick="adminPanel.approveWorker(${worker.id})">Approve</button>
-                                <button class="btn btn-sm btn-danger" onclick="adminPanel.deleteWorker(${worker.id}, '${escapeHtml(worker.name)}')">Reject</button>
-                            </td>
-                        </tr>
-                    `).join('');
+                try {
+                    await apiRequest(`/api/admin/workers/${btn.dataset.id}`, { method: 'DELETE' });
+                    await loadWorkers();
+                } catch (error) {
+                    alert('Error removing worker: ' + error.message);
                 }
-            }
-        } catch (error) {
-            console.error('Failed to load workers:', error);
-            showNotification('Failed to load workers', 'error');
-        } finally {
-            if (loadingIndicator) loadingIndicator.classList.add('hidden');
-        }
-    }
+            });
+        });
 
-    /**
-     * Approve pending worker
-     */
-    async approveWorker(workerId) {
-        try {
-            await API.post(`/api/admin/workers/${workerId}/approve`);
-            showNotification('Worker approved successfully', 'success');
-            this.loadWorkers();
-        } catch (error) {
-            console.error('Failed to approve worker:', error);
-            showNotification(error.message || 'Failed to approve worker', 'error');
-        }
-    }
+        // Pending workers
+        if (pendingWorkers.length === 0) {
+            document.getElementById('no-pending-workers').style.display = 'block';
+        } else {
+            document.getElementById('no-pending-workers').style.display = 'none';
 
-    /**
-     * Suspend worker
-     */
-    async suspendWorker(workerId) {
-        try {
-            await API.post(`/api/admin/workers/${workerId}/suspend`);
-            showNotification('Worker suspended successfully', 'success');
-            this.loadWorkers();
-        } catch (error) {
-            console.error('Failed to suspend worker:', error);
-            showNotification(error.message || 'Failed to suspend worker', 'error');
-        }
-    }
-
-    /**
-     * Activate worker (change from SUSPENDED to ACTIVE)
-     */
-    async activateWorker(workerId) {
-        try {
-            await API.put(`/api/admin/workers/${workerId}`, { status: 'ACTIVE' });
-            showNotification('Worker activated successfully', 'success');
-            this.loadWorkers();
-        } catch (error) {
-            console.error('Failed to activate worker:', error);
-            showNotification(error.message || 'Failed to activate worker', 'error');
-        }
-    }
-
-    /**
-     * Delete worker
-     */
-    async deleteWorker(workerId, workerName) {
-        if (!confirm(`Are you sure you want to delete worker "${workerName}"?`)) {
-            return;
-        }
-
-        try {
-            await API.delete(`/api/admin/workers/${workerId}`);
-            showNotification('Worker deleted successfully', 'success');
-            this.loadWorkers();
-        } catch (error) {
-            console.error('Failed to delete worker:', error);
-            showNotification(error.message || 'Failed to delete worker', 'error');
-        }
-    }
-
-    // =========================================================================
-    // Configuration Management
-    // =========================================================================
-
-    /**
-     * Load system configuration
-     */
-    async loadConfiguration() {
-        try {
-            const configs = await API.get('/api/admin/config');
-
-            // Store configs in object for easy access
-            this.config = {};
-            configs.forEach(cfg => {
-                this.config[cfg.key] = cfg;
+            pendingWorkers.forEach(worker => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${worker.id}</td>
+                    <td>${escapeHtml(worker.hostname || 'N/A')}</td>
+                    <td>${formatDate(worker.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary approve-worker-btn" data-id="${worker.id}">Approve</button>
+                        <button class="btn btn-sm btn-danger reject-worker-btn" data-id="${worker.id}">Reject</button>
+                    </td>
+                `;
+                pendingTbody.appendChild(row);
             });
 
-            // Populate form fields
-            this.populateConfigForm();
-        } catch (error) {
-            console.error('Failed to load configuration:', error);
-            showNotification('Failed to load configuration', 'error');
-        }
-    }
+            document.querySelectorAll('.approve-worker-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    try {
+                        await approveWorker(btn.dataset.id);
+                        await loadWorkers();
+                    } catch (error) {
+                        alert('Error approving worker: ' + error.message);
+                    }
+                });
+            });
 
-    /**
-     * Populate configuration form with current values
-     */
-    populateConfigForm() {
-        // Map form field names to config keys
-        const fieldMapping = {
-            'max_concurrent_users': 'max_concurrent_users',
-            'session_lifetime_days': 'session_lifetime_days',
-            'polka_auth_enabled': 'polka_auth_enabled',
-            'polka_auth_url': 'polka_auth_url',
-            'polka_auth_api_key': 'polka_auth_api_key',
-            'polka_auth_timeout': 'polka_auth_timeout',
-            'log_retention_days': 'log_retention_days',
-            'enable_log_compression': 'enable_log_compression',
-            'enable_syslog': 'enable_syslog',
-            'syslog_host': 'syslog_host',
-            'syslog_port': 'syslog_port',
-            'syslog_protocol': 'syslog_protocol',
-            'enable_remote_audit_api': 'enable_remote_audit_api',
-            'remote_audit_api_url': 'remote_audit_api_url',
-            'remote_audit_api_token': 'remote_audit_api_token',
-            'remote_audit_api_timeout': 'remote_audit_api_timeout',
-            'global_path_a_prefix': 'global_path_a_prefix',
-            'global_path_b_prefix': 'global_path_b_prefix',
-            'worker_heartbeat_interval': 'worker_heartbeat_interval',
-            'worker_heartbeat_timeout': 'worker_heartbeat_timeout',
-            'worker_timeout': 'worker_timeout',
-            'worker_retry_attempts': 'worker_retry_attempts',
-            'operation_timeout': 'operation_timeout',
-            'enable_auto_rollback': 'enable_auto_rollback',
-            'max_file_listing_items': 'max_file_listing_items',
-            'enable_lazy_loading': 'enable_lazy_loading',
-            'enable_ip_whitelist': 'enable_ip_whitelist',
-            'ip_whitelist': 'ip_whitelist',
-            'enable_rate_limiting': 'enable_rate_limiting',
-            'rate_limit_requests_per_minute': 'rate_limit_requests_per_minute',
-            'maintenance_mode': 'maintenance_mode',
-            'maintenance_message': 'maintenance_message'
-        };
-
-        Object.entries(fieldMapping).forEach(([fieldName, configKey]) => {
-            const element = document.querySelector(`[name="${fieldName}"]`);
-            if (!element || !this.config[configKey]) return;
-
-            const config = this.config[configKey];
-            const value = config.type === 'BOOLEAN'
-                ? config.value.toLowerCase() === 'true'
-                : config.value;
-
-            if (element.type === 'checkbox') {
-                element.checked = value;
-            } else if (element.tagName === 'TEXTAREA') {
-                element.value = value || '';
-            } else {
-                element.value = value || '';
-            }
-        });
-    }
-
-    /**
-     * Save system configuration
-     */
-    async saveConfiguration() {
-        const form = document.getElementById('config-form');
-        const formData = new FormData(form);
-
-        // Build config updates object
-        const updates = {};
-
-        for (const [fieldName, value] of formData.entries()) {
-            // Find corresponding config key
-            const configKey = fieldName;
-
-            // Handle different input types
-            const element = document.querySelector(`[name="${fieldName}"]`);
-            if (element.type === 'checkbox') {
-                updates[configKey] = element.checked ? 'true' : 'false';
-            } else {
-                updates[configKey] = value;
-            }
+            document.querySelectorAll('.reject-worker-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    try {
+                        await rejectWorker(btn.dataset.id);
+                        await loadWorkers();
+                    } catch (error) {
+                        alert('Error rejecting worker: ' + error.message);
+                    }
+                });
+            });
         }
 
-        // Also handle unchecked checkboxes (they don't appear in FormData)
-        const allCheckboxes = form.querySelectorAll('input[type="checkbox"]');
-        allCheckboxes.forEach(checkbox => {
-            const fieldName = checkbox.name;
-            if (!updates.hasOwnProperty(fieldName)) {
-                updates[fieldName] = 'false';
-            }
-        });
+    } catch (error) {
+        console.error('Failed to load workers:', error);
+        tbody.innerHTML = '<tr><td colspan="6">Error loading workers</td></tr>';
+    } finally {
+        loading.classList.add('hidden');
+    }
+}
 
+// =========================================================================
+// Configuration Management
+// =========================================================================
+
+function setupConfigEvents() {
+    document.getElementById('save-config-btn').addEventListener('click', async () => {
         try {
-            await API.post('/api/admin/config/bulk', { configs: updates });
-            showNotification('Configuration saved successfully', 'success');
-            this.loadConfiguration(); // Reload to confirm
+            await saveConfigurationData();
         } catch (error) {
             console.error('Failed to save configuration:', error);
-            showNotification(error.message || 'Failed to save configuration', 'error');
         }
-    }
-
-    /**
-     * Test VF paths (PathB and PathC) accessibility
-     */
-    async testVfPaths() {
-        const pathB = document.getElementById('config-path-b')?.value;
-        const pathC = document.getElementById('config-path-c')?.value;
-
-        if (!pathB && !pathC) {
-            showNotification('Please enter PathB or PathC to test', 'warning');
-            return;
-        }
-
-        try {
-            showNotification('Testing paths...', 'info');
-
-            const results = {};
-
-            // Test PathB if provided
-            if (pathB) {
-                try {
-                    const result = await API.post('/api/admin/test-path', {
-                        path: pathB,
-                        path_type: 'PathB'
-                    });
-                    results.pathB = result;
-                } catch (error) {
-                    results.pathB = { success: false, error: error.message };
-                }
-            }
-
-            // Test PathC if provided
-            if (pathC) {
-                try {
-                    const result = await API.post('/api/admin/test-path', {
-                        path: pathC,
-                        path_type: 'PathC'
-                    });
-                    results.pathC = result;
-                } catch (error) {
-                    results.pathC = { success: false, error: error.message };
-                }
-            }
-
-            // Display results
-            let message = 'Path Test Results:\n\n';
-            if (results.pathB) {
-                message += `PathB (${pathB}): ${results.pathB.success ? '✓ Accessible' : '✗ Not accessible - ' + results.pathB.error}\n`;
-            }
-            if (results.pathC) {
-                message += `PathC (${pathC}): ${results.pathC.success ? '✓ Accessible' : '✗ Not accessible - ' + results.pathC.error}\n`;
-            }
-
-            const allSuccess = Object.values(results).every(r => r.success);
-            showNotification(message, allSuccess ? 'success' : 'error');
-
-        } catch (error) {
-            console.error('Failed to test paths:', error);
-            showNotification(error.message || 'Failed to test paths', 'error');
-        }
-    }
-
-    // =========================================================================
-    // Logs Management
-    // =========================================================================
-
-    /**
-     * Load logging configuration
-     */
-    async loadLogConfiguration() {
-        try {
-            const config = await API.get('/api/admin/logs/config');
-
-            // Populate form
-            const syslogEnabled = document.getElementById('log-config-syslog-enabled');
-            if (syslogEnabled) syslogEnabled.checked = config.enable_syslog || false;
-
-            const syslogHost = document.getElementById('log-config-syslog-host');
-            if (syslogHost) syslogHost.value = config.syslog_host || '';
-
-            const syslogPort = document.getElementById('log-config-syslog-port');
-            if (syslogPort) syslogPort.value = config.syslog_port || 514;
-
-            const syslogProtocol = document.getElementById('log-config-syslog-protocol');
-            if (syslogProtocol) syslogProtocol.value = config.syslog_protocol || 'UDP';
-
-            const retention = document.getElementById('log-config-retention');
-            if (retention) retention.value = config.log_retention_days || 14;
-
-            const compression = document.getElementById('log-config-compression');
-            if (compression) compression.checked = config.enable_log_compression !== false;
-
-        } catch (error) {
-            console.error('Failed to load log configuration:', error);
-        }
-    }
-
-    /**
-     * Save logging configuration
-     */
-    async saveLogConfiguration() {
-        try {
-            const configs = [
-                {
-                    key: 'enable_syslog',
-                    value: document.getElementById('log-config-syslog-enabled')?.checked ? 'true' : 'false',
-                    type: 'BOOLEAN'
-                },
-                {
-                    key: 'syslog_host',
-                    value: document.getElementById('log-config-syslog-host')?.value || '',
-                    type: 'STRING'
-                },
-                {
-                    key: 'syslog_port',
-                    value: document.getElementById('log-config-syslog-port')?.value || '514',
-                    type: 'INT'
-                },
-                {
-                    key: 'syslog_protocol',
-                    value: document.getElementById('log-config-syslog-protocol')?.value || 'UDP',
-                    type: 'STRING'
-                },
-                {
-                    key: 'log_retention_days',
-                    value: document.getElementById('log-config-retention')?.value || '14',
-                    type: 'INT'
-                },
-                {
-                    key: 'enable_log_compression',
-                    value: document.getElementById('log-config-compression')?.checked ? 'true' : 'false',
-                    type: 'BOOLEAN'
-                }
-            ];
-
-            await API.post('/api/admin/config/bulk', { configs });
-            showNotification('Logging configuration saved successfully', 'success');
-        } catch (error) {
-            console.error('Failed to save log configuration:', error);
-            showNotification('Error saving log configuration: ' + error.message, 'error');
-        }
-    }
-
-    /**
-     * Load audit logs or application logs based on selected type
-     */
-    async loadLogs(offset = 0, limit = 100) {
-        const loadingIndicator = document.getElementById('logs-loading');
-        const logEntries = document.getElementById('log-entries');
-        const logTypeFilter = document.getElementById('log-type-filter');
-        const logLevelFilter = document.getElementById('log-level-filter');
-        const logSearch = document.getElementById('log-search');
-
-        const logType = logTypeFilter?.value || 'audit';
-        const level = logLevelFilter?.value || '';
-        const search = logSearch?.value || '';
-
-        try {
-            if (loadingIndicator) loadingIndicator.classList.remove('hidden');
-
-            let logs = [];
-
-            if (logType === 'application') {
-                // Load application logs from file
-                let url = `/api/admin/logs/application?offset=${offset}&limit=${limit}`;
-                if (level) url += `&level=${level}`;
-                if (search) url += `&search=${encodeURIComponent(search)}`;
-
-                const response = await API.get(url);
-                logs = response.logs || [];
-
-                if (logEntries) {
-                    if (offset === 0) {
-                        logEntries.innerHTML = '';
-                    }
-
-                    if (logs.length === 0 && offset === 0) {
-                        logEntries.innerHTML = '<div class="no-logs">No application logs found. Enable file logging in environment to view application logs.</div>';
-                    }
-
-                    logs.forEach(log => {
-                        const logEntry = document.createElement('div');
-                        logEntry.className = `log-entry log-level-${log.level.toLowerCase()}`;
-                        logEntry.innerHTML = `
-                            <div class="log-header">
-                                <span class="log-timestamp">${formatDate(log.timestamp)}</span>
-                                <span class="log-level badge badge-${log.level.toLowerCase()}">${log.level}</span>
-                                ${log.logger ? `<span class="log-logger">${escapeHtml(log.logger)}</span>` : ''}
-                            </div>
-                            <div class="log-message">${escapeHtml(log.message)}</div>
-                            ${log.extra ? `<div class="log-details"><pre>${escapeHtml(JSON.stringify(log.extra, null, 2))}</pre></div>` : ''}
-                        `;
-                        logEntries.appendChild(logEntry);
-                    });
-                }
-            } else {
-                // Load audit logs from database
-                const response = await API.get(`/api/admin/logs/stream?offset=${offset}&limit=${limit}`);
-                logs = response.logs || [];
-
-                if (logEntries) {
-                    if (offset === 0) {
-                        logEntries.innerHTML = '';
-                    }
-
-                    if (logs.length === 0 && offset === 0) {
-                        logEntries.innerHTML = '<div class="no-logs">No audit logs found.</div>';
-                    }
-
-                    logs.forEach(log => {
-                        const logEntry = document.createElement('div');
-                        logEntry.className = 'log-entry';
-                        logEntry.innerHTML = `
-                            <div class="log-header">
-                                <span class="log-timestamp">${formatDate(log.timestamp)}</span>
-                                <span class="log-action">${escapeHtml(log.action)}</span>
-                                ${log.username ? `<span class="log-user">${escapeHtml(log.username)}</span>` : (log.user_id ? `<span class="log-user">User ID: ${log.user_id}</span>` : '')}
-                            </div>
-                            <div class="log-details">
-                                ${log.details ? `<pre>${escapeHtml(JSON.stringify(log.details, null, 2))}</pre>` : ''}
-                            </div>
-                            <div class="log-meta">
-                                ${log.ip_address ? `<span>IP: ${escapeHtml(log.ip_address)}</span>` : ''}
-                            </div>
-                        `;
-                        logEntries.appendChild(logEntry);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load logs:', error);
-            showNotification('Error loading logs: ' + error.message, 'error');
-        } finally {
-            if (loadingIndicator) loadingIndicator.classList.add('hidden');
-        }
-    }
-
-    /**
-     * Load more logs (pagination)
-     */
-    loadMoreLogs() {
-        const currentCount = document.querySelectorAll('.log-entry').length;
-        this.loadLogs(currentCount, 100);
-    }
-
-    /**
-     * Export logs to file
-     */
-    async exportLogs() {
-        try {
-            const logs = await API.get('/api/admin/logs?offset=0&limit=10000');
-            const json = JSON.stringify(logs, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `audit-logs-${new Date().toISOString()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showNotification('Logs exported successfully', 'success');
-        } catch (error) {
-            console.error('Failed to export logs:', error);
-            showNotification('Failed to export logs', 'error');
-        }
-    }
-}
-
-// =========================================================================
-// Utility Functions
-// =========================================================================
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    });
 }
 
 /**
- * Debounce function
- */
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// Note: AdminPanel class is available for export but NOT auto-initialized
-// admin.html has its own implementation and only imports the standalone config functions
-// Auto-initialization was causing duplicate rendering of users and workers tables
-
-export default AdminPanel;
-
-/**
- * Standalone configuration loading function
- * Can be used independently without instantiating AdminPanel
+ * Load configuration data and populate form fields
  */
 export async function loadConfigurationData() {
     try {
-        const configs = await API.get('/api/admin/config');
+        const configs = await apiRequest('/api/admin/config');
 
-        // Convert array to map for easy access
         const configMap = {};
         configs.forEach(cfg => {
             configMap[cfg.key] = cfg;
         });
 
-        // Populate form fields - map element IDs to config keys
         const fieldMappings = {
             'config-max-concurrent-users': 'max_concurrent_users',
             'config-session-lifetime': 'session_lifetime_days',
@@ -960,16 +473,13 @@ export async function loadConfigurationData() {
         }
     } catch (error) {
         console.error('Failed to load configuration:', error);
-        throw error;
     }
 }
 
 /**
- * Standalone configuration saving function
- * Can be used independently without instantiating AdminPanel
+ * Save configuration data from form fields
  */
 export async function saveConfigurationData() {
-    // Map element IDs to config keys
     const fieldMappings = {
         'config-max-concurrent-users': 'max_concurrent_users',
         'config-session-lifetime': 'session_lifetime_days',
@@ -1018,11 +528,280 @@ export async function saveConfigurationData() {
     }
 
     try {
-        await API.post('/api/admin/config/bulk', { configs });
+        await apiRequest('/api/admin/config/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ configs })
+        });
         showNotification('Configuration saved successfully', 'success');
     } catch (error) {
         console.error('Failed to save configuration:', error);
         showNotification(error.message || 'Failed to save configuration', 'error');
         throw error;
     }
+}
+
+// =========================================================================
+// System Tab
+// =========================================================================
+
+function setupSystemEvents() {
+    document.getElementById('add-samba-path-btn')?.addEventListener('click', () => {
+        adminSystem.createSambaPath();
+    });
+
+    document.getElementById('refresh-stats-btn')?.addEventListener('click', () => {
+        adminSystem.loadSystemStats();
+    });
+
+    document.getElementById('refresh-worker-control-btn')?.addEventListener('click', () => {
+        loadWorkerControlList();
+    });
+}
+
+async function loadSystemTab() {
+    await Promise.all([
+        adminSystem.loadSambaPaths(),
+        adminSystem.loadSystemStats(),
+        loadWorkerControlList()
+    ]);
+}
+
+async function loadWorkerControlList() {
+    const container = document.getElementById('worker-control-list');
+    if (!container) return;
+
+    try {
+        const workers = await getWorkers();
+        const activeWorkers = workers.filter(w => w.status === 'ACTIVE' || w.status === 'active');
+
+        if (activeWorkers.length === 0) {
+            container.innerHTML = '<p class="no-data">No active workers available</p>';
+            return;
+        }
+
+        container.innerHTML = activeWorkers.map(worker => `
+            <div class="worker-control-card" data-worker-id="${worker.id}">
+                <div class="worker-control-header">
+                    <h4>${escapeHtml(worker.name || worker.hostname || 'Worker ' + worker.id)}</h4>
+                    <span class="badge badge-${worker.status?.toLowerCase() === 'active' ? 'success' : 'warning'}">${worker.status}</span>
+                </div>
+                <div class="worker-control-info">
+                    <div><strong>Hostname:</strong> ${escapeHtml(worker.hostname || 'N/A')}</div>
+                    <div><strong>Path A:</strong> ${escapeHtml(worker.path_a_prefix || 'Not set')}</div>
+                    <div><strong>Path B:</strong> ${escapeHtml(worker.path_b_prefix || 'Not set')}</div>
+                    <div><strong>Path C:</strong> ${escapeHtml(worker.path_c_prefix || 'Not set')}</div>
+                    <div><strong>Last Heartbeat:</strong> ${worker.last_heartbeat ? formatDate(worker.last_heartbeat) : 'Never'}</div>
+                </div>
+                <div class="worker-control-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'ping')">Ping</button>
+                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'get_status')">Status</button>
+                    <button class="btn btn-sm btn-primary" onclick="provisionWorkerDialog(${worker.id})">Provision</button>
+                    <button class="btn btn-sm btn-secondary" onclick="sendWorkerCmd(${worker.id}, 'reload_config')">Reload Config</button>
+                </div>
+                <div class="worker-cmd-result" id="worker-cmd-result-${worker.id}"></div>
+            </div>
+        `).join('');
+    } catch (error) {
+        container.innerHTML = `<p class="error">Error loading workers: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
+async function sendWorkerCmd(workerId, command) {
+    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+    resultDiv.innerHTML = '<span class="loading">Sending command...</span>';
+
+    try {
+        const response = await apiRequest(`/api/admin/workers/${workerId}/command`, {
+            method: 'POST',
+            body: JSON.stringify({ command, params: {}, timeout_seconds: 30 })
+        });
+
+        if (response.status === 'success') {
+            resultDiv.innerHTML = `<span class="success">${escapeHtml(command)}: ${escapeHtml(response.message || 'OK')} (${response.duration_ms}ms)</span>`;
+            if (response.data) {
+                resultDiv.innerHTML += `<pre>${escapeHtml(JSON.stringify(response.data, null, 2))}</pre>`;
+            }
+        } else {
+            resultDiv.innerHTML = `<span class="error">${escapeHtml(command)} failed: ${escapeHtml(response.message)}</span>`;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
+    }
+}
+
+async function provisionWorkerDialog(workerId) {
+    const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
+    const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
+    const pathC = prompt('Enter new Path C prefix (leave empty to keep current):');
+
+    if (!pathA && !pathB && !pathC) {
+        alert('No changes specified');
+        return;
+    }
+
+    const config = {};
+    if (pathA) config.path_a_prefix = pathA;
+    if (pathB) config.path_b_prefix = pathB;
+    if (pathC) config.path_c_prefix = pathC;
+
+    const resultDiv = document.getElementById(`worker-cmd-result-${workerId}`);
+    resultDiv.innerHTML = '<span class="loading">Provisioning worker...</span>';
+
+    try {
+        await apiRequest(`/api/admin/workers/${workerId}/provision`, {
+            method: 'POST',
+            body: JSON.stringify({ config, restart_required: false })
+        });
+        resultDiv.innerHTML = '<span class="success">Worker provisioned successfully</span>';
+        await loadWorkerControlList();
+    } catch (error) {
+        resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
+    }
+}
+
+// =========================================================================
+// Logs Management
+// =========================================================================
+
+function setupLogEvents() {
+    document.getElementById('refresh-logs-btn').addEventListener('click', () => loadLogs(false));
+    document.getElementById('load-more-logs').addEventListener('click', () => loadLogs(true));
+    document.getElementById('log-level-filter').addEventListener('change', () => loadLogs(false));
+
+    let searchTimeout;
+    document.getElementById('log-search').addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => loadLogs(false), 500);
+    });
+
+    document.getElementById('export-logs-btn').addEventListener('click', async () => {
+        try {
+            const response = await apiRequest('/api/admin/logs/stream?offset=0&limit=10000');
+            const json = JSON.stringify(response.logs || [], null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `audit-logs-${new Date().toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('Error exporting logs: ' + error.message);
+        }
+    });
+}
+
+async function loadLogs(append = false) {
+    const tbody = document.getElementById('logs-table-body');
+    const loading = document.getElementById('logs-loading');
+
+    if (!append) {
+        logsOffset = 0;
+        tbody.innerHTML = '';
+    }
+
+    loading.classList.remove('hidden');
+
+    try {
+        const level = document.getElementById('log-level-filter')?.value;
+        const search = document.getElementById('log-search')?.value;
+
+        const params = new URLSearchParams();
+        if (level) params.append('level', level);
+        if (search) params.append('search_query', search);
+        params.append('offset', logsOffset);
+        params.append('limit', logsLimit);
+
+        const response = await apiRequest(`/api/admin/logs/stream?${params.toString()}`);
+
+        if (!response || !response.logs) {
+            throw new Error('Invalid response from server');
+        }
+
+        const logs = response.logs;
+
+        if (logs.length === 0 && !append) {
+            tbody.innerHTML = '<tr><td colspan="8" class="no-data">No audit logs found</td></tr>';
+        }
+
+        logs.forEach(log => {
+            let sourceDir = '-';
+            let targetDir = '-';
+
+            if (log.details && (log.action === 'push' || log.action === 'pull')) {
+                if (log.details.source_directory) sourceDir = log.details.source_directory;
+                if (log.details.target_directory) targetDir = log.details.target_directory;
+            }
+
+            let fullTimestamp = 'N/A';
+            if (log.timestamp) {
+                const date = new Date(log.timestamp);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+                fullTimestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+            }
+
+            const relativeTime = formatRelativeTime(log.timestamp);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${fullTimestamp}</td>
+                <td>${relativeTime}</td>
+                <td>${escapeHtml(log.action)}</td>
+                <td>${escapeHtml(sourceDir)}</td>
+                <td>${escapeHtml(targetDir)}</td>
+                <td>${log.user_id || '-'}</td>
+                <td>${escapeHtml(log.username || 'System')}</td>
+                <td>${escapeHtml(log.ip_address || 'N/A')}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        logsOffset += logs.length;
+
+        const paginationInfo = document.getElementById('logs-pagination-info');
+        if (paginationInfo) {
+            paginationInfo.textContent = `Showing ${response.offset + 1} to ${response.offset + logs.length} of ${response.total_count}`;
+        }
+
+        if (!response.has_more) {
+            document.getElementById('load-more-logs').style.display = 'none';
+        } else {
+            document.getElementById('load-more-logs').style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="error">Error loading logs: ' + escapeHtml(error.message) + '</td></tr>';
+    } finally {
+        loading.classList.add('hidden');
+    }
+}
+
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'N/A';
+
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid date';
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+
+    return date.toLocaleString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
 }
