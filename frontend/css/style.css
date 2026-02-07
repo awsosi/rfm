@@ -543,6 +543,24 @@ select {
     margin: var(--spacing-md) auto;
 }
 
+/* Pagination */
+.pagination-info {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-right: var(--spacing-md);
+}
+
+.pagination-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pagination-ellipsis {
+    padding: 0 4px;
+    color: var(--text-muted);
+}
+
 /* ==========================================
    Operations Panel
    ========================================== */

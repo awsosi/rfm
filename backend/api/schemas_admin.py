@@ -274,6 +274,16 @@ class AppLogResponse(BaseModel):
     log_source: str  # "file", "memory"
 
 
+class LogConfigUpdate(BaseModel):
+    """Update logging configuration."""
+    enable_syslog: Optional[bool] = None
+    syslog_host: Optional[str] = None
+    syslog_port: Optional[int] = Field(None, ge=1, le=65535)
+    syslog_protocol: Optional[str] = Field(None, pattern="^(UDP|TCP)$")
+    log_retention_days: Optional[int] = Field(None, ge=1, le=365)
+    enable_log_compression: Optional[bool] = None
+
+
 class LogConfigResponse(BaseModel):
     """Current logging configuration."""
     log_level: str

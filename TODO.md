@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-02-06 (admin panel overhaul)
+> **Last Updated:** 2026-02-07 (health fix, config cleanup, log viewer overhaul)
 
 ---
 
@@ -33,16 +33,12 @@ None.
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
+- [ ] Verify System Health now shows database/elasticsearch/api/webui as healthy (was showing "Connection failed" due to SQLAlchemy text() bug)
+- [ ] Verify Logging Configuration in Logs tab: load, save, syslog runtime reconfiguration
+- [ ] Verify Audit Log Viewer: filter, pagination, export
+- [ ] Verify removed sections (Logging & Audit, Global Path Prefixes, VF Redesign) no longer appear in Configuration tab
 - [ ] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
-- [ ] Verify delete user works (showConfirm modal was missing from admin.html — now added)
-- [ ] Verify PolkaSQL users: can change role/active, cannot change username/password
-- [ ] Verify last-admin protection: cannot delete, demote, or deactivate the sole admin
-- [ ] Verify worker Ping/Status/Provision buttons in Worker Management tab
-- [ ] Verify System Statistics auto-refresh (5s interval when System tab is active)
-- [ ] Verify System Health shows database, elasticsearch, api, webui components
-- [ ] Verify theme is applied on Admin Panel (reads user preference from /api/preferences/me)
 - [ ] Verify fresh deployment with `ENABLE_POLKA_AUTH=true` in `.env`
-- [ ] Verify fresh deployment after migration consolidation
 
 ### Future Work
 - [ ] Worker: Integration testing of C# FileManagerWorker in staging
@@ -51,6 +47,12 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Health Fix, Config Cleanup, Log Viewer Overhaul (4 changes)
+1. **Fix System Health "Connection failed":** `database.py` `health_check()` used bare string `"SELECT 1"` — SQLAlchemy 2.0 requires `text()` wrapper. Exception was silently caught → returned `False`. Fixed with `text("SELECT 1")`.
+2. **Remove config sections:** Removed "Logging & Audit", "Global Path Prefixes", and "VF Redesign: Push/Pull Operation Paths" from Configuration tab (HTML + JS field mappings). Logging config is now exclusively in the Logs tab.
+3. **Logging Configuration (Logs tab):** Fully functional load/save. Frontend loads config from `GET /api/admin/logs/config` on tab open, saves via new `PUT /api/admin/logs/config` endpoint. Backend endpoint persists to DB config table and reconfigures syslog handler at runtime (removes old SyslogHandler, creates new one with updated host/port/protocol). Added `LogConfigUpdate` Pydantic schema.
+4. **Audit Log Viewer overhaul:** Renamed "Log Viewer" → "Audit Log Viewer". Removed "Audit Logs (Database) / Application Logs (File)" type selector. Removed log level selector. Renamed "Search logs..." → "Filter logs..." and implemented backend `search_query` filter (searches across `action`, `ip_address`, `details_json` via `ILIKE`). Fixed export (was requesting `limit=10000` exceeding API max of 1000 — now fetches in batches of 1000). Replaced "Load More" with proper page-number pagination (50 per page, prev/next, page numbers with ellipsis). Cleaned up dead code from `admin-system.js` (removed duplicate `loadLogs`/`renderLogs`).
 
 ### 2026-02-06 - Admin Panel Overhaul (11 fixes/changes)
 1. **Theme:** Admin Panel now loads and applies user's theme preference (system/light/dark) from Settings/Display Preferences

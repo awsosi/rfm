@@ -17,8 +17,6 @@ import AdminSystem from './admin-system.js';
 // =========================================================================
 
 let adminSystem = null;
-let logsOffset = 0;
-const logsLimit = 100;
 let statsRefreshInterval = null;
 let currentTab = 'users';
 let cachedUsers = null;
@@ -169,7 +167,8 @@ async function loadTabData(tabName) {
             await loadSystemTab();
             break;
         case 'logs':
-            await loadLogs();
+            await loadLogConfig();
+            await loadAuditLogs(false);
             break;
     }
 }
@@ -621,18 +620,6 @@ export async function loadConfigurationData() {
             'config-polka-auth-url': 'polka_auth_url',
             'config-polka-auth-api-key': 'polka_auth_api_key',
             'config-polka-auth-timeout': 'polka_auth_timeout',
-            'config-log-retention': 'log_retention_days',
-            'config-log-compression': 'enable_log_compression',
-            'config-syslog-enabled': 'enable_syslog',
-            'config-syslog-host': 'syslog_host',
-            'config-syslog-port': 'syslog_port',
-            'config-syslog-protocol': 'syslog_protocol',
-            'config-remote-audit-enabled': 'enable_remote_audit_api',
-            'config-remote-audit-url': 'remote_audit_api_url',
-            'config-remote-audit-token': 'remote_audit_api_token',
-            'config-remote-audit-timeout': 'remote_audit_api_timeout',
-            'config-path-a-prefix': 'global_path_a_prefix',
-            'config-path-b-prefix': 'global_path_b_prefix',
             'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
             'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
             'config-worker-timeout': 'worker_timeout',
@@ -678,18 +665,6 @@ export async function saveConfigurationData() {
         'config-polka-auth-url': 'polka_auth_url',
         'config-polka-auth-api-key': 'polka_auth_api_key',
         'config-polka-auth-timeout': 'polka_auth_timeout',
-        'config-log-retention': 'log_retention_days',
-        'config-log-compression': 'enable_log_compression',
-        'config-syslog-enabled': 'enable_syslog',
-        'config-syslog-host': 'syslog_host',
-        'config-syslog-port': 'syslog_port',
-        'config-syslog-protocol': 'syslog_protocol',
-        'config-remote-audit-enabled': 'enable_remote_audit_api',
-        'config-remote-audit-url': 'remote_audit_api_url',
-        'config-remote-audit-token': 'remote_audit_api_token',
-        'config-remote-audit-timeout': 'remote_audit_api_timeout',
-        'config-path-a-prefix': 'global_path_a_prefix',
-        'config-path-b-prefix': 'global_path_b_prefix',
         'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
         'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
         'config-worker-timeout': 'worker_timeout',
@@ -845,53 +820,123 @@ function renderSystemStats(stats, health) {
 // =========================================================================
 
 function setupLogEvents() {
-    document.getElementById('refresh-logs-btn').addEventListener('click', () => loadLogs(false));
-    document.getElementById('load-more-logs').addEventListener('click', () => loadLogs(true));
-    document.getElementById('log-level-filter').addEventListener('change', () => loadLogs(false));
+    document.getElementById('refresh-logs-btn').addEventListener('click', () => loadAuditLogs(false));
 
     let searchTimeout;
     document.getElementById('log-search').addEventListener('input', () => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => loadLogs(false), 500);
+        searchTimeout = setTimeout(() => loadAuditLogs(false), 500);
     });
 
-    document.getElementById('export-logs-btn').addEventListener('click', async () => {
-        try {
-            const response = await apiRequest('/api/admin/logs/stream?offset=0&limit=10000');
-            const json = JSON.stringify(response.logs || [], null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `audit-logs-${new Date().toISOString()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            alert('Error exporting logs: ' + error.message);
-        }
-    });
+    document.getElementById('export-logs-btn').addEventListener('click', exportAuditLogs);
+
+    // Logging Configuration save
+    document.getElementById('save-log-config-btn').addEventListener('click', saveLogConfig);
 }
 
-async function loadLogs(append = false) {
+async function loadLogConfig() {
+    try {
+        const config = await apiRequest('/api/admin/logs/config');
+
+        const el = (id) => document.getElementById(id);
+        if (el('log-config-syslog-enabled')) el('log-config-syslog-enabled').checked = config.enable_syslog;
+        if (el('log-config-syslog-host')) el('log-config-syslog-host').value = config.syslog_host || '';
+        if (el('log-config-syslog-port')) el('log-config-syslog-port').value = config.syslog_port || 514;
+        if (el('log-config-syslog-protocol')) el('log-config-syslog-protocol').value = config.syslog_protocol || 'UDP';
+        if (el('log-config-retention')) el('log-config-retention').value = config.log_retention_days || 14;
+        if (el('log-config-compression')) el('log-config-compression').checked = config.enable_log_compression;
+    } catch (error) {
+        console.error('Failed to load logging config:', error);
+    }
+}
+
+async function saveLogConfig() {
+    const el = (id) => document.getElementById(id);
+
+    const configData = {
+        enable_syslog: el('log-config-syslog-enabled')?.checked || false,
+        syslog_host: el('log-config-syslog-host')?.value || null,
+        syslog_port: parseInt(el('log-config-syslog-port')?.value) || 514,
+        syslog_protocol: el('log-config-syslog-protocol')?.value || 'UDP',
+        log_retention_days: parseInt(el('log-config-retention')?.value) || 14,
+        enable_log_compression: el('log-config-compression')?.checked || false,
+    };
+
+    // Don't send null syslog_host as empty string
+    if (!configData.syslog_host) configData.syslog_host = null;
+
+    try {
+        await apiRequest('/api/admin/logs/config', {
+            method: 'PUT',
+            body: JSON.stringify(configData)
+        });
+        showNotification('Logging configuration saved successfully', 'success');
+    } catch (error) {
+        console.error('Failed to save logging config:', error);
+        showNotification(error.message || 'Failed to save logging configuration', 'error');
+    }
+}
+
+async function exportAuditLogs() {
+    try {
+        // Fetch all logs in batches of 1000 (API max)
+        let allLogs = [];
+        let offset = 0;
+        const batchSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const response = await apiRequest(`/api/admin/logs/stream?offset=${offset}&limit=${batchSize}`);
+            if (response.logs && response.logs.length > 0) {
+                allLogs = allLogs.concat(response.logs);
+                offset += response.logs.length;
+                hasMore = response.has_more;
+            } else {
+                hasMore = false;
+            }
+        }
+
+        const json = JSON.stringify(allLogs, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showNotification(`Exported ${allLogs.length} audit log entries`, 'success');
+    } catch (error) {
+        showNotification('Error exporting logs: ' + error.message, 'error');
+    }
+}
+
+// =========================================================================
+// Audit Log State
+// =========================================================================
+
+let currentPage = 1;
+const pageSize = 50;
+let totalLogCount = 0;
+
+async function loadAuditLogs(preservePage = false) {
     const tbody = document.getElementById('logs-table-body');
     const loading = document.getElementById('logs-loading');
 
-    if (!append) {
-        logsOffset = 0;
-        tbody.innerHTML = '';
+    if (!preservePage) {
+        currentPage = 1;
     }
 
+    tbody.innerHTML = '';
     loading.classList.remove('hidden');
 
     try {
-        const level = document.getElementById('log-level-filter')?.value;
         const search = document.getElementById('log-search')?.value;
+        const offset = (currentPage - 1) * pageSize;
 
         const params = new URLSearchParams();
-        if (level) params.append('level', level);
         if (search) params.append('search_query', search);
-        params.append('offset', logsOffset);
-        params.append('limit', logsLimit);
+        params.append('offset', offset);
+        params.append('limit', pageSize);
 
         const response = await apiRequest(`/api/admin/logs/stream?${params.toString()}`);
 
@@ -900,8 +945,9 @@ async function loadLogs(append = false) {
         }
 
         const logs = response.logs;
+        totalLogCount = response.total_count;
 
-        if (logs.length === 0 && !append) {
+        if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" class="no-data">No audit logs found</td></tr>';
         }
 
@@ -943,18 +989,7 @@ async function loadLogs(append = false) {
             tbody.appendChild(tr);
         });
 
-        logsOffset += logs.length;
-
-        const paginationInfo = document.getElementById('logs-pagination-info');
-        if (paginationInfo) {
-            paginationInfo.textContent = `Showing ${response.offset + 1} to ${response.offset + logs.length} of ${response.total_count}`;
-        }
-
-        if (!response.has_more) {
-            document.getElementById('load-more-logs').style.display = 'none';
-        } else {
-            document.getElementById('load-more-logs').style.display = 'block';
-        }
+        renderPagination();
 
     } catch (error) {
         console.error('Failed to load logs:', error);
@@ -962,6 +997,61 @@ async function loadLogs(append = false) {
     } finally {
         loading.classList.add('hidden');
     }
+}
+
+function renderPagination() {
+    const container = document.getElementById('logs-pagination');
+    if (!container) return;
+
+    const totalPages = Math.max(1, Math.ceil(totalLogCount / pageSize));
+    const startEntry = totalLogCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const endEntry = Math.min(currentPage * pageSize, totalLogCount);
+
+    let html = `<span class="pagination-info">Showing ${startEntry}-${endEntry} of ${totalLogCount}</span>`;
+    html += '<div class="pagination-buttons">';
+
+    // Previous button
+    html += `<button class="btn btn-sm btn-secondary" ${currentPage <= 1 ? 'disabled' : ''} data-page="${currentPage - 1}">&laquo; Prev</button>`;
+
+    // Page numbers (show max 7 pages with ellipsis)
+    const maxVisible = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+        html += `<button class="btn btn-sm btn-secondary" data-page="1">1</button>`;
+        if (startPage > 2) html += '<span class="pagination-ellipsis">...</span>';
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const active = i === currentPage ? 'btn-primary' : 'btn-secondary';
+        html += `<button class="btn btn-sm ${active}" data-page="${i}">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += '<span class="pagination-ellipsis">...</span>';
+        html += `<button class="btn btn-sm btn-secondary" data-page="${totalPages}">${totalPages}</button>`;
+    }
+
+    // Next button
+    html += `<button class="btn btn-sm btn-secondary" ${currentPage >= totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">Next &raquo;</button>`;
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Attach click handlers
+    container.querySelectorAll('button[data-page]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page);
+            if (page >= 1 && page <= totalPages && page !== currentPage) {
+                currentPage = page;
+                loadAuditLogs(true);
+            }
+        });
+    });
 }
 
 function formatRelativeTime(timestamp) {

@@ -169,79 +169,6 @@
                                 </div>
                             </div>
 
-                            <!-- Logging Settings -->
-                            <div class="config-section">
-                                <h3>Logging & Audit</h3>
-                                <div class="form-group">
-                                    <label for="config-log-retention">Log Retention (days)</label>
-                                    <input type="number" id="config-log-retention" name="log_retention_days" class="form-control" min="1" max="365">
-                                    <small>Number of days to retain compressed logs</small>
-                                </div>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="config-log-compression" name="enable_log_compression">
-                                        Enable Automatic Log Compression
-                                    </label>
-                                </div>
-
-                                <h4 style="margin-top: 20px;">Syslog Integration</h4>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="config-syslog-enabled" name="enable_syslog">
-                                        Enable Syslog
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-syslog-host">Syslog Host</label>
-                                    <input type="text" id="config-syslog-host" name="syslog_host" class="form-control" placeholder="syslog.example.com">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-syslog-port">Syslog Port</label>
-                                    <input type="number" id="config-syslog-port" name="syslog_port" class="form-control" min="1" max="65535">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-syslog-protocol">Syslog Protocol</label>
-                                    <select id="config-syslog-protocol" name="syslog_protocol" class="form-control">
-                                        <option value="UDP">UDP</option>
-                                        <option value="TCP">TCP</option>
-                                    </select>
-                                </div>
-
-                                <h4 style="margin-top: 20px;">Remote Audit API</h4>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="config-remote-audit-enabled" name="enable_remote_audit_api">
-                                        Enable Remote Audit API Push
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-remote-audit-url">Remote Audit API URL</label>
-                                    <input type="text" id="config-remote-audit-url" name="remote_audit_api_url" class="form-control" placeholder="https://audit.example.com/api/logs">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-remote-audit-token">Remote Audit API Token</label>
-                                    <input type="password" id="config-remote-audit-token" name="remote_audit_api_token" class="form-control">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-remote-audit-timeout">Remote Audit Timeout (seconds)</label>
-                                    <input type="number" id="config-remote-audit-timeout" name="remote_audit_api_timeout" class="form-control" min="1" max="60">
-                                </div>
-                            </div>
-
-                            <!-- Path Prefixes -->
-                            <div class="config-section">
-                                <h3>Global Path Prefixes</h3>
-                                <p><small>Default path prefixes for all workers (can be overridden per worker)</small></p>
-                                <div class="form-group">
-                                    <label for="config-path-a-prefix">Global Path A Prefix</label>
-                                    <input type="text" id="config-path-a-prefix" name="global_path_a_prefix" class="form-control" placeholder="\\server\share\pathA">
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-path-b-prefix">Global Path B Prefix</label>
-                                    <input type="text" id="config-path-b-prefix" name="global_path_b_prefix" class="form-control" placeholder="\\server\share\pathB">
-                                </div>
-                            </div>
-
                             <!-- Worker Settings -->
                             <div class="config-section">
                                 <h3>Worker Configuration</h3>
@@ -323,29 +250,6 @@
                                 <div class="form-group">
                                     <label for="config-rate-limit">Rate Limit (requests/minute)</label>
                                     <input type="number" id="config-rate-limit" name="rate_limit_requests_per_minute" class="form-control" min="10" max="1000">
-                                </div>
-                            </div>
-
-                            <!-- VF Redesign: Push/Pull Operation Paths -->
-                            <div class="config-section">
-                                <h3>VF Redesign: Push/Pull Operation Paths</h3>
-                                <p class="config-description">
-                                    <strong>Note:</strong> These paths are used for the VF redesign PUSH and PULL operations.
-                                    Only admin users can configure these paths. Changes affect new operations only.
-                                </p>
-                                <div class="form-group">
-                                    <label for="config-path-b">PATH_B (Destination Path)</label>
-                                    <input type="text" id="config-path-b" name="path_b" class="form-control" placeholder="/path/to/destination">
-                                    <small>Destination path where PUSH operations copy directories</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-path-c">PATH_C (Archive Path)</label>
-                                    <input type="text" id="config-path-c" name="path_c" class="form-control" placeholder="/path/to/archive">
-                                    <small>Archive path where PUSH operations move original directories</small>
-                                </div>
-                                <div class="form-group">
-                                    <button type="button" class="btn btn-secondary" id="test-vf-paths-btn">Test Paths</button>
-                                    <small>Verify that PATH_B and PATH_C are accessible by the worker</small>
                                 </div>
                             </div>
 
@@ -435,23 +339,12 @@
                     </div>
                 </div>
 
-                <!-- Log Viewer Section -->
+                <!-- Audit Log Viewer Section -->
                 <div class="panel" style="margin-top: 20px;">
                     <div class="panel-header">
-                        <h2>Log Viewer</h2>
+                        <h2>Audit Log Viewer</h2>
                         <div class="log-controls">
-                            <select id="log-type-filter" class="form-control">
-                                <option value="audit">Audit Logs (Database)</option>
-                                <option value="application">Application Logs (File)</option>
-                            </select>
-                            <select id="log-level-filter" class="form-control">
-                                <option value="">All Levels</option>
-                                <option value="DEBUG">Debug</option>
-                                <option value="INFO">Info</option>
-                                <option value="WARNING">Warning</option>
-                                <option value="ERROR">Error</option>
-                            </select>
-                            <input type="text" id="log-search" class="form-control" placeholder="Search logs...">
+                            <input type="text" id="log-search" class="form-control" placeholder="Filter logs...">
                             <button class="btn btn-secondary" id="refresh-logs-btn">Refresh</button>
                             <button class="btn btn-secondary" id="export-logs-btn">Export</button>
                         </div>
@@ -475,8 +368,7 @@
                             </tbody>
                         </table>
                         <div class="loading-indicator hidden" id="logs-loading">Loading logs...</div>
-                        <div id="logs-pagination-info" style="margin-top: 10px; text-align: center;"></div>
-                        <button class="btn btn-secondary load-more" id="load-more-logs">Load More</button>
+                        <div id="logs-pagination" style="margin-top: 10px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;"></div>
                     </div>
                 </div>
             </div>
