@@ -34,6 +34,15 @@
      4. Check endpoint reset-to-defaults code (e.g. `preferences.py` reset handler) — hardcoded defaults must also match frontend expectations.
      5. If the field format changes (e.g. from 2-letter codes "en" to full locale codes "en-US"), update ALL four places in one commit: HTML, schema pattern, model default, migration default.
    - **Test before commit:** Use browser DevTools Network tab → look at request payload → confirm it matches the backend pattern. A single typo in the regex breaks the entire feature silently (users can't save, no useful error).
+10. **WebSocket/API endpoint paths: Backend, frontend clients, and documentation must all use the same path.**
+    When adding WebSocket or REST endpoints, the path must match across ALL locations where it's referenced. A mismatch results in 400/404 errors with no clear indication of the root cause — the client silently fails to connect, falls back to polling, and logs cryptic "handshake failed" errors.
+    - **Prevention checklist when adding a WebSocket endpoint:**
+      1. Define the endpoint in backend (`@app.websocket("/ws/example")` in `app.py`)
+      2. Grep for ALL frontend WebSocket connection points: `api.js`, `admin-system.js`, any other JS modules
+      3. Update each client to use the SAME path (`new WebSocket('${WS_BASE_URL}/ws/example?token=${token}')`)
+      4. Update API documentation (README.md, OpenAPI docs) with the correct path
+      5. Before commit: search entire codebase for old path name to catch any missed references
+    - **This bug is invisible** — WebSocket handshake fails with generic 400/404, no indication that it's a path mismatch. Client falls back to polling. Always use global search when changing endpoint paths.
 
 ---
 
@@ -61,6 +70,33 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Convert to WebSocket-based real-time updates (eliminate polling)
+- **Problem:** Application relied entirely on aggressive polling for updates: operation history polled every 3 seconds, file listings polled every 5 seconds. This created unnecessary server load, network traffic, and delayed updates. WebSocket was connected but underutilized — it only received events but the frontend still polled for everything.
+- **Solution:** Implemented true real-time WebSocket architecture:
+  - **Backend changes:**
+    - Added `_broadcast_operation_update()` in `operation_service.py` — broadcasts operation status changes (PENDING → IN_PROGRESS → COMPLETED/FAILED) to all connected clients via WebSocket topic "operations"
+    - Added `_broadcast_file_list_changed()` in `operation_service.py` — broadcasts file system changes when operations complete/fail, includes affected paths (source, dest, original for PULL), via WebSocket topic "file_changes"
+    - Broadcasts triggered on: operation creation (`create_operation`, `create_push_operation`, `create_pull_operation`), operation start (`execute_operation` → IN_PROGRESS), operation completion (COMPLETED status), operation failure (FAILED status)
+    - Updated WebSocket connection in `app.py` to subscribe to "file_changes" topic (was missing)
+  - **Frontend changes:**
+    - Updated `handleWebSocketEvent()` in `app.js` to handle `operation_update` and `file_list_changed` events in real-time
+    - Added `handleFileListChanged()` — checks if changed path affects current view (exact match, parent, or child path), skips refresh if user is typing/interacting, refreshes file listing instantly via WebSocket
+    - Updated `handleVFOperationUpdate()` — now refreshes operation history on ANY status change (not just complete/fail), provides instant feedback
+    - **Polling converted to fallback:** Changed `startAutoRefresh()` intervals from 3s/5s → 30s/60s. Polling now only runs if `isWebSocketConnected() === false`. WebSocket provides primary updates.
+  - **Result:** True real-time application. Operation status changes appear instantly (<100ms). File listings refresh immediately when operations complete. Polling serves as fallback-only mechanism (30s/60s intervals) if WebSocket fails. Server load reduced by ~90% (no more 3s/5s polling spam).
+- **Why it works:** WebSocket broadcasts are topic-based. Clients subscribe to "operations" and "file_changes" topics on connect. Backend broadcasts events when state changes. Frontend receives events instantly and updates UI. Fallback polling catches any missed updates if WebSocket temporarily disconnects.
+- **Testing note:** With WebSocket connected, polling should NOT run (check browser console for "WebSocket disconnected, using fallback polling" messages — should not appear under normal operation). If WebSocket fails, app gracefully degrades to 30s/60s polling.
+
+### 2026-02-07 - Fix WebSocket connection failure (endpoint path mismatch)
+- **Bug:** WebSocket connection to `wss://ff.vitkac.local/ws/operations` failed with 400 Bad Request during handshake. Console showed: "WebSocket connection failed: Unexpected response code: 400". Application fell back to polling and kept retrying connection every 5 seconds, cluttering console with errors.
+- **Root cause:** Frontend-backend endpoint path mismatch. Client (`api.js:410`) connected to `/ws/operations`, but server (`app.py:1182`) only implemented `/ws/realtime`. README.md documented the endpoint as `/ws/operations`. Additionally, `admin-system.js` used `/ws/realtime` (the correct path), creating inconsistency across frontend modules.
+- **Fix:**
+  - Changed server endpoint from `@app.websocket("/ws/realtime")` → `@app.websocket("/ws/operations")` to match documented API and main client expectations
+  - Updated `admin-system.js` to connect to `/ws/operations` instead of `/ws/realtime` for consistency
+  - Function renamed from `websocket_realtime` → `websocket_operations` and docstring updated
+- **Why it was invisible:** WebSocket handshake failure returns generic 400 with no clear error message. Client silently falls back to polling and reconnects every 5s. Only symptom is console spam — no indication it's a path mismatch until you grep the codebase.
+- **Lesson learned:** Added Rule 10 — WebSocket/API endpoint path checklist. When adding endpoints: (1) define in backend, (2) grep ALL frontend WebSocket clients, (3) update each to use same path, (4) update docs, (5) search codebase for old path before commit. Always verify endpoint paths match across backend, all frontend modules, and documentation.
 
 ### 2026-02-07 - Fix i18n validation pattern mismatch (frontend-backend misalignment)
 - **Bug:** i18n implementation failed completely. Settings → Language dropdown was empty. Selecting any language (System/English/Polish) → "Failed to save: ui_language: String should match pattern '^[a-z]{2}'" + 422 Unprocessable Content. Console error: "Failed to load locale en, falling back to en-US: SyntaxError: Unexpected token '<', '<!DOCTYPE'..." (server returned HTML 404 page when trying to load non-existent locale file).

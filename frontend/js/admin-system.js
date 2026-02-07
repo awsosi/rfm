@@ -198,7 +198,7 @@ class AdminSystem {
             return;
         }
 
-        const wsUrl = `ws://${window.location.host}/ws/realtime?token=${token}`;
+        const wsUrl = `ws://${window.location.host}/ws/operations?token=${token}`;
 
         this.websocket = new WebSocket(wsUrl);
 

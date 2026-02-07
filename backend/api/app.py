@@ -1179,8 +1179,8 @@ async def list_operations(
 # WebSocket
 # =============================================================================
 
-@app.websocket("/ws/realtime")
-async def websocket_realtime(
+@app.websocket("/ws/operations")
+async def websocket_operations(
     websocket: WebSocket,
     token: Optional[str] = None,
 ):
@@ -1194,7 +1194,7 @@ async def websocket_realtime(
     - Log streaming
 
     Usage:
-        ws://localhost:8000/ws/realtime?token=<jwt_token>
+        ws://localhost:8000/ws/operations?token=<jwt_token>
     """
     from api.websocket_manager import ws_manager
     from api.middleware.auth import decode_token
@@ -1220,7 +1220,7 @@ async def websocket_realtime(
         websocket,
         connection_id,
         user_id=user_id,
-        topics=["operations", "workers", "alerts", "logs"],
+        topics=["operations", "workers", "alerts", "logs", "file_changes"],
     )
 
     try:

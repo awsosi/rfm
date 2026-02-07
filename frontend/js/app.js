@@ -233,32 +233,46 @@ async function init() {
 
 /**
  * Start auto-refresh for Operation History and file listings (VF Redesign)
+ *
+ * NOTE: With WebSocket support, polling is now a FALLBACK mechanism only.
+ * WebSocket provides real-time updates. Polling runs at much longer intervals
+ * (30s for operations, 60s for files) to catch any updates if WebSocket fails.
  */
 function startAutoRefresh() {
-    // Refresh Operation History every 3 seconds
+    // Fallback polling: Refresh Operation History every 30 seconds (was 3s)
+    // Primary updates come via WebSocket 'operation_update' events
     state.autoRefreshIntervals.operationHistory = setInterval(async () => {
         try {
-            await loadOperationHistory(false);
+            // Only poll if WebSocket is not connected
+            if (!isWebSocketConnected()) {
+                console.log('WebSocket disconnected, using fallback polling for operations');
+                await loadOperationHistory(false);
+            }
         } catch (error) {
             console.error('Auto-refresh operation history failed:', error);
         }
-    }, 3000);
+    }, 30000);
 
-    // Refresh Path A file listing every 5 seconds
+    // Fallback polling: Refresh Path A file listing every 60 seconds (was 5s)
+    // Primary updates come via WebSocket 'file_list_changed' events
     state.autoRefreshIntervals.fileList = setInterval(async () => {
         try {
-            // Skip refresh if user is actively interacting
-            if (shouldSkipAutoRefresh('a')) {
-                console.log('Skipping auto-refresh: user is interacting');
-                return;
+            // Only poll if WebSocket is not connected
+            if (!isWebSocketConnected()) {
+                console.log('WebSocket disconnected, using fallback polling for file list');
+                // Skip refresh if user is actively interacting
+                if (shouldSkipAutoRefresh('a')) {
+                    console.log('Skipping auto-refresh: user is interacting');
+                    return;
+                }
+                await refreshPane('a');
             }
-            await refreshPane('a');
         } catch (error) {
             console.error('Auto-refresh file list failed:', error);
         }
-    }, 5000);
+    }, 60000);
 
-    console.log('Auto-refresh started for Operation History and file listings');
+    console.log('Fallback polling started (30s for operations, 60s for files). WebSocket provides real-time updates.');
 }
 
 /**
@@ -1094,21 +1108,45 @@ function handleWebSocketEvent(data) {
     const isVFRedesign = document.body.classList.contains('vf-redesign');
 
     if (isVFRedesign) {
-        // Handle VF redesign events
-        switch (data.type) {
+        // Handle VF redesign events (real-time WebSocket updates)
+        switch (data.event_type || data.type) {
             case 'operation_update':
-            case 'operation_started':
-            case 'operation_progress':
-            case 'operation_completed':
+                // Real-time operation status updates from backend
+                console.log('Real-time operation update via WebSocket:', data);
                 handleVFOperationUpdate(data);
                 break;
 
+            case 'operation_started':
+            case 'operation_progress':
+            case 'operation_completed':
+                // Legacy event types, handle same as operation_update
+                handleVFOperationUpdate(data);
+                break;
+
+            case 'file_list_changed':
+                // Real-time file listing change notification
+                console.log('Real-time file list changed via WebSocket:', data.path);
+                handleFileListChanged(data);
+                break;
+
             case 'file_changed':
-                // Refresh Path A if affected
+                // Legacy file change event
                 if (data.path && data.path.startsWith(state.panes.a.currentPath)) {
                     refreshPane('a');
                 }
                 break;
+
+            case 'connected':
+                // WebSocket connection established
+                console.log('WebSocket connection established');
+                break;
+
+            case 'heartbeat':
+                // Heartbeat/ping from server (no action needed)
+                break;
+
+            default:
+                console.log('Unhandled WebSocket event type:', data.event_type || data.type);
         }
     } else {
         // Legacy dual-pane event handling
@@ -1756,28 +1794,19 @@ function updateVFButtonStates() {
 }
 
 /**
- * Handle WebSocket operation updates for VF redesign
+ * Handle WebSocket operation updates for VF redesign (REAL-TIME)
  */
 function handleVFOperationUpdate(data) {
-    console.log('VF operation update received:', data);
+    console.log('[WebSocket] Real-time operation update:', data);
 
-    // Immediately refresh operation history when operations complete or fail
-    if (data.status === 'completed' || data.status === 'failed') {
-        console.log('Operation completed/failed, refreshing operation history');
-        loadOperationHistory(false).catch(err => {
-            console.error('Failed to refresh operation history:', err);
-        });
+    // Real-time refresh: Update operation history when ANY operation status changes
+    // This replaces the 3-second polling with instant updates
+    console.log('[WebSocket] Refreshing operation history in real-time');
+    loadOperationHistory(false).catch(err => {
+        console.error('Failed to refresh operation history:', err);
+    });
 
-        // Also refresh file listing if operation affected Path A
-        if (state.panes.a.currentPath) {
-            console.log('Refreshing file listing');
-            refreshPane('a').catch(err => {
-                console.error('Failed to refresh file listing:', err);
-            });
-        }
-    }
-
-    // Update individual operation in queue if it exists
+    // Update individual operation in queue if it exists (for instant UI feedback)
     if (data.operation_id) {
         const opIndex = state.operationQueue.operations.findIndex(
             op => op.id === data.operation_id
@@ -1794,6 +1823,41 @@ function handleVFOperationUpdate(data) {
             // Update UI
             updateOperationInQueueTable(state.operationQueue.operations[opIndex]);
         }
+    }
+}
+
+/**
+ * Handle WebSocket file list changed events for VF redesign (REAL-TIME)
+ * @param {Object} data - File list changed event data
+ */
+function handleFileListChanged(data) {
+    console.log('[WebSocket] Real-time file list changed:', data.path);
+
+    // Check if the changed path affects the currently displayed directory
+    const currentPath = state.panes.a.currentPath;
+
+    // Refresh if:
+    // 1. Changed path matches current path exactly, OR
+    // 2. Changed path is a parent of current path (affects current view), OR
+    // 3. Current path is a parent of changed path (subdirectory changed)
+    const shouldRefresh =
+        currentPath === data.path ||
+        currentPath.startsWith(data.path) ||
+        data.path.startsWith(currentPath);
+
+    if (shouldRefresh) {
+        // Skip refresh if user is actively interacting
+        if (shouldSkipAutoRefresh('a')) {
+            console.log('[WebSocket] Skipping refresh: user is interacting');
+            return;
+        }
+
+        console.log('[WebSocket] Refreshing file listing in real-time');
+        refreshPane('a').catch(err => {
+            console.error('Failed to refresh file listing:', err);
+        });
+    } else {
+        console.log('[WebSocket] Changed path does not affect current view, skipping refresh');
     }
 }
 

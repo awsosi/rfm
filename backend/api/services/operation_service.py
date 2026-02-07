@@ -63,6 +63,97 @@ class OperationService:
         self.settings = settings
         self.worker_service = worker_service
 
+    async def _broadcast_operation_update(
+        self,
+        operation: Operation,
+        user_name: Optional[str] = None,
+    ) -> None:
+        """
+        Broadcast operation update via WebSocket.
+
+        Args:
+            operation: Operation that was updated
+            user_name: Username (optional)
+        """
+        try:
+            from api.websocket_manager import ws_manager
+
+            await ws_manager.broadcast(
+                {
+                    "event_type": "operation_update",
+                    "type": "operation_update",
+                    "operation_id": operation.id,
+                    "status": operation.status.value if operation.status else None,
+                    "operation_type": operation.type.value if operation.type else None,
+                    "user_name": user_name,
+                    "source_path": operation.source_path,
+                    "dest_path": operation.dest_path,
+                    "error_msg": operation.error_msg,
+                },
+                topic="operations"
+            )
+            logger.debug(f"Broadcast operation {operation.id} update: {operation.status}")
+        except Exception as exc:
+            logger.warning(f"Failed to broadcast operation update: {exc}")
+
+    async def _broadcast_file_list_changed(
+        self,
+        operation: Operation,
+    ) -> None:
+        """
+        Broadcast file listing change via WebSocket.
+
+        Notifies clients that file listings may have changed for affected paths.
+
+        Args:
+            operation: Operation that affected file system
+        """
+        try:
+            from api.websocket_manager import ws_manager
+            import os
+
+            # Collect affected paths
+            affected_paths = []
+
+            if operation.source_path:
+                # Get parent directory of source path for refresh
+                source_parent = os.path.dirname(operation.source_path.rstrip('/\\'))
+                if not source_parent or source_parent == operation.source_path:
+                    # If at root, use the source path itself
+                    source_parent = operation.source_path
+                affected_paths.append(source_parent)
+
+            if operation.dest_path:
+                # Get parent directory of dest path for refresh
+                dest_parent = os.path.dirname(operation.dest_path.rstrip('/\\'))
+                if not dest_parent or dest_parent == operation.dest_path:
+                    dest_parent = operation.dest_path
+                affected_paths.append(dest_parent)
+
+            if operation.original_path:
+                # For PULL operations, also refresh original path
+                original_parent = os.path.dirname(operation.original_path.rstrip('/\\'))
+                if not original_parent or original_parent == operation.original_path:
+                    original_parent = operation.original_path
+                if original_parent not in affected_paths:
+                    affected_paths.append(original_parent)
+
+            # Broadcast file list changed event for each affected path
+            for path in affected_paths:
+                await ws_manager.broadcast(
+                    {
+                        "event_type": "file_list_changed",
+                        "type": "file_list_changed",
+                        "path": path,
+                        "operation_id": operation.id,
+                        "operation_type": operation.type.value if operation.type else None,
+                    },
+                    topic="file_changes"
+                )
+                logger.debug(f"Broadcast file list changed for path: {path}")
+        except Exception as exc:
+            logger.warning(f"Failed to broadcast file list changed: {exc}")
+
     async def _index_operation_in_elasticsearch(
         self, operation: Operation, user_name: Optional[str] = None, db: Optional[AsyncSession] = None
     ) -> None:
@@ -165,6 +256,9 @@ class OperationService:
         # Index in Elasticsearch
         await self._index_operation_in_elasticsearch(operation, user.username, db)
 
+        # Broadcast operation creation via WebSocket
+        await self._broadcast_operation_update(operation, user.username)
+
         return operation
 
     async def execute_operation(
@@ -196,6 +290,9 @@ class OperationService:
         # Update in Elasticsearch
         await self._index_operation_in_elasticsearch(operation, None, db)
 
+        # Broadcast operation start via WebSocket
+        await self._broadcast_operation_update(operation)
+
         try:
             # Get workers
             workers = await self._get_operation_workers(operation, db)
@@ -225,6 +322,12 @@ class OperationService:
             # Update in Elasticsearch
             await self._index_operation_in_elasticsearch(operation, None, db)
 
+            # Broadcast operation completion via WebSocket
+            await self._broadcast_operation_update(operation)
+
+            # Broadcast file listing changes for affected paths
+            await self._broadcast_file_list_changed(operation)
+
             return operation
 
         except Exception as exc:
@@ -238,6 +341,12 @@ class OperationService:
 
             # Update in Elasticsearch
             await self._index_operation_in_elasticsearch(operation, None, db)
+
+            # Broadcast operation failure via WebSocket
+            await self._broadcast_operation_update(operation)
+
+            # Broadcast file listing changes for affected paths (operation may have partially completed)
+            await self._broadcast_file_list_changed(operation)
 
             # Attempt automatic rollback if enabled
             # PUSH/PULL operations should not use auto-rollback (they have their own undo mechanism via PULL)
@@ -665,6 +774,9 @@ class OperationService:
         # Index in Elasticsearch
         await self._index_operation_in_elasticsearch(operation, user.username, db)
 
+        # Broadcast operation creation via WebSocket
+        await self._broadcast_operation_update(operation, user.username)
+
         return operation
 
     async def create_pull_operation(
@@ -758,6 +870,9 @@ class OperationService:
 
         # Index in Elasticsearch
         await self._index_operation_in_elasticsearch(operation, user.username, db)
+
+        # Broadcast operation creation via WebSocket
+        await self._broadcast_operation_update(operation, user.username)
 
         return operation
 
