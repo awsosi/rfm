@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Explorer - File Manager (VF Redesign)</title>
+    <title data-i18n="explorer.pageTitle">File Explorer - File Manager (VF Redesign)</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/responsive.css">
 </head>
@@ -11,16 +11,16 @@
     <!-- Header -->
     <header class="app-header">
         <div class="header-left">
-            <h1>File Manager</h1>
+            <h1 data-i18n="app.title">File Manager</h1>
         </div>
         <div class="header-right">
             <span class="user-info" id="user-info">
                 <span class="user-name" id="user-name"></span>
                 <span class="user-role" id="user-role"></span>
             </span>
-            <button class="btn btn-secondary" id="admin-btn" style="display: none;">Admin Panel</button>
-            <button class="btn btn-secondary" id="settings-btn">Settings</button>
-            <button class="btn btn-secondary" id="logout-btn">Logout</button>
+            <button class="btn btn-secondary" id="admin-btn" style="display: none;" data-i18n="explorer.adminPanel">Admin Panel</button>
+            <button class="btn btn-secondary" id="settings-btn" data-i18n="explorer.settings">Settings</button>
+            <button class="btn btn-secondary" id="logout-btn" data-i18n="explorer.logout">Logout</button>
         </div>
     </header>
 
@@ -30,35 +30,35 @@
             <!-- Path A Pane (Single Pane) -->
             <div class="pane pane-single" id="pane-a">
                 <div class="pane-header">
-                    <h2>Path A</h2>
+                    <h2 data-i18n="explorer.pathA">Path A</h2>
                     <div class="pane-controls">
-                        <button class="btn-icon" id="refresh-a" title="Refresh">&#x21bb;</button>
+                        <button class="btn-icon" id="refresh-a" data-i18n-title="explorer.refresh" title="Refresh">&#x21bb;</button>
                     </div>
                 </div>
 
                 <div class="breadcrumb-container">
-                    <input type="text" class="breadcrumb-input" id="path-input-a" placeholder="A:/path/to/directory">
-                    <button class="btn btn-sm" id="path-go-a">Go</button>
+                    <input type="text" class="breadcrumb-input" id="path-input-a" data-i18n-placeholder="explorer.pathPlaceholder" placeholder="A:/path/to/directory">
+                    <button class="btn btn-sm" id="path-go-a" data-i18n="explorer.go">Go</button>
                 </div>
 
                 <div class="search-container">
-                    <input type="text" class="search-input" id="search-a" placeholder="Search directories...">
-                    <button class="btn btn-sm" id="search-btn-a">Search</button>
+                    <input type="text" class="search-input" id="search-a" data-i18n-placeholder="explorer.searchPlaceholder" placeholder="Search directories...">
+                    <button class="btn btn-sm" id="search-btn-a" data-i18n="explorer.search">Search</button>
                 </div>
 
                 <div class="file-list-container">
                     <table class="file-list" id="file-list-a">
                         <thead>
                             <tr>
-                                <th class="col-select">Select</th>
+                                <th class="col-select" data-i18n="explorer.selectColumn">Select</th>
                                 <th class="col-name sortable" data-sort-by="name">
-                                    Name <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.nameColumn">Name</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-size sortable" data-sort-by="size">
-                                    Size <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.sizeColumn">Size</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-modified sortable sorted-desc" data-sort-by="modified">
-                                    Modified <span class="sort-arrow">▼</span>
+                                    <span data-i18n="explorer.modifiedColumn">Modified</span> <span class="sort-arrow">▼</span>
                                 </th>
                             </tr>
                         </thead>
@@ -66,18 +66,18 @@
                             <!-- Directories will be loaded here -->
                         </tbody>
                     </table>
-                    <div class="loading-indicator hidden" id="loading-a">Loading...</div>
-                    <div class="no-files hidden" id="no-files-a">No directories found</div>
-                    <button class="btn btn-secondary load-more hidden" id="load-more-a">Load More</button>
+                    <div class="loading-indicator hidden" id="loading-a" data-i18n="explorer.loading">Loading...</div>
+                    <div class="no-files hidden" id="no-files-a" data-i18n="explorer.noDirectoriesFound">No directories found</div>
+                    <button class="btn btn-secondary load-more hidden" id="load-more-a" data-i18n="explorer.loadMore">Load More</button>
                 </div>
             </div>
 
             <!-- Action Buttons (Between Panes) -->
             <div class="action-buttons-container">
-                <button class="btn btn-primary btn-push" id="push-btn" title="Copy to PATH_B and archive to PATH_C" disabled>
+                <button class="btn btn-primary btn-push" id="push-btn" data-i18n-title="explorer.pushButtonTitle" data-i18n="explorer.pushButton" title="Copy to PATH_B and archive to PATH_C" disabled>
                     Push &gt;
                 </button>
-                <button class="btn btn-secondary btn-pull" id="pull-btn" title="Revert selected operation from Operation Queue" disabled>
+                <button class="btn btn-secondary btn-pull" id="pull-btn" data-i18n-title="explorer.pullButtonTitle" data-i18n="explorer.pullButton" title="Revert selected operation from Operation Queue" disabled>
                     &lt; Pull
                 </button>
             </div>
@@ -85,25 +85,25 @@
             <!-- Operation History (Right Side) -->
             <div class="operation-queue-panel" id="operation-queue-panel">
                 <div class="queue-header">
-                    <h2>Operation History</h2>
+                    <h2 data-i18n="explorer.operationHistory">Operation History</h2>
                     <div class="queue-search">
-                        <input type="text" id="queue-search-input" class="search-input" placeholder="Search operations..." />
-                        <button class="btn btn-sm" id="queue-search-btn">Search</button>
-                        <button class="btn btn-sm" id="queue-clear-search-btn">Clear</button>
+                        <input type="text" id="queue-search-input" class="search-input" data-i18n-placeholder="explorer.searchOperations" placeholder="Search operations..." />
+                        <button class="btn btn-sm" id="queue-search-btn" data-i18n="explorer.search">Search</button>
+                        <button class="btn btn-sm" id="queue-clear-search-btn" data-i18n="explorer.clear">Clear</button>
                     </div>
                     <div class="queue-controls">
-                        <button class="btn-icon" id="refresh-queue" title="Refresh Queue">&#x21bb;</button>
-                        <select id="queue-filter-status" class="filter-select" title="Filter by status">
-                            <option value="">All Statuses</option>
-                            <option value="PENDING">Pending</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="COMPLETED">Completed</option>
-                            <option value="FAILED">Failed</option>
+                        <button class="btn-icon" id="refresh-queue" data-i18n-title="explorer.refresh" title="Refresh Queue">&#x21bb;</button>
+                        <select id="queue-filter-status" class="filter-select" data-i18n-title="explorer.filterByStatus" title="Filter by status">
+                            <option value="" data-i18n="explorer.allStatuses">All Statuses</option>
+                            <option value="PENDING" data-i18n="explorer.pending">Pending</option>
+                            <option value="IN_PROGRESS" data-i18n="explorer.inProgress">In Progress</option>
+                            <option value="COMPLETED" data-i18n="explorer.completed">Completed</option>
+                            <option value="FAILED" data-i18n="explorer.failed">Failed</option>
                         </select>
-                        <select id="queue-filter-type" class="filter-select" title="Filter by type">
-                            <option value="">All Types</option>
-                            <option value="PUSH">Push</option>
-                            <option value="PULL">Pull</option>
+                        <select id="queue-filter-type" class="filter-select" data-i18n-title="explorer.filterByType" title="Filter by type">
+                            <option value="" data-i18n="explorer.allTypes">All Types</option>
+                            <option value="PUSH" data-i18n="explorer.push">Push</option>
+                            <option value="PULL" data-i18n="explorer.pull">Pull</option>
                         </select>
                     </div>
                 </div>
@@ -112,24 +112,24 @@
                     <table class="queue-table" id="queue-table">
                         <thead>
                             <tr>
-                                <th class="col-select">Select</th>
+                                <th class="col-select" data-i18n="explorer.selectColumn">Select</th>
                                 <th class="col-id sortable" data-sort-by="id">
-                                    ID <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.idColumn">ID</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-type sortable" data-sort-by="type">
-                                    Type <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.typeColumn">Type</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-status sortable" data-sort-by="status">
-                                    Status <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.statusColumn">Status</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-directory sortable" data-sort-by="directory">
-                                    Directory <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.directoryColumn">Directory</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-user sortable" data-sort-by="user">
-                                    User <span class="sort-arrow"></span>
+                                    <span data-i18n="explorer.userColumn">User</span> <span class="sort-arrow"></span>
                                 </th>
                                 <th class="col-timestamp sortable sorted-desc" data-sort-by="timestamp">
-                                    Timestamp <span class="sort-arrow">▼</span>
+                                    <span data-i18n="explorer.timestampColumn">Timestamp</span> <span class="sort-arrow">▼</span>
                                 </th>
                             </tr>
                         </thead>
@@ -137,9 +137,9 @@
                             <!-- Operations will be loaded here -->
                         </tbody>
                     </table>
-                    <div class="loading-indicator hidden" id="loading-queue">Loading operations...</div>
-                    <div class="no-operations hidden" id="no-operations">No operations in history</div>
-                    <button class="btn btn-secondary load-more hidden" id="load-more-queue">Load More</button>
+                    <div class="loading-indicator hidden" id="loading-queue" data-i18n="explorer.loadingOperations">Loading operations...</div>
+                    <div class="no-operations hidden" id="no-operations" data-i18n="explorer.noOperations">No operations in history</div>
+                    <button class="btn btn-secondary load-more hidden" id="load-more-queue" data-i18n="explorer.loadMore">Load More</button>
                 </div>
             </div>
         </div>
@@ -148,8 +148,8 @@
     <!-- Context Menu -->
     <div class="context-menu hidden" id="context-menu">
         <ul>
-            <li data-action="open">Open</li>
-            <li data-action="push">Push &gt;</li>
+            <li data-action="open" data-i18n="contextMenu.open">Open</li>
+            <li data-action="push" data-i18n="contextMenu.push">Push &gt;</li>
         </ul>
     </div>
 
@@ -157,7 +157,7 @@
     <div class="modal hidden" id="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="modal-title">Confirm Action</h3>
+                <h3 id="modal-title" data-i18n="modal.confirmAction">Confirm Action</h3>
                 <button class="modal-close" id="modal-close">&times;</button>
             </div>
             <div class="modal-body" id="modal-body">
@@ -167,8 +167,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
-                <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+                <button class="btn btn-secondary" id="modal-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm" data-i18n="modal.confirm">Confirm</button>
             </div>
         </div>
     </div>
@@ -177,56 +177,59 @@
     <div class="modal hidden" id="settings-modal">
         <div class="modal-content modal-wide">
             <div class="modal-header">
-                <h3 id="settings-modal-title">User Settings</h3>
+                <h3 id="settings-modal-title" data-i18n="settings.title">User Settings</h3>
                 <button class="modal-close" id="settings-modal-close">&times;</button>
             </div>
             <div class="modal-body" id="settings-modal-body">
                 <form id="settings-form">
                     <div class="settings-section">
-                        <h4>Display Preferences</h4>
+                        <h4 data-i18n="settings.displayPreferences">Display Preferences</h4>
 
                         <div class="form-group">
-                            <label for="ui-theme">Theme:</label>
+                            <label for="ui-theme" data-i18n="settings.theme">Theme:</label>
                             <select id="ui-theme" name="ui_theme" class="form-control">
-                                <option value="system">System (Auto)</option>
-                                <option value="light">Light</option>
-                                <option value="dark">Dark</option>
+                                <option value="system" data-i18n="settings.themeSystem">System (Auto)</option>
+                                <option value="light" data-i18n="settings.themeLight">Light</option>
+                                <option value="dark" data-i18n="settings.themeDark">Dark</option>
                             </select>
-                            <small class="form-text">System theme follows your browser/OS preference</small>
+                            <small class="form-text" data-i18n="settings.themeHelp">System theme follows your browser/OS preference</small>
                         </div>
 
                         <div class="form-group">
-                            <label for="ui-language">Language:</label>
+                            <label for="ui-language" data-i18n="settings.language">Language:</label>
                             <select id="ui-language" name="ui_language" class="form-control">
-                                <option value="en">English</option>
+                                <option value="auto" data-i18n="settings.languageSystem">System (Auto)</option>
+                                <option value="en-US" data-i18n="settings.languageEnglish">English</option>
+                                <option value="pl-PL" data-i18n="settings.languagePolish">Polish</option>
                             </select>
-                            <small class="form-text">More languages coming soon (i18n implementation planned)</small>
+                            <small class="form-text" data-i18n="settings.languageHelp">System setting follows your browser/OS preference</small>
                         </div>
 
                     </div>
 
                     <div class="settings-section">
-                        <h4>Session Preferences</h4>
+                        <h4 data-i18n="settings.sessionPreferences">Session Preferences</h4>
 
                         <div class="form-group">
                             <label for="remember-last-paths">
                                 <input type="checkbox" id="remember-last-paths" name="remember_last_paths" checked>
-                                Remember last visited Path A subdirectory
+                                <span data-i18n="settings.rememberLastPaths">Remember last visited Path A subdirectory</span>
                             </label>
-                            <small class="form-text">When enabled, your last visited directory will be restored on login. If the path no longer exists, you'll be taken to the root.</small>
+                            <small class="form-text" data-i18n="settings.rememberLastPathsHelp">When enabled, your last visited directory will be restored on login. If the path no longer exists, you'll be taken to the root.</small>
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="settings-reset">Reset to Defaults</button>
-                <button class="btn btn-secondary" id="settings-cancel">Cancel</button>
-                <button class="btn btn-primary" id="settings-save">Save</button>
+                <button class="btn btn-secondary" id="settings-reset" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
+                <button class="btn btn-secondary" id="settings-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="settings-save" data-i18n="settings.save">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
+    <script type="module" src="../js/i18n.js"></script>
     <script type="module" src="../js/app.js"></script>
 </body>
 </html>

@@ -37,21 +37,37 @@ None.
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
-- [ ] **Rebuild Docker image** after `elasticsearch[async]` fix, verify Elasticsearch shows "Connected" in System Health
-- [ ] Verify remote syslog: enable via Logs tab config, perform an action, confirm messages arrive at syslog server
-- [ ] Verify syslog persists across restart (enabled in DB → `_reconfigure_logging_from_db()` picks it up)
-- [ ] Verify Logging Configuration in Logs tab: load, save, syslog runtime reconfiguration
-- [ ] Verify Audit Log Viewer: filter, pagination, export
-- [ ] Verify removed sections (Logging & Audit, Global Path Prefixes, VF Redesign) no longer appear in Configuration tab
-- [ ] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
+- [x] **Rebuild Docker image** after `elasticsearch[async]` fix, verify Elasticsearch shows "Connected" in System Health
+- [x] Verify syslog persists across restart (enabled in DB → `_reconfigure_logging_from_db()` picks it up)
+- [x] Verify Logging Configuration in Logs tab: load, save, syslog runtime reconfiguration
+- [x] Verify Audit Log Viewer: filter, pagination, export
+- [x] Verify removed sections (Logging & Audit, Global Path Prefixes, VF Redesign) no longer appear in Configuration tab
+- [x] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
+- [x] Worker: Integration testing of C# FileManagerWorker in staging
 
 ### Future Work
-- [ ] Worker: Integration testing of C# FileManagerWorker in staging
+- [ ] Verify remote syslog: enable via Logs tab config, perform an action, confirm messages arrive at syslog server
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
 
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Full i18n implementation for user-facing pages
+- Implemented internationalization (i18n) system for login page, file explorer, user settings, and all toasts/popups
+- Created modular locales system: `locales/locales.json` lists available locales `["en-US", "pl-PL"]`
+- Created `locales/en-US.json` with all English translations, `locales/pl-PL.json` as placeholder (user will complete)
+- Created `js/i18n.js` module: auto-detects browser language, loads locale files with fallback to en-US, provides `t()` translation function with parameter replacement
+- Auto-detection: checks `navigator.languages`, finds exact match or language prefix match (e.g., `pl` matches `pl-PL`), defaults to `en-US`
+- User Settings → Language selector: options are "System (Auto)" (default), "English", "Polish"
+  - "System (Auto)" follows browser/OS preference
+  - Changing language saves to preferences and applies immediately via `setLocale()` which triggers page re-translation
+- Updated HTML: all user-visible text uses `data-i18n`, `data-i18n-placeholder`, `data-i18n-title` attributes
+- Updated JavaScript: all toast messages, error messages, confirmations use `t()` function
+- Settings modal updated: replaced "More languages coming soon (i18n implementation planned)" with "System setting follows your browser/OS preference"
+- `translatePage()` scans DOM for i18n attributes and applies translations; re-runs on locale change
+- Login page, explorer page, settings modal, context menu, modals all fully internationalized
+- Page titles update dynamically when locale changes
 
 ### 2026-02-07 - Restore Redis health check to System Health tile
 - Redis component was removed from System Health during Admin Panel overhaul (commit 85eecc6) along with other placeholder checks

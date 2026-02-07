@@ -4,6 +4,7 @@
  */
 
 import { checkAuth, logout, getCurrentUser, isAdmin, setupAutoRefresh } from './auth.js';
+import { initI18n, translatePage, t, setLocale } from './i18n.js';
 import {
     listFiles,
     searchFiles,
@@ -112,6 +113,13 @@ const state = {
  * Initialize application
  */
 async function init() {
+    // Initialize i18n first
+    await initI18n();
+    translatePage();
+
+    // Update page title
+    document.title = t('explorer.pageTitle');
+
     // Check authentication
     if (!checkAuth()) {
         window.location.href = 'login.html';
@@ -147,6 +155,12 @@ async function init() {
 
     // Setup listener for system theme changes
     setupSystemThemeListener();
+
+    // Setup listener for locale changes
+    document.addEventListener('localechange', () => {
+        translatePage();
+        document.title = t('explorer.pageTitle');
+    });
 
     // Setup auto token refresh
     setupAutoRefresh();
@@ -543,14 +557,14 @@ function setupOperationButtons() {
  */
 function validatePathA(path) {
     if (!path) {
-        throw new Error('Path cannot be empty');
+        throw new Error(t('errors.pathEmpty'));
     }
 
     const pathUpper = path.toUpperCase();
 
     // Path must start with A:
     if (!pathUpper.startsWith('A:')) {
-        throw new Error('Path A operations must use paths starting with "A:". Other drive letters (B:, C:) are not allowed.');
+        throw new Error(t('errors.pathInvalid'));
     }
 
     // Check for other drive letters in the path (B:, C:, D:, etc.)
@@ -559,7 +573,7 @@ function validatePathA(path) {
     if (driveLetterRegex.test(pathAfterA)) {
         const match = pathAfterA.match(driveLetterRegex);
         if (match) {
-            throw new Error(`Invalid path: Drive letter "${match[0]}" not allowed in Path A. Use relative paths only.`);
+            throw new Error(t('errors.driveLetterNotAllowed', { letter: match[0] }));
         }
     }
 
@@ -649,7 +663,7 @@ async function loadDirectory(paneId, path) {
 
     } catch (error) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
-        showError(`Failed to load directory: ${error.message}`);
+        showError(t('errors.failedToLoadDirectory', { error: error.message }));
         hideLoading(paneId);
     } finally {
         // Clear loading flag after navigation completes
@@ -755,7 +769,7 @@ async function loadMoreFiles(paneId) {
 
     } catch (error) {
         console.error(`Error loading more files for pane ${paneId}:`, error);
-        showError(`Failed to load more files: ${error.message}`);
+        showError(t('errors.failedToLoadMore', { error: error.message }));
     } finally {
         hideLoading(paneId);
     }
@@ -799,7 +813,7 @@ async function handleSearch(paneId) {
 
     } catch (error) {
         console.error(`Error searching files in pane ${paneId}:`, error);
-        showError(`Search failed: ${error.message}`);
+        showError(t('errors.searchFailed', { error: error.message }));
     } finally {
         hideLoading(paneId);
         // Clear loading flag after search completes
@@ -1224,7 +1238,7 @@ async function openSettingsModal() {
 
         // Populate form with current preferences
         document.getElementById('ui-theme').value = preferences.ui_theme || 'system';
-        document.getElementById('ui-language').value = preferences.ui_language || 'en';
+        document.getElementById('ui-language').value = preferences.ui_language || 'auto';
         document.getElementById('remember-last-paths').checked = preferences.remember_last_paths !== false;
 
         // Show modal
@@ -1240,34 +1254,46 @@ async function openSettingsModal() {
                 };
 
                 await updatePreferences(updatedPreferences);
-                showSuccess('Settings saved successfully');
+                showSuccess(t('settings.settingsSaved'));
                 closeSettingsModal();
 
                 // Apply theme immediately if changed
                 if (updatedPreferences.ui_theme !== preferences.ui_theme) {
                     applyTheme(updatedPreferences.ui_theme);
                 }
+
+                // Apply language immediately if changed
+                if (updatedPreferences.ui_language !== preferences.ui_language) {
+                    const { getLocaleFromPreference } = await import('./i18n.js');
+                    const locale = getLocaleFromPreference(updatedPreferences.ui_language);
+                    await setLocale(locale);
+                }
             } catch (error) {
-                showError('Failed to save settings: ' + error.message);
+                showError(t('settings.settingsFailed', { error: error.message }));
             }
         };
 
         // Reset button handler
         const resetHandler = async () => {
-            if (confirm('Reset all settings to defaults?')) {
+            if (confirm(t('settings.settingsResetConfirm'))) {
                 try {
                     const defaultPrefs = await resetPreferences();
-                    showSuccess('Settings reset to defaults');
+                    showSuccess(t('settings.settingsReset'));
 
                     // Re-populate form with defaults
                     document.getElementById('ui-theme').value = defaultPrefs.ui_theme || 'system';
-                    document.getElementById('ui-language').value = defaultPrefs.ui_language || 'en';
+                    document.getElementById('ui-language').value = defaultPrefs.ui_language || 'auto';
                     document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths !== false;
 
                     // Apply theme
                     applyTheme(defaultPrefs.ui_theme || 'system');
+
+                    // Apply language
+                    const { getLocaleFromPreference } = await import('./i18n.js');
+                    const locale = getLocaleFromPreference(defaultPrefs.ui_language || 'auto');
+                    await setLocale(locale);
                 } catch (error) {
-                    showError('Failed to reset settings: ' + error.message);
+                    showError(t('settings.settingsResetFailed', { error: error.message }));
                 }
             }
         };
@@ -1288,7 +1314,7 @@ async function openSettingsModal() {
         settingsClose.addEventListener('click', closeSettingsModal);
 
     } catch (error) {
-        showError('Failed to load settings: ' + error.message);
+        showError(t('settings.settingsLoadFailed', { error: error.message }));
         console.error('Settings error:', error);
     }
 }
@@ -1577,7 +1603,7 @@ async function loadOperationHistory(append = false) {
 
     } catch (error) {
         console.error('Failed to load operation history:', error);
-        showError('Failed to load operation history: ' + error.message);
+        showError(t('errors.failedToLoadOperationHistory', { error: error.message }));
     } finally {
         hideQueueLoading();
     }
@@ -1590,12 +1616,12 @@ async function handlePushOperation() {
     const selectedFiles = getSelectedFiles('a');
 
     if (selectedFiles.length === 0) {
-        showError('Please select a directory to push');
+        showError(t('operations.selectDirectory'));
         return;
     }
 
     if (selectedFiles.length > 1) {
-        showError('Please select only one directory');
+        showError(t('operations.selectOneDirectory'));
         return;
     }
 
@@ -1603,17 +1629,13 @@ async function handlePushOperation() {
 
     // Ensure it's a directory
     if (!selectedFile.is_directory) {
-        showError('Please select a directory (not a file)');
+        showError(t('operations.selectDirectoryNotFile'));
         return;
     }
 
     // Confirm operation
     const confirmed = await confirmAction(
-        `Push directory "${selectedFile.name}"?\n\n` +
-        `This will:\n` +
-        `1. Copy to PATH_B\n` +
-        `2. Archive to PATH_C\n\n` +
-        `Original directory will be moved to archive.`
+        t('operations.pushDirectory', { name: selectedFile.name })
     );
 
     if (!confirmed) {
@@ -1621,12 +1643,12 @@ async function handlePushOperation() {
     }
 
     try {
-        updateOperationStatus('Pushing directory...', 'info');
+        updateOperationStatus(t('operations.pushingDirectory'), 'info');
 
         const sourcePath = joinPath(state.panes.a.currentPath, selectedFile.name);
         const operation = await pushOperation(sourcePath, state.workerId);
 
-        showSuccess('Push operation started');
+        showSuccess(t('operations.pushStarted'));
         clearSelection('a');
 
         // Refresh operation history
@@ -1637,7 +1659,7 @@ async function handlePushOperation() {
 
     } catch (error) {
         console.error('Push operation failed:', error);
-        showError('Push operation failed: ' + error.message);
+        showError(t('operations.pushFailed', { error: error.message }));
     } finally {
         clearOperationStatus();
     }
@@ -1650,7 +1672,7 @@ async function handlePullOperation() {
     const selectedOperationId = getSelectedOperationId();
 
     if (!selectedOperationId) {
-        showError('Please select a PUSH operation to revert');
+        showError(t('operations.selectOperation'));
         return;
     }
 
@@ -1658,16 +1680,13 @@ async function handlePullOperation() {
     const operation = state.operationQueue.operations.find(op => op.id === selectedOperationId);
 
     if (!operation) {
-        showError('Selected operation not found');
+        showError(t('operations.operationNotFound'));
         return;
     }
 
     // Confirm operation
     const confirmed = await confirmAction(
-        `Pull (revert) operation ${operation.id}?\n\n` +
-        `This will:\n` +
-        `1. Copy from PATH_B back to: ${operation.original_path}\n` +
-        `2. Remove from PATH_B\n\n`
+        t('operations.pullOperation', { id: operation.id, path: operation.original_path })
     );
 
     if (!confirmed) {
@@ -1675,11 +1694,11 @@ async function handlePullOperation() {
     }
 
     try {
-        updateOperationStatus('Pulling (reverting) operation...', 'info');
+        updateOperationStatus(t('operations.pullingOperation'), 'info');
 
         await pullOperation(selectedOperationId, state.workerId);
 
-        showSuccess('Pull operation started');
+        showSuccess(t('operations.pullStarted'));
 
         // Refresh operation history
         await loadOperationHistory();
@@ -1692,7 +1711,7 @@ async function handlePullOperation() {
 
     } catch (error) {
         console.error('Pull operation failed:', error);
-        showError('Pull operation failed: ' + error.message);
+        showError(t('operations.pullFailed', { error: error.message }));
     } finally {
         clearOperationStatus();
     }
