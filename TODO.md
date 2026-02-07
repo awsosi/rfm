@@ -54,26 +54,22 @@
       5. Check reverse proxy logs FIRST when debugging connection failures — errors may come from proxy, not application
     - **This bug is invisible** — 400 errors during WebSocket handshake look like backend validation failures, but they're actually proxy routing errors. No backend logs, no clear error messages. Hours wasted debugging backend when the issue is in frontend domain configuration.
 
+12. **Frontend configuration injection must cover ALL entry points, not just index.html.**
+    When the backend injects configuration into HTML pages (e.g., `window.API_URL_PUBLIC` via Flask template replacement), it MUST inject into ALL HTML pages that users can land on directly, not just `index.html`. Users often access specific pages via bookmarks, redirects, or direct URLs (e.g., `pages/login.html`), bypassing `index.html` entirely. If configuration is only injected into `index.html`, these pages won't have the configuration and will fall back to incorrect defaults.
+    - **Prevention checklist when adding frontend configuration injection:**
+      1. Identify ALL HTML pages that can be accessed directly (not just index.html): login.html, admin.html, explorer.html, etc.
+      2. Ensure the backend route handler for these pages injects configuration before serving the HTML
+      3. Use a DRY approach: create a shared function/decorator that injects config into any HTML response
+      4. Test by accessing each page DIRECTLY (not via index.html redirect) and verify configuration is present
+      5. Check browser console for "undefined" or "null" config values when accessing pages directly
+    - **This bug is invisible** — Pages load fine, JavaScript runs without errors. The missing configuration silently causes fallback to `window.location.origin` or other defaults. API calls and WebSocket connections fail with generic 400/404 errors that look like backend issues. No indication the problem is missing frontend configuration.
+    - **Example:** Backend injects `window.API_URL_PUBLIC` into `index.html` only. User lands on `pages/login.html` directly → configuration undefined → falls back to `window.location.origin` (webui domain) → all API calls go to wrong service → 400 errors. Fixed by injecting configuration into the `/pages/<filename>` route handler for all HTML files.
+
 ---
 
 ## ACTIVE BUGS
 
-### WebSocket Configuration for Traefik Deployment
-**User Action Required:** The WebSocket connection now uses a configurable API URL, but you need to set it in your `.env` file.
-
-**What you need to do:**
-1. Add this line to your `.env` file (create it from `.env.example` if it doesn't exist):
-   ```
-   API_URL_PUBLIC=https://api.ff.vitkac.local
-   ```
-2. Rebuild the containers:
-   ```bash
-   docker-compose down
-   docker-compose build --no-cache webui
-   docker-compose up -d
-   ```
-
-**Why:** Your Traefik routes `ff.vitkac.local` → webui and `api.ff.vitkac.local` → API. The frontend needs to know the API is at `api.ff.vitkac.local`, not `ff.vitkac.local`. This is now configurable via `API_URL_PUBLIC` environment variable instead of being hardcoded.
+None currently.
 
 ---
 
@@ -188,6 +184,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix WebSocket 400 error (configuration not injected into all HTML pages)
+- **Bug:** WebSocket connection to `wss://ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Persisted despite user setting `API_URL_PUBLIC=https://api.ff.vitkac.local` in `.env` and rebuilding containers.
+- **Root cause:** Backend (`server.py`) only injected `window.API_URL_PUBLIC` configuration into `index.html` (line 42-59), but users were immediately redirected to `pages/login.html` which didn't have the configuration. Without `window.API_URL_PUBLIC`, `auth.js` fell back to `window.location.origin` (the webui domain `https://ff.vitkac.local`), causing WebSocket and API calls to route to the wrong service.
+- **Fix:** Updated `server.py` `/pages/<filename>` route handler (line 61-84) to inject `window.API_URL_PUBLIC` configuration into ALL HTML files served from the pages directory, not just index.html. Now login.html, explorer.html, admin.html all receive the configuration injection.
+- **Why it was invisible:** Pages loaded fine, JavaScript ran without errors. The missing configuration silently caused `window.API_URL_PUBLIC` to be `undefined`, triggering the fallback to `window.location.origin`. WebSocket tried connecting to `wss://ff.vitkac.local/ws/operations` (webui domain) instead of `wss://api.ff.vitkac.local/ws/operations` (API domain). Traefik routed the request to the webui service (which doesn't have WebSocket endpoints), returning 400. No backend logs, no clear error messages. Hours wasted debugging backend and reverse proxy configuration when the issue was missing frontend configuration injection.
+- **Lesson learned:** Added Rule 12 — Frontend configuration injection must cover ALL entry points. When injecting config into HTML, inject into ALL pages that can be accessed directly (login, admin, explorer), not just index.html. Users bypass index.html via direct URLs, bookmarks, or redirects. Test by accessing each page directly and verify configuration is present in browser console.
 
 ### 2026-02-07 - Fix WebSocket 400 error (wrong domain - reverse proxy routing issue)
 - **Bug:** WebSocket connection to `wss://ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Persisted through multiple backend fixes (parameter parsing, Query() annotation, manual scope parsing).

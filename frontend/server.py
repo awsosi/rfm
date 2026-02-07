@@ -60,7 +60,28 @@ def index():
 
 @app.route('/pages/<path:filename>')
 def pages(filename):
-    """Serve pages"""
+    """Serve pages with injected configuration"""
+    # For HTML files, inject API_URL_PUBLIC configuration
+    if filename.endswith('.html'):
+        try:
+            with open(f'frontend/pages/{filename}', 'r', encoding='utf-8') as f:
+                html = f.read()
+
+            # Inject API_URL_PUBLIC configuration before closing </head> tag
+            config_script = f'''
+    <script>
+        // API URL configuration (injected by backend)
+        window.API_URL_PUBLIC = {f'"{API_URL_PUBLIC}"' if API_URL_PUBLIC else 'null'};
+    </script>
+</head>'''
+
+            html = html.replace('</head>', config_script)
+
+            return Response(html, mimetype='text/html')
+        except Exception as e:
+            logger.error(f"Error serving {filename}: {e}")
+            return send_from_directory('frontend/pages', filename)
+
     return send_from_directory('frontend/pages', filename)
 
 @app.route('/js/<path:filename>')
