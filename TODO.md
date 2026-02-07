@@ -44,11 +44,36 @@
       5. Before commit: search entire codebase for old path name to catch any missed references
     - **This bug is invisible** — WebSocket handshake fails with generic 400/404, no indication that it's a path mismatch. Client falls back to polling. Always use global search when changing endpoint paths.
 
+11. **Reverse proxy routing: Frontend API_BASE_URL must point to the API domain, not the webui domain.**
+    When deploying behind a reverse proxy (nginx, traefik) with separate domains for frontend and backend (e.g., `ff.example.com` for webui, `api.ff.example.com` for API), the frontend's `API_BASE_URL` MUST be configured to use the API domain. If `API_BASE_URL` defaults to `window.location.origin` (the webui domain), all API calls and WebSocket connections will fail with 400/404 errors because they're routed to the wrong service.
+    - **Prevention checklist when deploying with reverse proxy:**
+      1. Identify all domains/subdomains: webui domain (e.g., `app.example.com`), API domain (e.g., `api.example.com`)
+      2. Check reverse proxy routing rules (nginx.conf, traefik toml) — confirm which domain routes to API service
+      3. Update frontend `API_BASE_URL` logic to use the API domain when not on localhost
+      4. Test WebSocket connections specifically — they're more sensitive to routing issues than HTTP requests
+      5. Check reverse proxy logs FIRST when debugging connection failures — errors may come from proxy, not application
+    - **This bug is invisible** — 400 errors during WebSocket handshake look like backend validation failures, but they're actually proxy routing errors. No backend logs, no clear error messages. Hours wasted debugging backend when the issue is in frontend domain configuration.
+
 ---
 
 ## ACTIVE BUGS
 
-None.
+### WebSocket Configuration for Traefik Deployment
+**User Action Required:** The WebSocket connection now uses a configurable API URL, but you need to set it in your `.env` file.
+
+**What you need to do:**
+1. Add this line to your `.env` file (create it from `.env.example` if it doesn't exist):
+   ```
+   API_URL_PUBLIC=https://api.ff.vitkac.local
+   ```
+2. Rebuild the containers:
+   ```bash
+   docker-compose down
+   docker-compose build --no-cache webui
+   docker-compose up -d
+   ```
+
+**Why:** Your Traefik routes `ff.vitkac.local` → webui and `api.ff.vitkac.local` → API. The frontend needs to know the API is at `api.ff.vitkac.local`, not `ff.vitkac.local`. This is now configurable via `API_URL_PUBLIC` environment variable instead of being hardcoded.
 
 ---
 
@@ -164,13 +189,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
 ## COMPLETED (Compact Log)
 
-### 2026-02-07 - Fix WebSocket query parameter parsing (token always None, then 400 validation error)
-- **Bug:** WebSocket connection to `/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Persisted even after attempting to fix with `Query()` annotation.
-- **Root cause (attempt 1):** FastAPI WebSocket endpoints do NOT automatically parse query parameters like HTTP endpoints. Parameter defined as `token: Optional[str] = None` meant query string was ignored and `token` was always `None`.
-- **Root cause (attempt 2):** Using `Query()` annotation (`token: Optional[str] = Query(None)`) caused FastAPI to perform validation during the WebSocket handshake phase. Any validation issue returns 400 BEFORE the endpoint function is called - no logs, no error messages, just instant 400 rejection.
-- **Fix:** Removed all parameter declarations and manually parse query string from `websocket.scope["query_string"]` using `urllib.parse.parse_qs()`. Accept connection first, THEN parse and validate query params inside the function body.
-- **Why it was invisible:** FastAPI's parameter validation for WebSockets happens during handshake, before any user code runs. 400 error with zero indication it's a parameter validation issue. Only symptom: "Unexpected response code: 400" on client.
-- **Lesson learned:** Added "WebSocket Query Parameters Must Be Manually Parsed" to LESSONS LEARNED. Key rule: NEVER use function parameters (with or without `Query()`) for WebSocket endpoints. ALWAYS manually parse from scope.
+### 2026-02-07 - Fix WebSocket 400 error (wrong domain - reverse proxy routing issue)
+- **Bug:** WebSocket connection to `wss://ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Persisted through multiple backend fixes (parameter parsing, Query() annotation, manual scope parsing).
+- **Root cause (attempts 1-2):** Initially thought it was a FastAPI parameter parsing issue. Tried fixing with `Query()` annotation, then manual scope parsing. Neither worked because the request never reached FastAPI.
+- **Root cause (actual):** Frontend `API_BASE_URL` was set to `window.location.origin` when not on localhost, which meant it used `https://ff.vitkac.local` (the webui domain) for API calls. WebSocket URL was derived as `wss://ff.vitkac.local/ws/operations`. But Traefik routes `ff.vitkac.local` → webui (port 43000), while `api.ff.vitkac.local` → API (port 48080). The WebSocket request was hitting the webui service (which doesn't have `/ws/operations` endpoint) instead of the API service, causing Traefik to return 400.
+- **Fix:** Updated `auth.js` line 9 to replace `ff.vitkac.local` with `api.ff.vitkac.local` when setting `API_BASE_URL`. Now WebSocket connects to `wss://api.ff.vitkac.local/ws/operations`, which Traefik correctly routes to the API service.
+- **Why it was invisible:** The 400 error came from Traefik/reverse proxy, not from the backend application. No backend logs, no FastAPI errors. Client just saw "Unexpected response code: 400" with no indication it was a domain/routing mismatch. Spent hours debugging backend when the issue was in frontend domain configuration.
+- **Lesson learned:** When using a reverse proxy with separate domains for frontend and backend, ALWAYS check that WebSocket URLs point to the API domain, not the webui domain. Check proxy logs and routing rules BEFORE debugging application code. A 400 during WebSocket handshake can come from the proxy, not the app.
 
 ### 2026-02-07 - Fix WebSocket 400 error and missing clearOperationStatus function
 - **Bug 1 - WebSocket 400 Bad Request:** WebSocket connection to `/ws/operations` failed with "Unexpected response code: 400" during handshake. Application fell back to polling and kept retrying every 5 seconds, cluttering console with errors.

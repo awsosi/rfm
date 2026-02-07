@@ -5,7 +5,7 @@ Serves static files and proxies API requests to backend
 """
 import os
 import logging
-from flask import Flask, send_from_directory, request, jsonify
+from flask import Flask, send_from_directory, request, jsonify, Response
 from flask_cors import CORS
 import requests
 
@@ -27,11 +27,13 @@ CORS(app, resources={
 
 # Configuration
 API_URL = os.getenv('API_URL', 'http://api:8000')
+API_URL_PUBLIC = os.getenv('API_URL_PUBLIC', '')  # Public-facing API URL for browser
 WEBUI_PORT = int(os.getenv('WEBUI_PORT', 3000))
 WEBUI_HOST = os.getenv('WEBUI_HOST', '0.0.0.0')
 
 logger.info(f"WebUI Server starting on {WEBUI_HOST}:{WEBUI_PORT}")
-logger.info(f"API Backend URL: {API_URL}")
+logger.info(f"API Backend URL (internal): {API_URL}")
+logger.info(f"API Backend URL (public): {API_URL_PUBLIC or 'auto-detect'}")
 
 # ------------------------------------------------------------------------------
 # Static File Routes
@@ -39,8 +41,22 @@ logger.info(f"API Backend URL: {API_URL}")
 
 @app.route('/')
 def index():
-    """Serve index.html"""
-    return send_from_directory('frontend', 'index.html')
+    """Serve index.html with injected configuration"""
+    # Read index.html
+    with open('frontend/index.html', 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    # Inject API_URL_PUBLIC configuration before closing </head> tag
+    config_script = f'''
+    <script>
+        // API URL configuration (injected by backend)
+        window.API_URL_PUBLIC = {f'"{API_URL_PUBLIC}"' if API_URL_PUBLIC else 'null'};
+    </script>
+</head>'''
+
+    html = html.replace('</head>', config_script)
+
+    return Response(html, mimetype='text/html')
 
 @app.route('/pages/<path:filename>')
 def pages(filename):

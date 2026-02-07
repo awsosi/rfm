@@ -3,10 +3,13 @@
  * Handles user authentication, session management, and token storage
  */
 
-// API base URL - adjust based on deployment
-const API_BASE_URL = window.location.origin.includes('localhost')
-    ? 'http://localhost:8000'
-    : window.location.origin;
+// API base URL - can be overridden by backend via window.API_URL_PUBLIC
+// This is set by the Flask backend from the API_URL_PUBLIC environment variable
+const API_BASE_URL = window.API_URL_PUBLIC || (
+    window.location.origin.includes('localhost')
+        ? 'http://localhost:8000'
+        : window.location.origin
+);
 
 // Session storage keys
 const TOKEN_KEY = 'auth_token';
