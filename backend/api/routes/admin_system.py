@@ -37,6 +37,7 @@ from api.schemas_admin import (
     LogStreamResponse,
     AppLogEntry,
     AppLogResponse,
+    LogConfigUpdate,
     LogConfigResponse,
 )
 from api.services.worker_service import WorkerService, get_worker_by_id
@@ -742,6 +743,17 @@ async def stream_logs(
     if end_time is not None:
         stmt = stmt.where(AuditLog.timestamp <= end_time)
 
+    if search_query is not None and search_query.strip():
+        search_term = f"%{search_query.strip()}%"
+        from sqlalchemy import cast, String
+        stmt = stmt.where(
+            or_(
+                AuditLog.action.ilike(search_term),
+                AuditLog.ip_address.ilike(search_term),
+                cast(AuditLog.details_json, String).ilike(search_term),
+            )
+        )
+
     # Get total count
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_count = (await db.execute(count_stmt)).scalar() or 0
@@ -932,6 +944,115 @@ async def get_logging_config(
         log_retention_days=int(config_values.get('log_retention_days', '14')),
         enable_log_compression=config_values.get('enable_log_compression', 'true').lower() == 'true',
     )
+
+
+@router.put("/logs/config", response_model=LogConfigResponse)
+async def update_logging_config(
+    config_data: LogConfigUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """Update logging configuration and reconfigure syslog handler at runtime."""
+    from models import Config
+
+    # Map schema fields to DB config keys
+    field_to_key = {
+        'enable_syslog': 'enable_syslog',
+        'syslog_host': 'syslog_host',
+        'syslog_port': 'syslog_port',
+        'syslog_protocol': 'syslog_protocol',
+        'log_retention_days': 'log_retention_days',
+        'enable_log_compression': 'enable_log_compression',
+    }
+
+    updates = config_data.model_dump(exclude_none=True)
+    updated_keys = []
+
+    for field_name, db_key in field_to_key.items():
+        if field_name not in updates:
+            continue
+
+        value = updates[field_name]
+        # Convert booleans and ints to string for DB storage
+        if isinstance(value, bool):
+            value = 'true' if value else 'false'
+        else:
+            value = str(value)
+
+        stmt = select(Config).where(Config.key == db_key)
+        result = await db.execute(stmt)
+        config = result.scalar_one_or_none()
+
+        if config:
+            stmt = update(Config).where(Config.key == db_key).values(value=value)
+            await db.execute(stmt)
+        else:
+            # Create config entry if it doesn't exist
+            new_config = Config(key=db_key, value=value, type='STRING')
+            db.add(new_config)
+
+        updated_keys.append(db_key)
+
+    await db.commit()
+
+    # Reconfigure syslog handler at runtime
+    try:
+        from logging_module.logger import _global_handler, get_config
+        from logging_module.handlers import SyslogHandler
+
+        if _global_handler is not None:
+            # Read final config values from DB
+            syslog_enabled = updates.get('enable_syslog')
+            syslog_host = updates.get('syslog_host')
+            syslog_port = updates.get('syslog_port')
+            syslog_protocol = updates.get('syslog_protocol')
+
+            # If any syslog setting changed, reconfigure
+            if any(k in updates for k in ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']):
+                # Remove existing syslog handlers
+                _global_handler.handlers = [
+                    h for h in _global_handler.handlers
+                    if not isinstance(h, SyslogHandler)
+                ]
+
+                # Re-read full config from DB to get current values
+                config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
+                config_values = {}
+                for key in config_keys:
+                    stmt = select(Config).where(Config.key == key)
+                    result = await db.execute(stmt)
+                    cfg = result.scalar_one_or_none()
+                    if cfg:
+                        config_values[key] = cfg.value
+
+                is_enabled = config_values.get('enable_syslog', 'false').lower() == 'true'
+                host = config_values.get('syslog_host')
+                port = int(config_values.get('syslog_port', '514'))
+                protocol = config_values.get('syslog_protocol', 'UDP')
+
+                if is_enabled and host:
+                    new_syslog = SyslogHandler(host=host, port=port, protocol=protocol)
+                    _global_handler.add_handler(new_syslog)
+                    logger.info(f"Syslog handler reconfigured: {host}:{port}/{protocol}")
+
+    except Exception as exc:
+        logger.warning(f"Failed to reconfigure syslog handler at runtime: {exc}")
+
+    # Audit log
+    await AuditLogger.log_admin_action(
+        user_id=current_user.id,
+        action="logging_config_update",
+        target="logging",
+        details={"updated_keys": updated_keys, "values": updates},
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    # Return updated config
+    return await get_logging_config(current_user, db, settings)
+
 
 # =============================================================================
 # Elasticsearch File Indexing
