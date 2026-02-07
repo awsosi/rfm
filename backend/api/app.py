@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Optional, Any
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -1180,10 +1180,7 @@ async def list_operations(
 # =============================================================================
 
 @app.websocket("/ws/operations")
-async def websocket_operations(
-    websocket: WebSocket,
-    token: Optional[str] = Query(None),
-):
+async def websocket_operations(websocket: WebSocket):
     """
     WebSocket endpoint for real-time updates.
 
@@ -1202,12 +1199,18 @@ async def websocket_operations(
     from loguru import logger
     from datetime import datetime, timezone
     import uuid
+    from urllib.parse import parse_qs
 
     connection_id = str(uuid.uuid4())
     user_id = None
 
     # Accept WebSocket connection first (must accept before we can close on auth failure)
     await websocket.accept()
+
+    # Extract token from query string manually
+    query_string = websocket.scope.get("query_string", b"").decode()
+    query_params = parse_qs(query_string)
+    token = query_params.get("token", [None])[0]
 
     # Authenticate token (required for this endpoint)
     if not token:
