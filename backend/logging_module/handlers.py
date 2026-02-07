@@ -166,8 +166,10 @@ class SyslogHandler:
         if self._socket is None:
             if self.protocol == "UDP":
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._socket.settimeout(2.0)
             elif self.protocol == "TCP":
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._socket.settimeout(5.0)
                 self._socket.connect((self.host, self.port))
             else:
                 raise ValueError(f"Invalid protocol: {self.protocol}")
@@ -237,6 +239,13 @@ class SyslogHandler:
                     sock.sendall(message_bytes + b"\n")
 
             except Exception as exc:
+                # Reset socket on failure so next attempt creates a fresh one
+                if self._socket:
+                    try:
+                        self._socket.close()
+                    except Exception:
+                        pass
+                    self._socket = None
                 # Buffer log for retry
                 self.buffer.add(log_entry.to_json_dict())
                 logger.error(f"Failed to send log to syslog: {exc}")

@@ -71,6 +71,54 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         logger.warning(f"Failed to sync env config to DB: {exc}")
 
 
+async def _reconfigure_logging_from_db() -> None:
+    """
+    Reconfigure the structured logging module from DB config.
+
+    At startup, setup_structured_logging() runs before the DB is available,
+    so it only reads env vars.  If syslog was enabled via the admin UI
+    (stored in DB), this function picks up those settings and adds the
+    SyslogHandler to the global MultiHandler.
+    """
+    from database import DatabaseManager
+    from sqlalchemy import select
+    from logging_module.logger import _global_handler
+    from logging_module.handlers import SyslogHandler
+
+    if _global_handler is None:
+        return
+
+    async with DatabaseManager.session() as session:
+        config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
+        config_values = {}
+        for key in config_keys:
+            stmt = select(Config).where(Config.key == key)
+            result = await session.execute(stmt)
+            cfg = result.scalar_one_or_none()
+            if cfg:
+                config_values[key] = cfg.value
+
+    is_enabled = config_values.get('enable_syslog', 'false').lower() == 'true'
+    host = config_values.get('syslog_host')
+    port = int(config_values.get('syslog_port', '514'))
+    protocol = config_values.get('syslog_protocol', 'UDP')
+
+    # Check if syslog handler already exists (from env vars)
+    has_syslog = any(isinstance(h, SyslogHandler) for h in _global_handler.handlers)
+
+    if is_enabled and host and not has_syslog:
+        syslog_handler = SyslogHandler(host=host, port=port, protocol=protocol)
+        _global_handler.add_handler(syslog_handler)
+        logger.info(f"Syslog handler configured from DB: {host}:{port}/{protocol}")
+    elif not is_enabled and has_syslog:
+        # DB says disabled but env started it — remove
+        _global_handler.handlers = [
+            h for h in _global_handler.handlers
+            if not isinstance(h, SyslogHandler)
+        ]
+        logger.info("Syslog handler removed (disabled in DB config)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -97,6 +145,14 @@ async def lifespan(app: FastAPI):
 
     # Sync env-driven config into DB so .env changes take effect on restart
     await _sync_env_config_to_db(settings)
+
+    # Reconfigure structured logging from DB config (syslog may have been
+    # enabled via admin UI and stored in DB, but setup_structured_logging()
+    # above only reads env vars since DB wasn't initialized yet)
+    try:
+        await _reconfigure_logging_from_db()
+    except Exception as exc:
+        logger.warning(f"Failed to reconfigure logging from DB: {exc}")
 
     # Initialize Elasticsearch
     from api.services.elasticsearch_service import get_elasticsearch_service
