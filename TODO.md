@@ -17,7 +17,11 @@
 5. **Single source of truth for config: DB at runtime, env on startup.** Environment variables (`.env` → docker-compose → container env) are synced INTO the DB `config` table on every API startup (`_sync_env_config_to_db`). Runtime code reads ONLY from DB. Never add fallback-to-env logic in request handlers — that creates a dual-source-of-truth bug where DB and env can disagree silently.
    - If you need a new env-driven config: add it to `_sync_env_config_to_db()` in `app.py`, seed it in the migration, and read it from DB in handlers.
 6. **Alembic `ON CONFLICT DO NOTHING` means "seed once, never update."** The migration's config seed only runs on first deployment. Changing `.env` values after that won't update the DB through the migration alone — that's why `_sync_env_config_to_db()` exists. Never rely on the migration to propagate env changes on re-deployment.
-7. **Env var names must match the project's naming convention — or accept both.**
+7. **Python async extras: always install `[async]` (or equivalent) when using async clients.**
+   When a Python library offers async support via an extras group (e.g. `elasticsearch[async]`, `redis[hiredis]`, `httpx[http2]`), you MUST install the extra — not the bare package. The bare package lets you *import* the async class without error, but the class silently fails at runtime because its async HTTP transport dependency (e.g. `aiohttp`) is missing. The exception gets swallowed by generic `except Exception` handlers, and the service appears permanently broken with zero useful error messages.
+   - **Checklist:** For every `pip install <package>` that will be used with `async`/`await`, verify that the correct extras group is specified in `requirements.txt`. Search the code for `Async` class names (e.g. `AsyncElasticsearch`, `AsyncClient`) and confirm the extras are installed.
+   - **This bug is invisible at import time.** The import succeeds. The error only appears at runtime when the transport tries to load the missing dependency. Combined with a broad `except Exception` handler, the root cause is completely hidden.
+8. **Env var names must match the project's naming convention — or accept both.**
    Most boolean toggles in this project use `ENABLE_*` prefix (`ENABLE_SYSLOG`, `ENABLE_REMOTE_AUDIT_API`, `ENABLE_JSON_LOGS`). If a new toggle uses a *different* pattern (e.g. `POLKA_AUTH_ENABLED` — suffix instead of prefix), users WILL type the wrong name (`ENABLE_POLKA_AUTH`) because that matches every other toggle they see. Pydantic's `extra="ignore"` silently drops unrecognized env vars, and docker-compose's `${VAR:-default}` silently falls back to the default. **Result: the user sets the value, everything looks correct, but the app ignores it with zero errors.**
    - **Prevention:** When adding a boolean env var, always use the `ENABLE_*` prefix convention. If you inherit a name that doesn't match, add `validation_alias=AliasChoices(...)` in the Settings field so BOTH names work. Also update docker-compose substitution to check both: `${ENABLE_X:-${X_ENABLED:-false}}`.
    - **This bug is invisible** — no error, no warning, no log. The only symptom is "the setting doesn't work." Always grep `.env.example` for naming consistency when adding new toggles.
@@ -33,8 +37,7 @@ None.
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
-- [ ] Verify System Health shows all components healthy (database text() fix, ES retry-on-health-check)
-- [ ] Verify Elasticsearch shows "Connected" (not "Not enabled") in System Health
+- [ ] **Rebuild Docker image** after `elasticsearch[async]` fix, verify Elasticsearch shows "Connected" in System Health
 - [ ] Verify remote syslog: enable via Logs tab config, perform an action, confirm messages arrive at syslog server
 - [ ] Verify syslog persists across restart (enabled in DB → `_reconfigure_logging_from_db()` picks it up)
 - [ ] Verify Logging Configuration in Logs tab: load, save, syslog runtime reconfiguration
@@ -49,6 +52,12 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix Elasticsearch "connection failed" (AsyncElasticsearch missing aiohttp)
+- **Bug:** System Health shows `⚠ elasticsearch: Enabled but connection failed (will retry)` despite ES container being healthy. Persists indefinitely — retries never succeed.
+- **Root cause:** `requirements.txt` had `elasticsearch==8.12.0` (bare package). The code uses `AsyncElasticsearch` which requires `aiohttp` for its async HTTP transport (`AiohttpHttpNode`). Without the `[async]` extras group, `aiohttp` is never installed. `AsyncElasticsearch` *imports* fine, but fails at runtime when trying to create the transport. The error is caught by `except Exception`, `_client` is set to `None`, and every retry fails the same way.
+- **Fix:** Changed to `elasticsearch[async]==8.12.0` (installs `aiohttp`). Also fixed resource leak: `initialize()` now closes the ES client on failure before setting it to `None` (previously leaked unclosed `AsyncElasticsearch` instances on each retry).
+- **Lesson learned:** Added Rule 8 — always install `[async]` extras for async Python clients. Added checklist to prevent recurrence.
 
 ### 2026-02-07 - Fix ES Health + Syslog Delivery (2 changes)
 5. **Fix Elasticsearch "Not enabled":** `get_elasticsearch_service()` was a one-shot init — if ES wasn't ready on first call, service stayed failed forever. Added retry: if `elasticsearch_enabled=True` but `_initialized=False`, re-attempt `initialize()` on each `get_elasticsearch_service()` call. Health endpoint now checks `settings.elasticsearch_enabled` first to distinguish "disabled in config" from "enabled but not connected".

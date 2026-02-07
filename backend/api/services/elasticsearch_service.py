@@ -65,9 +65,13 @@ class ElasticsearchService:
 
         except ESConnectionError as e:
             logger.error(f"Failed to connect to Elasticsearch: {e}")
+            if self._client:
+                await self._client.close()
             self._client = None
         except Exception as e:
             logger.error(f"Unexpected error initializing Elasticsearch: {e}")
+            if self._client:
+                await self._client.close()
             self._client = None
 
     async def close(self):

@@ -71,8 +71,8 @@ redis[hiredis]==5.0.1
 # ------------------------------------------------------------------------------
 # Elasticsearch (Search & Indexing)
 # ------------------------------------------------------------------------------
-# Async Elasticsearch client
-elasticsearch==8.12.0
+# Async Elasticsearch client ([async] extra installs aiohttp for AsyncElasticsearch)
+elasticsearch[async]==8.12.0
 
 # ------------------------------------------------------------------------------
 # HTTP Client (for external API calls)
