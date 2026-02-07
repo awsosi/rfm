@@ -190,7 +190,8 @@ async def create_audit_log(
     user_agent: str = None,
 ) -> AuditLog:
     """
-    Create audit log entry.
+    Create audit log entry in database and forward to logging_module
+    (syslog, external API, file) if configured.
 
     Args:
         user_id: ID of user performing action
@@ -225,6 +226,39 @@ async def create_audit_log(
             "operation_id": operation_id,
         },
     )
+
+    # Forward to logging_module handlers (syslog, external API, file) if configured.
+    # Skip DatabaseHandler to avoid duplicate audit_logs entries.
+    try:
+        from logging_module.logger import _global_handler
+        from logging_module.handlers import DatabaseHandler
+        if _global_handler is not None:
+            from logging_module.models import LogEntry as LMLogEntry, LogLevel, LogComponent
+            from logging_module.utils import get_utc_timestamp
+            import asyncio
+
+            log_entry = LMLogEntry(
+                timestamp=get_utc_timestamp(),
+                level=LogLevel.INFO,
+                component=LogComponent.SYSTEM,
+                user_id=user_id,
+                operation_id=operation_id,
+                action=action,
+                message=f"Audit: {action}",
+                details=details,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            # Write to non-DB handlers only (syslog, file, external API)
+            tasks = [
+                h.write_log(log_entry)
+                for h in _global_handler.handlers
+                if not isinstance(h, DatabaseHandler)
+            ]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception:
+        pass  # DB audit log is the primary record; syslog is best-effort
 
     return audit_log
 
@@ -310,37 +344,6 @@ class AuditLogger:
         # Include username in details if provided
         if username:
             audit_details["username"] = username
-
-        # Send to logging_module for syslog (if configured)
-        try:
-            from logging_module import log_operation as log_op_to_module
-
-            # Extract paths from details for structured logging
-            source_path = details.get("source") or details.get("original_operation_id")
-            dest_path = details.get("path_b") or details.get("restore_to")
-
-            # Create descriptive message
-            if username:
-                message = f"User {username} performed {action} operation"
-            else:
-                message = f"User ID {user_id} performed {action} operation"
-
-            # Send to logging_module (will forward to syslog if enabled)
-            await log_op_to_module(
-                operation_type=action,
-                message=message,
-                user_id=user_id,
-                operation_id=operation_id,
-                source_path=str(source_path) if source_path else None,
-                dest_path=str(dest_path) if dest_path else None,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                details=audit_details,
-            )
-        except Exception:
-            # If logging_module is not initialized or fails, continue anyway
-            # (database audit log will still be created below)
-            pass
 
         return await create_audit_log(
             user_id=user_id,

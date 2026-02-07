@@ -541,6 +541,9 @@ async def get_elasticsearch_service() -> ElasticsearchService:
     """
     Get or create the global Elasticsearch service instance.
 
+    If the service was previously created but failed to initialize,
+    retries initialization (ES may have become available since last attempt).
+
     Returns:
         Initialized ElasticsearchService instance
     """
@@ -548,6 +551,12 @@ async def get_elasticsearch_service() -> ElasticsearchService:
 
     if _elasticsearch_service is None:
         _elasticsearch_service = ElasticsearchService()
+        await _elasticsearch_service.initialize()
+    elif (
+        _elasticsearch_service.settings.elasticsearch_enabled
+        and not _elasticsearch_service._initialized
+    ):
+        # Retry initialization if ES is enabled but previous init failed
         await _elasticsearch_service.initialize()
 
     return _elasticsearch_service

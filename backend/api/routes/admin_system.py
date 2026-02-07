@@ -662,29 +662,43 @@ async def get_system_health(
 
     # Check Elasticsearch
     try:
-        from api.services.elasticsearch_service import get_elasticsearch_service
-        es_service = await get_elasticsearch_service()
-        if es_service.is_enabled:
-            try:
-                es_healthy = await es_service._client.ping()
-            except Exception:
-                es_healthy = False
+        settings = get_settings()
+        if not settings.elasticsearch_enabled:
             components["elasticsearch"] = {
-                "status": "healthy" if es_healthy else "warning",
-                "message": "Connected" if es_healthy else "Connection failed",
+                "status": "warning",
+                "message": "Disabled in configuration",
             }
-            if not es_healthy:
+        else:
+            from api.services.elasticsearch_service import get_elasticsearch_service
+            es_service = await get_elasticsearch_service()
+            if es_service.is_enabled and es_service._client:
+                try:
+                    es_healthy = await es_service._client.ping()
+                except Exception:
+                    es_healthy = False
+                components["elasticsearch"] = {
+                    "status": "healthy" if es_healthy else "warning",
+                    "message": "Connected" if es_healthy else "Connection failed",
+                }
+                if not es_healthy:
+                    overall_status = "degraded" if overall_status == "healthy" else overall_status
+                    alerts.append({
+                        "severity": "warning",
+                        "component": "elasticsearch",
+                        "message": "Elasticsearch connection failed",
+                    })
+            else:
+                # Enabled in config but initialization failed
                 overall_status = "degraded" if overall_status == "healthy" else overall_status
+                components["elasticsearch"] = {
+                    "status": "warning",
+                    "message": "Enabled but connection failed (will retry)",
+                }
                 alerts.append({
                     "severity": "warning",
                     "component": "elasticsearch",
-                    "message": "Elasticsearch connection failed",
+                    "message": "Elasticsearch enabled but not connected",
                 })
-        else:
-            components["elasticsearch"] = {
-                "status": "warning",
-                "message": "Not enabled",
-            }
     except Exception:
         components["elasticsearch"] = {
             "status": "warning",

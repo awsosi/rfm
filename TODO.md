@@ -33,12 +33,14 @@ None.
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
-- [ ] Verify System Health now shows database/elasticsearch/api/webui as healthy (was showing "Connection failed" due to SQLAlchemy text() bug)
+- [ ] Verify System Health shows all components healthy (database text() fix, ES retry-on-health-check)
+- [ ] Verify Elasticsearch shows "Connected" (not "Not enabled") in System Health
+- [ ] Verify remote syslog: enable via Logs tab config, perform an action, confirm messages arrive at syslog server
+- [ ] Verify syslog persists across restart (enabled in DB → `_reconfigure_logging_from_db()` picks it up)
 - [ ] Verify Logging Configuration in Logs tab: load, save, syslog runtime reconfiguration
 - [ ] Verify Audit Log Viewer: filter, pagination, export
 - [ ] Verify removed sections (Logging & Audit, Global Path Prefixes, VF Redesign) no longer appear in Configuration tab
 - [ ] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
-- [ ] Verify fresh deployment with `ENABLE_POLKA_AUTH=true` in `.env`
 
 ### Future Work
 - [ ] Worker: Integration testing of C# FileManagerWorker in staging
@@ -47,6 +49,10 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix ES Health + Syslog Delivery (2 changes)
+5. **Fix Elasticsearch "Not enabled":** `get_elasticsearch_service()` was a one-shot init — if ES wasn't ready on first call, service stayed failed forever. Added retry: if `elasticsearch_enabled=True` but `_initialized=False`, re-attempt `initialize()` on each `get_elasticsearch_service()` call. Health endpoint now checks `settings.elasticsearch_enabled` first to distinguish "disabled in config" from "enabled but not connected".
+6. **Fix remote syslog not receiving messages:** Root cause: `create_audit_log()` wrote only to DB — the logging_module's `SyslogHandler` was never called for auth, admin, config, or user events (only file operations had syslog forwarding). Fix: `create_audit_log()` now forwards every audit event to the logging_module's non-DB handlers (syslog, file, external API), skipping `DatabaseHandler` to avoid duplicate DB entries. Also: added `_reconfigure_logging_from_db()` at startup so syslog config saved via admin UI persists across restarts. Fixed socket timeout (2s UDP, 5s TCP) and socket reset on failure for reconnection.
 
 ### 2026-02-07 - Health Fix, Config Cleanup, Log Viewer Overhaul (4 changes)
 1. **Fix System Health "Connection failed":** `database.py` `health_check()` used bare string `"SELECT 1"` — SQLAlchemy 2.0 requires `text()` wrapper. Exception was silently caught → returned `False`. Fixed with `text("SELECT 1")`.
