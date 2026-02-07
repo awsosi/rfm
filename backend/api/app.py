@@ -1206,17 +1206,24 @@ async def websocket_operations(
     connection_id = str(uuid.uuid4())
     user_id = None
 
-    # Authenticate if token provided
-    if token:
-        try:
-            token_data = decode_token(token)
-            user_id = token_data.user_id
-        except Exception:
-            await websocket.close(code=1008, reason="Invalid token")
-            return
+    # Accept WebSocket connection first (must accept before we can close on auth failure)
+    await websocket.accept()
 
-    # Connect to WebSocket manager
-    await ws_manager.connect(
+    # Authenticate token (required for this endpoint)
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    try:
+        token_data = decode_token(token)
+        user_id = token_data.user_id
+    except Exception as e:
+        logger.warning(f"WebSocket auth failed: {e}")
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # Register connection with WebSocket manager (connection already accepted above)
+    await ws_manager.register_connection(
         websocket,
         connection_id,
         user_id=user_id,

@@ -114,6 +114,37 @@ class WebSocketManager:
 
         logger.info(f"WebSocket connected: {connection_id} (user_id={user_id})")
 
+    async def register_connection(
+        self,
+        websocket: WebSocket,
+        connection_id: str,
+        user_id: Optional[int] = None,
+        topics: Optional[List[str]] = None,
+    ) -> None:
+        """
+        Register WebSocket connection that has already been accepted.
+        Use this when you need to accept the connection early (e.g., for auth validation).
+
+        Args:
+            websocket: WebSocket connection (already accepted)
+            connection_id: Unique connection identifier
+            user_id: User ID (for auth/filtering)
+            topics: Initial topics to subscribe to
+        """
+        self.active_connections[connection_id] = websocket
+        self.connection_metadata[connection_id] = {
+            "user_id": user_id,
+            "connected_at": datetime.now(timezone.utc),
+            "topics": set(),
+        }
+
+        # Subscribe to topics
+        if topics:
+            for topic in topics:
+                await self.subscribe(connection_id, topic)
+
+        logger.info(f"WebSocket registered: {connection_id} (user_id={user_id})")
+
         # Send welcome message
         await self.send_to_connection(
             connection_id,

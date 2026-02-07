@@ -52,6 +52,49 @@ None.
 
 ---
 
+## LESSONS LEARNED - CRITICAL PATTERNS
+
+### WebSocket Accept-Before-Close Pattern
+**Problem:** WebSocket connections failing with 400 Bad Request when trying to close on authentication failure.
+
+**Root Cause:** FastAPI WebSocket endpoints MUST call `await websocket.accept()` before they can call `await websocket.close()`. Attempting to close an unaccepted WebSocket results in a 400 error during the handshake - the client sees "Unexpected response code: 400" with no indication it's an accept/close ordering issue.
+
+**Correct Pattern:**
+```python
+@app.websocket("/ws/endpoint")
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    # 1. ALWAYS accept first
+    await websocket.accept()
+
+    # 2. THEN validate auth
+    if not token or not is_valid(token):
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # 3. Then register and handle messages
+    await ws_manager.register_connection(websocket, ...)
+```
+
+**Wrong Pattern (causes 400 error):**
+```python
+@app.websocket("/ws/endpoint")
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    # WRONG - validate before accept
+    if not token or not is_valid(token):
+        await websocket.close(code=1008, reason="Invalid token")  # FAILS - not accepted yet!
+        return
+
+    await ws_manager.connect(websocket, ...)  # Accepts here - too late
+```
+
+**Prevention Checklist:**
+- When adding WebSocket auth, accept the connection FIRST, then validate and close if needed
+- If using a manager that calls accept(), either accept in the endpoint and use a separate register method, or ensure validation happens after the manager's accept() call
+- Never call `websocket.close()` before `websocket.accept()` - this is the #1 cause of WebSocket 400 errors
+- Test WebSocket endpoints with invalid auth to ensure they fail gracefully (close with proper error code, not 400)
+
+---
+
 ## ACTIVE TODO ITEMS
 
 ### Verification Needed (requires running app with Docker)
@@ -70,6 +113,16 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix WebSocket 400 error and missing clearOperationStatus function
+- **Bug 1 - WebSocket 400 Bad Request:** WebSocket connection to `/ws/operations` failed with "Unexpected response code: 400" during handshake. Application fell back to polling and kept retrying every 5 seconds, cluttering console with errors.
+- **Root cause:** Backend `websocket_operations()` function tried to close the WebSocket on auth failure (`await websocket.close(code=1008)` at line 1215) BEFORE accepting it. The `websocket.accept()` only happened inside `ws_manager.connect()` at line 1219. You cannot close a WebSocket that hasn't been accepted yet - FastAPI requires accept() before close().
+- **Bug 2 - Missing import:** `handlePushOperation()` and `handlePullOperation()` in app.js called `clearOperationStatus()` in their finally blocks (lines 1726, 1778), but this function was not imported from ui.js despite being exported there. Caused "ReferenceError: clearOperationStatus is not defined" when push/pull operations finished.
+- **Fix:**
+  - **Backend:** Modified `websocket_operations()` to accept the connection FIRST (`await websocket.accept()` at line 1210), then validate token, then close with proper error if invalid. Created new `ws_manager.register_connection()` method that registers an already-accepted connection (same as `connect()` but without the accept() call). This prevents the 400 error by ensuring accept happens before any potential close.
+  - **Frontend:** Added `clearOperationStatus` to the import list in app.js line 35 (imported from ui.js).
+- **Why it was invisible:** WebSocket handshake failure returns generic 400 with no indication it's an accept/close ordering issue. Client silently falls back to polling. Missing import causes runtime ReferenceError only when operations complete, easy to miss during development.
+- **Lesson learned:** Added "WebSocket Accept-Before-Close Pattern" to LESSONS LEARNED section. Key rule: ALWAYS call `await websocket.accept()` before `await websocket.close()`. When using a manager that accepts for you, either accept early in the endpoint (before auth validation) and use a separate register method, or ensure validation happens after the manager's accept. Test with invalid auth to verify graceful failure.
 
 ### 2026-02-07 - Convert to WebSocket-based real-time updates (eliminate polling)
 - **Problem:** Application relied entirely on aggressive polling for updates: operation history polled every 3 seconds, file listings polled every 5 seconds. This created unnecessary server load, network traffic, and delayed updates. WebSocket was connected but underutilized — it only received events but the frontend still polled for everything.

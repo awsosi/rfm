@@ -32,6 +32,7 @@ import {
     clearSelection,
     navigateToDirectory,
     updateOperationStatus,
+    clearOperationStatus,
     updateProgress,
     hideProgress,
     addOperationToQueue,
