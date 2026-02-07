@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Optional, Any
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket
+from fastapi import FastAPI, Depends, HTTPException, status, Request, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -1182,7 +1182,7 @@ async def list_operations(
 @app.websocket("/ws/operations")
 async def websocket_operations(
     websocket: WebSocket,
-    token: Optional[str] = None,
+    token: Optional[str] = Query(None),
 ):
     """
     WebSocket endpoint for real-time updates.

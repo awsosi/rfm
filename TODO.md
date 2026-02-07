@@ -54,6 +54,53 @@ None.
 
 ## LESSONS LEARNED - CRITICAL PATTERNS
 
+### WebSocket Query Parameters Must Use Query() Annotation
+**Problem:** WebSocket connections failing with 400 Bad Request during handshake. Token parameter sent in URL (`/ws/operations?token=xyz`) but backend receives `None`, immediately rejects connection, client sees "Unexpected response code: 400".
+
+**Root Cause:** FastAPI does NOT automatically parse query parameters for WebSocket endpoints the same way it does for HTTP endpoints. A parameter defined as `token: Optional[str] = None` is ALWAYS `None` for WebSockets — the query string is ignored. You MUST use the `Query()` annotation to extract query parameters from WebSocket URLs.
+
+**Correct Pattern:**
+```python
+from fastapi import WebSocket, Query
+
+@app.websocket("/ws/endpoint")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),  # ← REQUIRED for query params
+):
+    await websocket.accept()
+
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    # Token is now correctly extracted from ?token=xyz
+```
+
+**Wrong Pattern (causes 400 error):**
+```python
+@app.websocket("/ws/endpoint")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = None,  # ← WRONG - query param ignored, always None
+):
+    await websocket.accept()
+
+    if not token:  # This ALWAYS triggers
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+```
+
+**Prevention Checklist:**
+- When adding query parameters to WebSocket endpoints, ALWAYS import and use `Query()` from fastapi
+- Never assume query parameters work like HTTP endpoints — they don't
+- Test WebSocket endpoints with query params immediately after implementation
+- If token is always `None` despite being in the URL, check for missing `Query()` annotation first
+
+**Why it's invisible:** The connection accepts initially (no syntax error), but immediately closes because the backend thinks auth is missing. Client sees generic "400 Bad Request" with no indication it's a parameter parsing issue.
+
+---
+
 ### WebSocket Accept-Before-Close Pattern
 **Problem:** WebSocket connections failing with 400 Bad Request when trying to close on authentication failure.
 
@@ -62,7 +109,7 @@ None.
 **Correct Pattern:**
 ```python
 @app.websocket("/ws/endpoint")
-async def websocket_endpoint(websocket: WebSocket, token: str = None):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     # 1. ALWAYS accept first
     await websocket.accept()
 
@@ -78,7 +125,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 **Wrong Pattern (causes 400 error):**
 ```python
 @app.websocket("/ws/endpoint")
-async def websocket_endpoint(websocket: WebSocket, token: str = None):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     # WRONG - validate before accept
     if not token or not is_valid(token):
         await websocket.close(code=1008, reason="Invalid token")  # FAILS - not accepted yet!
@@ -113,6 +160,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix WebSocket query parameter parsing (token always None)
+- **Bug:** WebSocket connection to `/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Backend immediately rejected connection with "Authentication required" even though token was present in URL.
+- **Root cause:** FastAPI WebSocket endpoints do NOT automatically parse query parameters like HTTP endpoints. The parameter was defined as `token: Optional[str] = None` without `Query()` annotation, so the query string was ignored and `token` was always `None`. Backend accepted the connection, saw `None`, and closed it immediately with auth error (code 1008).
+- **Fix:** Added `Query` import from fastapi, changed signature from `token: Optional[str] = None` to `token: Optional[str] = Query(None)`. Token now correctly extracted from URL query string.
+- **Why it was invisible:** Connection accepted first (no syntax error), then immediately closed with "Authentication required". Client saw generic 400 error with no indication it's a parameter parsing issue, not an actual auth failure.
+- **Lesson learned:** Added "WebSocket Query Parameters Must Use Query() Annotation" to LESSONS LEARNED. Key rule: ALWAYS use `Query()` annotation for WebSocket query parameters. Never assume they work like HTTP endpoints.
 
 ### 2026-02-07 - Fix WebSocket 400 error and missing clearOperationStatus function
 - **Bug 1 - WebSocket 400 Bad Request:** WebSocket connection to `/ws/operations` failed with "Unexpected response code: 400" during handshake. Application fell back to polling and kept retrying every 5 seconds, cluttering console with errors.
