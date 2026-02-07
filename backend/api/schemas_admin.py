@@ -150,6 +150,7 @@ class SystemHealthResponse(BaseModel):
     components: Dict[str, Dict[str, Any]] = {
         "database": {"status": "unknown", "message": ""},
         "elasticsearch": {"status": "unknown", "message": ""},
+        "redis": {"status": "unknown", "message": ""},
         "api": {"status": "unknown", "message": ""},
         "webui": {"status": "unknown", "message": ""},
     }

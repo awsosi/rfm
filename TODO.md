@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-02-07 (health fix, config cleanup, log viewer overhaul)
+> **Last Updated:** 2026-02-07 (Redis health check restored)
 
 ---
 
@@ -52,6 +52,15 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Restore Redis health check to System Health tile
+- Redis component was removed from System Health during Admin Panel overhaul (commit 85eecc6) along with other placeholder checks
+- Added `_check_redis()` helper in `admin_system.py` — pings Redis via `redis.asyncio` using configured `REDIS_URL` with 3s timeout
+- `/api/admin/health` now includes `redis` component (Connected/Connection failed) alongside database, elasticsearch, api, webui
+- `/api/admin/stats/system` `redis_healthy` field now uses actual ping instead of hardcoded `True`
+- `/health` endpoint now checks Redis (was hardcoded `redis=True` with TODO comment); overall status degrades if Redis is down
+- `SystemHealthResponse` schema default components updated to include `redis`
+- No frontend changes needed — JS dynamically renders all components from the health response dict
 
 ### 2026-02-07 - Fix Elasticsearch "connection failed" (AsyncElasticsearch missing aiohttp)
 - **Bug:** System Health shows `⚠ elasticsearch: Enabled but connection failed (will retry)` despite ES container being healthy. Persists indefinitely — retries never succeed.

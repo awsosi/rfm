@@ -228,11 +228,21 @@ async def health_check_endpoint():
     """Health check endpoint."""
     db_healthy = await health_check()
 
+    try:
+        import redis.asyncio as aioredis
+        settings = get_settings()
+        r = aioredis.from_url(settings.redis_url, socket_connect_timeout=3)
+        redis_healthy = bool(await r.ping())
+        await r.aclose()
+    except Exception:
+        redis_healthy = False
+
+    all_healthy = db_healthy and redis_healthy
     return HealthCheckResponse(
-        status="healthy" if db_healthy else "degraded",
+        status="healthy" if all_healthy else "degraded",
         version="1.0.0",
         database=db_healthy,
-        redis=True,  # TODO: Add Redis health check
+        redis=redis_healthy,
     )
 
 

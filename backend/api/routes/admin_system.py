@@ -509,6 +509,20 @@ async def test_path(
 # System Monitoring & Statistics
 # =============================================================================
 
+
+async def _check_redis() -> bool:
+    """Ping Redis and return True if healthy."""
+    try:
+        import redis.asyncio as aioredis
+        settings = get_settings()
+        r = aioredis.from_url(settings.redis_url, socket_connect_timeout=3)
+        result = await r.ping()
+        await r.aclose()
+        return bool(result)
+    except Exception:
+        return False
+
+
 @router.get("/stats/system", response_model=SystemStatsResponse)
 async def get_system_stats(
     current_user: Annotated[User, Depends(require_admin)],
@@ -629,7 +643,7 @@ async def get_system_stats(
         viewer_users=regular_users,  # Regular users (renamed from viewer)
         avg_operation_duration_seconds=float(avg_duration) if avg_duration else None,
         database_healthy=True,
-        redis_healthy=True,
+        redis_healthy=await _check_redis(),
         total_audit_logs=total_audit_logs,
     )
 
@@ -704,6 +718,20 @@ async def get_system_health(
             "status": "warning",
             "message": "Not available",
         }
+
+    # Check Redis
+    redis_healthy = await _check_redis()
+    components["redis"] = {
+        "status": "healthy" if redis_healthy else "warning",
+        "message": "Connected" if redis_healthy else "Connection failed",
+    }
+    if not redis_healthy:
+        overall_status = "degraded" if overall_status == "healthy" else overall_status
+        alerts.append({
+            "severity": "warning",
+            "component": "redis",
+            "message": "Redis connection failed",
+        })
 
     # Check API (always healthy if we reached this point)
     components["api"] = {
