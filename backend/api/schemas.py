@@ -405,7 +405,7 @@ class UserPreferencesUpdate(BaseModel):
     last_path_a: Optional[str] = Field(None, max_length=1000)
     last_path_b: Optional[str] = Field(None, max_length=1000)
     ui_theme: Optional[str] = Field(None, pattern="^(system|light|dark)$")
-    ui_language: Optional[str] = Field(None, pattern="^[a-z]{2}$")  # ISO 639-1 language codes
+    ui_language: Optional[str] = Field(None, pattern="^(auto|[a-z]{2}(-[A-Z]{2})?)$")  # "auto", short codes ("en", "pl"), or full locale codes ("en-US", "pl-PL")
     pane_layout: Optional[str] = Field(None, pattern="^(horizontal|vertical)$")
     custom_settings: Optional[dict[str, Any]] = None
 

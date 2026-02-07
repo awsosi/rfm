@@ -239,7 +239,7 @@ def upgrade() -> None:
         sa.Column('last_path_a', sa.String(length=1000), nullable=True),
         sa.Column('last_path_b', sa.String(length=1000), nullable=True),
         sa.Column('ui_theme', sa.String(length=50), nullable=False, server_default='system'),
-        sa.Column('ui_language', sa.String(10), nullable=False, server_default='en'),
+        sa.Column('ui_language', sa.String(10), nullable=False, server_default='auto'),
         sa.Column('pane_layout', sa.String(length=50), nullable=False, server_default='horizontal'),
         sa.Column('custom_settings', postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

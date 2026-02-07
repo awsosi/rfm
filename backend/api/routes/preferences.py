@@ -94,7 +94,7 @@ async def reset_my_preferences(
         preferences.last_path_a = None
         preferences.last_path_b = None
         preferences.ui_theme = "system"
-        preferences.ui_language = "en"
+        preferences.ui_language = "auto"
         preferences.pane_layout = "horizontal"
         preferences.custom_settings = None
     else:

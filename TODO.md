@@ -25,6 +25,15 @@
    Most boolean toggles in this project use `ENABLE_*` prefix (`ENABLE_SYSLOG`, `ENABLE_REMOTE_AUDIT_API`, `ENABLE_JSON_LOGS`). If a new toggle uses a *different* pattern (e.g. `POLKA_AUTH_ENABLED` — suffix instead of prefix), users WILL type the wrong name (`ENABLE_POLKA_AUTH`) because that matches every other toggle they see. Pydantic's `extra="ignore"` silently drops unrecognized env vars, and docker-compose's `${VAR:-default}` silently falls back to the default. **Result: the user sets the value, everything looks correct, but the app ignores it with zero errors.**
    - **Prevention:** When adding a boolean env var, always use the `ENABLE_*` prefix convention. If you inherit a name that doesn't match, add `validation_alias=AliasChoices(...)` in the Settings field so BOTH names work. Also update docker-compose substitution to check both: `${ENABLE_X:-${X_ENABLED:-false}}`.
    - **This bug is invisible** — no error, no warning, no log. The only symptom is "the setting doesn't work." Always grep `.env.example` for naming consistency when adding new toggles.
+9. **Frontend-backend data format alignment: Pydantic validation patterns must match HTML form values exactly.**
+   When HTML forms send data to API endpoints validated by Pydantic schemas, the frontend values and backend regex patterns MUST align. If they don't, the API returns 422 "Unprocessable Content" but the frontend may not surface this clearly — user sees generic "Failed to save" with no hint that it's a validation mismatch. Example: HTML `<select>` with `<option value="en-US">` sending "en-US", but Pydantic field has `pattern="^[a-z]{2}$"` expecting only 2 letters → instant 422, zero indication of why.
+   - **Prevention checklist when adding a new user-facing setting:**
+     1. Look at the HTML `<select>`, `<input>`, or JS code that builds the request payload. Note the exact string format sent (e.g. "auto", "en-US", "pl-PL").
+     2. Find the Pydantic schema field in `schemas.py`. If it has a `pattern=` constraint, verify the regex accepts ALL valid values from step 1.
+     3. Check database model default in `models.py` and migration `server_default=` — ensure they match a valid frontend value (not a legacy placeholder like "en" when frontend expects "auto" or "en-US").
+     4. Check endpoint reset-to-defaults code (e.g. `preferences.py` reset handler) — hardcoded defaults must also match frontend expectations.
+     5. If the field format changes (e.g. from 2-letter codes "en" to full locale codes "en-US"), update ALL four places in one commit: HTML, schema pattern, model default, migration default.
+   - **Test before commit:** Use browser DevTools Network tab → look at request payload → confirm it matches the backend pattern. A single typo in the regex breaks the entire feature silently (users can't save, no useful error).
 
 ---
 
@@ -52,6 +61,14 @@ None.
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-07 - Fix i18n validation pattern mismatch (frontend-backend misalignment)
+- **Bug:** i18n implementation failed completely. Settings → Language dropdown was empty. Selecting any language (System/English/Polish) → "Failed to save: ui_language: String should match pattern '^[a-z]{2}'" + 422 Unprocessable Content. Console error: "Failed to load locale en, falling back to en-US: SyntaxError: Unexpected token '<', '<!DOCTYPE'..." (server returned HTML 404 page when trying to load non-existent locale file).
+- **Root cause:** Backend validation pattern in `schemas.py` was `^[a-z]{2}$` (2 lowercase letters like "en", "pl"), but frontend HTML sent "auto", "en-US", "pl-PL" → all rejected. Also: model default was "en" instead of "auto", migration default was "en", preferences reset hardcoded "en" → four places with wrong/inconsistent defaults.
+- **Fix:**
+  - **Backend:** Updated validation pattern to `^(auto|[a-z]{2}(-[A-Z]{2})?)$` to accept "auto", short codes ("en", "pl" for backward compat), and full locale codes ("en-US", "pl-PL"). Changed all defaults from "en" → "auto" in: `models.py` (Column default), `001_initial_schema.py` (server_default), `preferences.py` (reset handler).
+  - **Frontend:** Added normalization in `app.js` to convert legacy 2-letter codes ("en" → "en-US", "pl" → "pl-PL") when loading preferences into the dropdown, preventing empty selection when DB contains old "en" value.
+- **Lesson learned:** Added Rule 9 — Frontend-backend data format alignment checklist. When adding user-facing settings: (1) note exact format sent by HTML/JS, (2) verify Pydantic pattern accepts all values, (3) check model default, (4) check migration default, (5) check endpoint reset code. All must match. Test with DevTools Network tab before commit. A regex typo breaks the feature silently with generic 422 errors.
 
 ### 2026-02-07 - Full i18n implementation for user-facing pages
 - Implemented internationalization (i18n) system for login page, file explorer, user settings, and all toasts/popups

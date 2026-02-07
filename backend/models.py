@@ -541,7 +541,7 @@ class UserPreferences(Base):
 
     # Layout preferences
     ui_theme = Column(String(50), nullable=False, default="system")  # system, light, dark
-    ui_language = Column(String(10), nullable=False, default="en")  # en (more coming with i18n)
+    ui_language = Column(String(10), nullable=False, default="auto")  # "auto" or locale codes like "en-US", "pl-PL"
     pane_layout = Column(String(50), nullable=False, default="horizontal")  # horizontal, vertical
 
     # Additional settings (JSON for flexibility)

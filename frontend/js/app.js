@@ -1238,7 +1238,19 @@ async function openSettingsModal() {
 
         // Populate form with current preferences
         document.getElementById('ui-theme').value = preferences.ui_theme || 'system';
-        document.getElementById('ui-language').value = preferences.ui_language || 'auto';
+
+        // Normalize language preference (handle legacy 2-letter codes)
+        let langValue = preferences.ui_language || 'auto';
+        const langNormalizationMap = {
+            'en': 'en-US',
+            'pl': 'pl-PL',
+            'en-US': 'en-US',
+            'pl-PL': 'pl-PL',
+            'auto': 'auto'
+        };
+        langValue = langNormalizationMap[langValue] || 'auto';
+        document.getElementById('ui-language').value = langValue;
+
         document.getElementById('remember-last-paths').checked = preferences.remember_last_paths !== false;
 
         // Show modal
@@ -1282,7 +1294,19 @@ async function openSettingsModal() {
 
                     // Re-populate form with defaults
                     document.getElementById('ui-theme').value = defaultPrefs.ui_theme || 'system';
-                    document.getElementById('ui-language').value = defaultPrefs.ui_language || 'auto';
+
+                    // Normalize language preference (handle legacy 2-letter codes)
+                    let defaultLangValue = defaultPrefs.ui_language || 'auto';
+                    const langNormalizationMap = {
+                        'en': 'en-US',
+                        'pl': 'pl-PL',
+                        'en-US': 'en-US',
+                        'pl-PL': 'pl-PL',
+                        'auto': 'auto'
+                    };
+                    defaultLangValue = langNormalizationMap[defaultLangValue] || 'auto';
+                    document.getElementById('ui-language').value = defaultLangValue;
+
                     document.getElementById('remember-last-paths').checked = defaultPrefs.remember_last_paths !== false;
 
                     // Apply theme
