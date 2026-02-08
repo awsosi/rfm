@@ -431,26 +431,40 @@ function setupPaneControls(paneId) {
     });
 
     // Search button
-    document.getElementById(`search-btn-${paneId}`).addEventListener('click', async () => {
-        await handleSearch(paneId);
-    });
+    const searchBtn = document.getElementById(`search-btn-${paneId}`);
+    if (searchBtn) {
+        searchBtn.addEventListener('click', async () => {
+            console.log(`[Search] Search button clicked for pane ${paneId}`);
+            await handleSearch(paneId);
+        });
+        console.log(`[Init] Search button event listener attached for pane ${paneId}`);
+    } else {
+        console.error(`[Init] Search button not found for pane ${paneId}`);
+    }
 
     // Search input enter key
-    document.getElementById(`search-${paneId}`).addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            await handleSearch(paneId);
-        }
-    });
-
-    // Search input with debounce
     const searchInput = document.getElementById(`search-${paneId}`);
-    searchInput.addEventListener('input', debounce(async () => {
-        if (searchInput.value) {
-            await handleSearch(paneId);
-        } else {
-            await refreshPane(paneId);
-        }
-    }, 500));
+    if (searchInput) {
+        searchInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                console.log(`[Search] Enter key pressed in search input for pane ${paneId}`);
+                await handleSearch(paneId);
+            }
+        });
+
+        // Search input with debounce
+        searchInput.addEventListener('input', debounce(async () => {
+            console.log(`[Search] Search input changed for pane ${paneId}, value: "${searchInput.value}"`);
+            if (searchInput.value) {
+                await handleSearch(paneId);
+            } else {
+                await refreshPane(paneId);
+            }
+        }, 500));
+        console.log(`[Init] Search input event listeners attached for pane ${paneId}`);
+    } else {
+        console.error(`[Init] Search input not found for pane ${paneId}`);
+    }
 
     // Load more button
     document.getElementById(`load-more-${paneId}`).addEventListener('click', async () => {
@@ -796,15 +810,25 @@ async function loadMoreFiles(paneId) {
  * @param {string} paneId - Pane ID
  */
 async function handleSearch(paneId) {
+    console.log(`[Search] handleSearch called for pane ${paneId}`);
+
     const searchInput = document.getElementById(`search-${paneId}`);
+    if (!searchInput) {
+        console.error(`[Search] Search input element not found for pane ${paneId}`);
+        return;
+    }
+
     const pattern = searchInput.value.trim();
+    console.log(`[Search] Search pattern: "${pattern}"`);
 
     if (!pattern) {
+        console.log('[Search] Empty pattern, refreshing pane');
         await refreshPane(paneId);
         return;
     }
 
     const currentPath = state.panes[paneId].currentPath;
+    console.log(`[Search] Searching in path: ${currentPath}, workerId: ${state.workerId}`);
 
     // Set loading flag to prevent race conditions with auto-refresh
     state.panes[paneId].isLoading = true;
@@ -814,7 +838,9 @@ async function handleSearch(paneId) {
 
     try {
         // Pass workerId explicitly to search function
+        console.log(`[Search] Calling searchFiles API...`);
         const files = await searchFiles(currentPath, pattern, state.workerId);
+        console.log(`[Search] Received ${files.length} results`);
 
         state.panes[paneId].files = files;
 
@@ -827,8 +853,9 @@ async function handleSearch(paneId) {
         // Update sort arrows
         updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
 
+        console.log('[Search] Search completed successfully');
     } catch (error) {
-        console.error(`Error searching files in pane ${paneId}:`, error);
+        console.error(`[Search] Error searching files in pane ${paneId}:`, error);
         showError(t('errors.searchFailed', { error: error.message }));
     } finally {
         hideLoading(paneId);
@@ -1440,6 +1467,7 @@ function setupVFRedesignControls() {
     const queueSearchInput = document.getElementById('queue-search-input');
     if (queueSearchBtn && queueSearchInput) {
         queueSearchBtn.addEventListener('click', async () => {
+            console.log(`[OpHistory] Queue search button clicked, query: "${queueSearchInput.value}"`);
             state.operationQueue.searchQuery = queueSearchInput.value.trim();
             state.operationQueue.offset = 0;
             await loadOperationHistory();
@@ -1448,11 +1476,15 @@ function setupVFRedesignControls() {
         // Also trigger search on Enter key
         queueSearchInput.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
+                console.log(`[OpHistory] Enter key pressed in queue search input, query: "${queueSearchInput.value}"`);
                 state.operationQueue.searchQuery = queueSearchInput.value.trim();
                 state.operationQueue.offset = 0;
                 await loadOperationHistory();
             }
         });
+        console.log('[Init] Queue search event listeners attached');
+    } else {
+        console.error(`[Init] Queue search elements not found: btn=${!!queueSearchBtn}, input=${!!queueSearchInput}`);
     }
 
     // Queue clear search button
@@ -1601,10 +1633,12 @@ function updateOperationQueueSortArrows(sortBy, sortOrder) {
  * Load operation history (VF Redesign)
  */
 async function loadOperationHistory(append = false) {
+    console.log(`[OpHistory] loadOperationHistory called, append: ${append}`);
     showQueueLoading();
 
     try {
         const hasSearchQuery = state.operationQueue.searchQuery && state.operationQueue.searchQuery.trim() !== '';
+        console.log(`[OpHistory] Has search query: ${hasSearchQuery}, query: "${state.operationQueue.searchQuery}"`);
         let operations;
 
         if (hasSearchQuery) {
@@ -1616,9 +1650,11 @@ async function loadOperationHistory(append = false) {
                 operation_type: state.operationQueue.filters.type,
                 status: state.operationQueue.filters.status
             };
+            console.log('[OpHistory] Using searchOperations API with params:', searchParams);
 
             const result = await searchOperations(searchParams);
             operations = result.operations;
+            console.log(`[OpHistory] searchOperations returned ${operations?.length || 0} results`);
         } else {
             // Use regular history API
             const filters = {
@@ -1627,8 +1663,10 @@ async function loadOperationHistory(append = false) {
                 operation_type: state.operationQueue.filters.type,
                 status: state.operationQueue.filters.status
             };
+            console.log('[OpHistory] Using getOperationHistory API with filters:', filters);
 
             operations = await getOperationHistory(filters);
+            console.log(`[OpHistory] getOperationHistory returned ${operations?.length || 0} results`);
         }
 
         if (append) {

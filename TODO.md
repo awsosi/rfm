@@ -69,7 +69,15 @@
 
 ## ACTIVE BUGS
 
-None currently.
+### Directory Search and Operation History Search Not Working
+**Status:** Investigating
+**Reported:** 2026-02-08
+**Description:** After recent WebSocket changes, both directory search (file search in Path A pane) and operation history search (queue search) are not working. WebSocket connection is successful and real-time updates are working, but search functionality is broken.
+**Investigation:**
+- Added comprehensive debug logging to search functions and event listeners
+- Added logging to API calls (searchFiles, searchOperations)
+- Need to check browser console for specific errors when searches are attempted
+**Next Steps:** User needs to attempt a search and check browser console for debug output to identify root cause
 
 ---
 
