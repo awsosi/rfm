@@ -1,4 +1,8 @@
 {
+  "contextMenu.prepare": "Prepare selected to be sent with RFM",
+  "contextMenu.send": "Send selected with RFM",
+  "contextMenu.prepareHelp": "Pre-select this folder in RFM for sending",
+  "contextMenu.sendHelp": "Automatically send this folder with RFM",
   "auth": {
     "browserOpening": "Opening browser for authentication...",
     "waitingApproval": "Waiting for approval. Please enter this code in your browser: {code}",

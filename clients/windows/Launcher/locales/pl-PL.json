@@ -1,4 +1,8 @@
 {
+  "contextMenu.prepare": "Przygotuj zaznaczone do wysłania przez RFM",
+  "contextMenu.send": "Wyślij zaznaczone przez RFM",
+  "contextMenu.prepareHelp": "Wstępnie wybierz ten folder w RFM do wysłania",
+  "contextMenu.sendHelp": "Automatycznie wyślij ten folder przez RFM",
   "auth": {
     "browserOpening": "Otwieranie przeglądarki do uwierzytelnienia...",
     "waitingApproval": "Oczekiwanie na zatwierdzenie. Wprowadź ten kod w przeglądarce: {code}",

@@ -199,3 +199,148 @@ bool Utils::IsPathAllowed(const std::wstring& path)
 
 	return false;
 }
+
+std::wstring Utils::GetLanguage()
+{
+	// Get config.json path
+	std::wstring moduleDir = GetModuleDirectory();
+	std::wstring configPath = moduleDir + L"\\config.json";
+
+	// Try parent directory if not found
+	if (!PathFileExists(configPath.c_str()))
+	{
+		std::wstring parentDir = moduleDir;
+		PathRemoveFileSpec(const_cast<LPWSTR>(parentDir.c_str()));
+		configPath = parentDir + L"\\config.json";
+	}
+
+	// Try standard installation path
+	if (!PathFileExists(configPath.c_str()))
+	{
+		configPath = L"C:\\Program Files\\RFM\\config.json";
+	}
+
+	if (!PathFileExists(configPath.c_str()))
+	{
+		return L"en-US";  // Default
+	}
+
+	// Read config file
+	std::wifstream file(configPath);
+	if (!file.is_open())
+	{
+		return L"en-US";  // Default
+	}
+
+	std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
+		std::istreambuf_iterator<wchar_t>());
+	file.close();
+
+	// Simple JSON parsing for "language" field
+	size_t langStart = content.find(L"\"language\"");
+	if (langStart == std::wstring::npos)
+	{
+		return L"en-US";  // Default
+	}
+
+	// Find the value after "language":
+	size_t colonPos = content.find(L':', langStart);
+	if (colonPos == std::wstring::npos)
+	{
+		return L"en-US";  // Default
+	}
+
+	// Find opening quote
+	size_t quoteStart = content.find(L'"', colonPos);
+	if (quoteStart == std::wstring::npos)
+	{
+		return L"en-US";  // Default
+	}
+
+	// Find closing quote
+	size_t quoteEnd = content.find(L'"', quoteStart + 1);
+	if (quoteEnd == std::wstring::npos)
+	{
+		return L"en-US";  // Default
+	}
+
+	return content.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+}
+
+std::wstring Utils::GetLocalizedString(const std::wstring& key)
+{
+	// Get language
+	std::wstring language = GetLanguage();
+
+	// Get localization file path
+	std::wstring moduleDir = GetModuleDirectory();
+	std::wstring localesPath = moduleDir + L"\\locales\\" + language + L".json";
+
+	// Try parent directory if not found
+	if (!PathFileExists(localesPath.c_str()))
+	{
+		std::wstring parentDir = moduleDir;
+		PathRemoveFileSpec(const_cast<LPWSTR>(parentDir.c_str()));
+		localesPath = parentDir + L"\\locales\\" + language + L".json";
+	}
+
+	// Try standard installation path
+	if (!PathFileExists(localesPath.c_str()))
+	{
+		localesPath = L"C:\\Program Files\\RFM\\locales\\" + language + L".json";
+	}
+
+	// Fall back to en-US if language file not found
+	if (!PathFileExists(localesPath.c_str()))
+	{
+		language = L"en-US";
+		localesPath = L"C:\\Program Files\\RFM\\locales\\" + language + L".json";
+	}
+
+	if (!PathFileExists(localesPath.c_str()))
+	{
+		return key;  // Return key if no localization found
+	}
+
+	// Read localization file
+	std::wifstream file(localesPath);
+	if (!file.is_open())
+	{
+		return key;
+	}
+
+	std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
+		std::istreambuf_iterator<wchar_t>());
+	file.close();
+
+	// Simple JSON parsing - find the key
+	std::wstring searchKey = L"\"" + key + L"\"";
+	size_t keyStart = content.find(searchKey);
+	if (keyStart == std::wstring::npos)
+	{
+		return key;  // Key not found
+	}
+
+	// Find the value after the key
+	size_t colonPos = content.find(L':', keyStart);
+	if (colonPos == std::wstring::npos)
+	{
+		return key;
+	}
+
+	// Find opening quote
+	size_t quoteStart = content.find(L'"', colonPos);
+	if (quoteStart == std::wstring::npos)
+	{
+		return key;
+	}
+
+	// Find closing quote
+	size_t quoteEnd = content.find(L'"', quoteStart + 1);
+	if (quoteEnd == std::wstring::npos)
+	{
+		return key;
+	}
+
+	return content.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+}

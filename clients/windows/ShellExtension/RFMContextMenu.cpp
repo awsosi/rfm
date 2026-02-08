@@ -49,11 +49,15 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 		return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
 	}
 
+	// Get localized strings
+	std::wstring prepareText = Utils::GetLocalizedString(L"contextMenu.prepare");
+	std::wstring sendText = Utils::GetLocalizedString(L"contextMenu.send");
+
 	// Add "Prepare selected to be sent with RFM" menu item
 	MENUITEMINFO mii = { sizeof(mii) };
 	mii.fMask = MIIM_STRING | MIIM_ID;
 	mii.wID = idCmdFirst + IDM_RFM_PREPARE;
-	mii.dwTypeData = const_cast<LPWSTR>(L"Prepare selected to be sent with RFM");
+	mii.dwTypeData = const_cast<LPWSTR>(prepareText.c_str());
 	InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 
 	UINT itemsAdded = 1;
@@ -62,7 +66,7 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 	if (m_isSingleSelection)
 	{
 		mii.wID = idCmdFirst + IDM_RFM_SEND;
-		mii.dwTypeData = const_cast<LPWSTR>(L"Send selected with RFM");
+		mii.dwTypeData = const_cast<LPWSTR>(sendText.c_str());
 		InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 		itemsAdded++;
 	}
@@ -119,25 +123,25 @@ STDMETHODIMP CRFMContextMenu::GetCommandString(
 		return E_NOTIMPL;
 	}
 
-	LPCWSTR helpText = nullptr;
+	std::wstring helpText;
 
 	switch (idCmd)
 	{
 	case IDM_RFM_PREPARE:
-		helpText = L"Pre-select this folder in RFM for sending";
+		helpText = Utils::GetLocalizedString(L"contextMenu.prepareHelp");
 		break;
 
 	case IDM_RFM_SEND:
-		helpText = L"Automatically send this folder with RFM";
+		helpText = Utils::GetLocalizedString(L"contextMenu.sendHelp");
 		break;
 
 	default:
 		return E_INVALIDARG;
 	}
 
-	if (helpText)
+	if (!helpText.empty())
 	{
-		wcsncpy_s(reinterpret_cast<LPWSTR>(pszName), cchMax, helpText, _TRUNCATE);
+		wcsncpy_s(reinterpret_cast<LPWSTR>(pszName), cchMax, helpText.c_str(), _TRUNCATE);
 		return S_OK;
 	}
 

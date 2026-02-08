@@ -22,4 +22,10 @@ public:
 
 	// Case-insensitive string comparison
 	static bool StartsWithIgnoreCase(const std::wstring& str, const std::wstring& prefix);
+
+	// Load language setting from config.json
+	static std::wstring GetLanguage();
+
+	// Load localized string from localization file
+	static std::wstring GetLocalizedString(const std::wstring& key);
 };
