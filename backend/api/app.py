@@ -1194,7 +1194,8 @@ async def websocket_operations(websocket: WebSocket):
         ws://localhost:8000/ws/operations?token=<jwt_token>
     """
     from api.websocket_manager import ws_manager
-    from api.middleware.auth import decode_token
+    from api.middleware.auth import verify_token
+    from api.config import get_settings
     from fastapi import WebSocketDisconnect
     from loguru import logger
     from datetime import datetime, timezone
@@ -1218,7 +1219,8 @@ async def websocket_operations(websocket: WebSocket):
         return
 
     try:
-        token_data = decode_token(token)
+        settings = get_settings()
+        token_data = await verify_token(token, settings)
         user_id = token_data.user_id
     except Exception as e:
         logger.warning(f"WebSocket auth failed: {e}")

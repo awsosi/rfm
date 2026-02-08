@@ -185,6 +185,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
 ## COMPLETED (Compact Log)
 
+### 2026-02-08 - Fix WebSocket 500 error (wrong import - decode_token doesn't exist)
+- **Bug:** WebSocket connection to `wss://api.ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 500" during handshake. Backend logs showed: `ImportError: cannot import name 'decode_token' from 'api.middleware.auth'`.
+- **Root cause:** The WebSocket endpoint (`app.py:1197`) imported `decode_token` from `api.middleware.auth`, but this function doesn't exist. The correct function name is `verify_token`, which requires both the token string and settings as parameters.
+- **Fix:** Updated `app.py` WebSocket endpoint to import `verify_token` and `get_settings`, then changed the call from `decode_token(token)` to `await verify_token(token, settings)` (async call with settings parameter).
+- **Why it was invisible:** The import was done inside the WebSocket function (not at module level), so the ImportError only occurred when a WebSocket connection was attempted, not during server startup. No error at startup, no indication of the import issue until runtime.
+- **Lesson learned:** When refactoring auth functions, grep for ALL usages including WebSocket endpoints and background tasks. Imports inside functions delay errors until runtime instead of failing at import time.
+
 ### 2026-02-07 - Fix WebSocket 400 error (configuration not injected into all HTML pages)
 - **Bug:** WebSocket connection to `wss://ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 400" during handshake. Persisted despite user setting `API_URL_PUBLIC=https://api.ff.vitkac.local` in `.env` and rebuilding containers.
 - **Root cause:** Backend (`server.py`) only injected `window.API_URL_PUBLIC` configuration into `index.html` (line 42-59), but users were immediately redirected to `pages/login.html` which didn't have the configuration. Without `window.API_URL_PUBLIC`, `auth.js` fell back to `window.location.origin` (the webui domain `https://ff.vitkac.local`), causing WebSocket and API calls to route to the wrong service.
