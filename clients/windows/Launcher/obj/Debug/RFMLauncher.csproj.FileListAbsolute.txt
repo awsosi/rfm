@@ -1,0 +1,2 @@
+C:\Users\olek\Documents\GitHub\rfm\clients\windows\Launcher\obj\Debug\RFMLauncher.csproj.AssemblyReference.cache
+C:\Users\olek\Documents\GitHub\rfm\clients\windows\Launcher\obj\Debug\RFMLauncher.csproj.CoreCompileInputs.cache
