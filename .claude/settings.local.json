@@ -9,7 +9,9 @@
       "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" RFM-Windows.sln //p:Configuration=Debug //v:minimal)",
       "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" RFM-Windows.sln //t:Clean,Build //p:Configuration=Debug //v:minimal)",
       "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" RFM-Windows.sln //p:Configuration=Debug //p:Platform=x86 //v:minimal //t:Rebuild)",
-      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" Installer/RFMSetup.wixproj //p:Configuration=Debug //p:Platform=x86 //v:minimal //t:Rebuild)"
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" Installer/RFMSetup.wixproj //p:Configuration=Debug //p:Platform=x86 //v:minimal //t:Rebuild)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/bin/MSBuild.exe\" Installer/RFMSetup.wixproj //p:Configuration=Debug //p:Platform=x86 //v:detailed //t:Rebuild)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" RFM-Windows.sln -p:Configuration=Release -p:Platform=x64 -t:Rebuild)"
     ]
   }
 }

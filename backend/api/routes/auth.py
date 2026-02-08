@@ -604,8 +604,8 @@ async def device_authorization_request(
     await db.commit()
 
     # Build verification URI
-    # Get base URL from request
-    base_url = str(request.base_url).rstrip('/')
+    # Use public-facing API URL for external clients
+    base_url = settings.api_url_public.rstrip('/')
     verification_uri = f"{base_url}/pages/device.html"
 
     # Calculate expires_in

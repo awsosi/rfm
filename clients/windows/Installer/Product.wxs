@@ -10,6 +10,7 @@
     <Package InstallerVersion="200"
              Compressed="yes"
              InstallScope="perMachine"
+             Platform="x64"
              Description="RFM Windows Context Menu Integration"
              Comments="Integrates RFM with Windows Explorer context menu" />
 
@@ -37,7 +38,7 @@
     <!-- Directory Structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="SystemFolder" />
-      <Directory Id="ProgramFilesFolder">
+      <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="RFM">
 
           <!-- Launcher Component -->
@@ -71,14 +72,19 @@
 
             <File Id="Microsoft.IdentityModel.JsonWebTokens.dll"
                   Source="$(var.RFMLauncher.TargetDir)Microsoft.IdentityModel.JsonWebTokens.dll" />
-
-            <!-- Locale files -->
-            <File Id="enUS.json"
-                  Source="$(var.RFMLauncher.TargetDir)locales\en-US.json" />
-
-            <File Id="plPL.json"
-                  Source="$(var.RFMLauncher.TargetDir)locales\pl-PL.json" />
           </Component>
+
+          <!-- Locales Directory -->
+          <Directory Id="LocalesFolder" Name="locales">
+            <Component Id="LocalesComponent" Guid="F2B3C4D5-E6F7-8901-ABCD-EF2345678901">
+              <File Id="enUS.json"
+                    Source="$(var.RFMLauncher.TargetDir)locales\en-US.json"
+                    KeyPath="yes" />
+
+              <File Id="plPL.json"
+                    Source="$(var.RFMLauncher.TargetDir)locales\pl-PL.json" />
+            </Component>
+          </Directory>
 
           <!-- Shell Extension Component -->
           <Component Id="ShellExtComponent" Guid="A3B4C5D6-E7F8-9012-CDEF-123456789ABC">
@@ -86,39 +92,18 @@
                   Source="$(var.RFMShellExt.TargetPath)"
                   KeyPath="yes" />
 
-            <!-- Self-registration for COM -->
-            <RegistryValue Root="HKCR"
-                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
-                          Value="RFM Context Menu"
-                          Type="string" />
+            <!-- COM Class Registration -->
+            <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}" Type="string" Value="RFM Context Menu" />
+            <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32" Type="string" Value="[#RFMShellExt.dll]" />
+            <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32" Name="ThreadingModel" Type="string" Value="Apartment" />
 
-            <RegistryValue Root="HKCR"
-                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32"
-                          Value="[INSTALLFOLDER]RFMShellExt.dll"
-                          Type="string" />
+            <!-- Context Menu Handlers -->
+            <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shellex\ContextMenuHandlers\RFM" Type="string" Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}" />
+            <RegistryValue Root="HKLM" Key="Software\Classes\*\shellex\ContextMenuHandlers\RFM" Type="string" Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}" />
+            <RegistryValue Root="HKLM" Key="Software\Classes\Folder\shellex\ContextMenuHandlers\RFM" Type="string" Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}" />
 
-            <RegistryValue Root="HKCR"
-                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32"
-                          Name="ThreadingModel"
-                          Value="Apartment"
-                          Type="string" />
-
-            <!-- Context menu handler registration for directories -->
-            <RegistryValue Root="HKCR"
-                          Key="Directory\shellex\ContextMenuHandlers\RFM"
-                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
-                          Type="string" />
-
-            <!-- Context menu handler registration for files/folders -->
-            <RegistryValue Root="HKCR"
-                          Key="*\shellex\ContextMenuHandlers\RFM"
-                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
-                          Type="string" />
-
-            <RegistryValue Root="HKCR"
-                          Key="Folder\shellex\ContextMenuHandlers\RFM"
-                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
-                          Type="string" />
+            <!-- Shell Extension Approval -->
+            <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved" Name="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}" Type="string" Value="RFM Context Menu" />
           </Component>
 
         </Directory>
@@ -150,6 +135,7 @@
     <!-- Features -->
     <Feature Id="ProductFeature" Title="RFM Windows Integration" Level="1">
       <ComponentRef Id="LauncherComponent" />
+      <ComponentRef Id="LocalesComponent" />
       <ComponentRef Id="ShellExtComponent" />
       <ComponentRef Id="ApplicationShortcutComponent" />
     </Feature>
@@ -177,13 +163,29 @@
                   VBScriptCall=""
                   Execute="deferred"
                   Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Register Shell Extension DLL using regsvr32 -->
+    <CustomAction Id="SetRegisterShellExtPath"
+                  Property="RegisterShellExt"
+                  Value="&quot;[INSTALLFOLDER]RFMShellExt.dll&quot;" />
+
+    <CustomAction Id="RegisterShellExt"
+                  Directory="SystemFolder"
+                  ExeCommand="regsvr32.exe /s [RegisterShellExt]"
+                  Execute="deferred"
+                  Impersonate="no"
                   Return="check" />
 
-    <CustomAction Id="RestartExplorer"
-                  ExeCommand="cmd.exe /c taskkill /f /im explorer.exe &amp; start explorer.exe"
+    <CustomAction Id="SetUnregisterShellExtPath"
+                  Property="UnregisterShellExt"
+                  Value="&quot;[INSTALLFOLDER]RFMShellExt.dll&quot;" />
+
+    <CustomAction Id="UnregisterShellExt"
                   Directory="SystemFolder"
+                  ExeCommand="regsvr32.exe /s /u [UnregisterShellExt]"
                   Execute="deferred"
-                  Impersonate="yes"
+                  Impersonate="no"
                   Return="ignore" />
 
     <!-- Install Sequence -->
@@ -194,10 +196,26 @@
       <Custom Action="GenerateConfigJson" After="InstallFiles">
         NOT REMOVE
       </Custom>
-      <Custom Action="RestartExplorer" Before="InstallFinalize">
+
+      <!-- Register Shell Extension DLL -->
+      <Custom Action="SetRegisterShellExtPath" Before="RegisterShellExt">
         NOT REMOVE
       </Custom>
+      <Custom Action="RegisterShellExt" After="GenerateConfigJson">
+        NOT REMOVE
+      </Custom>
+
+      <!-- Unregister Shell Extension DLL on uninstall -->
+      <Custom Action="SetUnregisterShellExtPath" Before="UnregisterShellExt">
+        REMOVE="ALL"
+      </Custom>
+      <Custom Action="UnregisterShellExt" Before="RemoveFiles">
+        REMOVE="ALL"
+      </Custom>
     </InstallExecuteSequence>
+
+    <!-- Prompt user to reboot after installation -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="Please restart your computer for the context menu integration to take effect." />
 
     <!-- Localization -->
     <WixVariable Id="WixUILicenseRtf" Value="Files\License.rtf" />

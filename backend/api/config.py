@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_workers: int = 4
     api_reload: bool = False
+    api_url_public: str = Field(
+        default="http://localhost:8000",
+        description="Public-facing API URL for external clients (used for device authorization, etc.)",
+    )
 
     # Database
     database_url: PostgresDsn = Field(
