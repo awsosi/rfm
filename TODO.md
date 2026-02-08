@@ -185,6 +185,23 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
 ## COMPLETED (Compact Log)
 
+### 2026-02-08 - UI improvements: wildcard search, status column centering, responsive button arrows
+- **Issue 1 - Wildcard search NOT working:** Directory search in left pane (Path A) should support partial/substring matching. Typing "anoth" should find "anotherdir". User reported this was NOT working despite 2026-02-08 Elasticsearch fix.
+  - **Root cause 1 (Elasticsearch):** `elasticsearch_service.py:495-501` used `multi_match` with `type: "phrase"` for wildcard queries, but `multi_match` with `type: "phrase"` does NOT support wildcards. This was a bug in the original "fix".
+  - **Root cause 2 (Worker fallback):** When Elasticsearch is disabled, search falls back to worker service which sends pattern to C# worker. The C# worker uses `Directory.GetFiles(pattern)` which requires explicit wildcards (`*pattern*`). If user types "anoth" without wildcards, it won't match "anotherdir".
+  - **Fix 1:** Replaced `multi_match` with actual `wildcard` queries on `.keyword` fields in `elasticsearch_service.py:494-510`. Now uses separate `wildcard` queries for `path.keyword` and `name.keyword` with pattern `*{query}*`.
+  - **Fix 2:** Modified `worker_service.py:230-256` to automatically wrap search query with wildcards before sending to worker (adds `*` prefix/suffix if not already present). This allows "anoth" to match "anotherdir" even when Elasticsearch is disabled.
+  - **Result:** Substring matching now works in both code paths (Elasticsearch and worker fallback). Typing "anoth" finds "anotherdir" correctly.
+- **Issue 2 - Status column vertical alignment:** Operation History table status badges were aligned to top instead of centered vertically within table cells.
+  - **Fix:** Added `vertical-align: middle;` to `.queue-table td` selector in `style.css:1530`. All table cells now center content vertically.
+- **Issue 3 - Push/Pull button arrows:** When panes are side-by-side (horizontal layout), `Push >` and `< Pull` make sense. When panes are stacked vertically (mobile/tablet), the horizontal arrows `>` and `<` are confusing.
+  - **Fix:** Implemented responsive arrow display:
+    1. Updated HTML (`explorer.html:77-82`): Split button text into separate spans for label and arrows. Added both horizontal (`>`, `<`) and vertical (`↓`, `↑`) arrow spans.
+    2. Added CSS rules (`style.css:1422-1443`): By default (horizontal layout), show horizontal arrows, hide vertical arrows.
+    3. Added media query (`style.css:1698-1711`): At `@media (max-width: 1024px)` (stacked layout), hide horizontal arrows, show vertical arrows.
+    4. Result: Desktop/horizontal shows "Push >" and "< Pull". Mobile/tablet shows "Push ↓" and "↑ Pull".
+- **Files modified:** `elasticsearch_service.py` (fixed wildcard query), `worker_service.py` (auto-wrap pattern with wildcards), `style.css` (vertical-align, arrow visibility, media query), `explorer.html` (button HTML structure with arrow spans)
+
 ### 2026-02-08 - Implement silent background polling for real-time external file changes
 - **Issue:** After WebSocket implementation, polling interval was changed from 5s → 60s to reduce load. But this meant external file changes (files added/modified directly on Samba share, outside the app) took 60 seconds to appear. Also, polling caused screen flicker with "Loading" indicator.
 - **User requirements:**

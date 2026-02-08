@@ -491,12 +491,22 @@ class ElasticsearchService:
                                     "fuzziness": "AUTO",
                                 }
                             },
-                            # Wildcard query for substring matching
+                            # Wildcard query on path for substring matching (e.g., "anoth" matches "anotherdir")
                             {
-                                "multi_match": {
-                                    "query": f"*{query}*",
-                                    "fields": ["path.keyword^2", "name.keyword^3"],
-                                    "type": "phrase",
+                                "wildcard": {
+                                    "path.keyword": {
+                                        "value": f"*{query}*",
+                                        "boost": 2.0,
+                                    }
+                                }
+                            },
+                            # Wildcard query on name for substring matching
+                            {
+                                "wildcard": {
+                                    "name.keyword": {
+                                        "value": f"*{query}*",
+                                        "boost": 3.0,
+                                    }
                                 }
                             },
                         ],

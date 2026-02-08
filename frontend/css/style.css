@@ -1414,6 +1414,23 @@ select {
     box-shadow: none;
 }
 
+/* Horizontal layout arrows (default: side-by-side) */
+.btn-push .arrow-horizontal {
+    display: inline;
+}
+
+.btn-push .arrow-vertical {
+    display: none;
+}
+
+.btn-pull .arrow-horizontal {
+    display: inline;
+}
+
+.btn-pull .arrow-vertical {
+    display: none;
+}
+
 /* Operation Queue Panel (Right Side) */
 .operation-queue-panel {
     background-color: var(--bg-primary);
@@ -1528,6 +1545,7 @@ select {
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: 13px;
     color: var(--text-primary);
+    vertical-align: middle;
 }
 
 .queue-table td.col-directory {
@@ -1695,6 +1713,23 @@ select {
 
     .operation-queue-panel {
         min-height: 400px;
+    }
+
+    /* Vertical layout arrows (stacked: panes on top of each other) */
+    .btn-push .arrow-horizontal {
+        display: none;
+    }
+
+    .btn-push .arrow-vertical {
+        display: inline;
+    }
+
+    .btn-pull .arrow-horizontal {
+        display: none;
+    }
+
+    .btn-pull .arrow-vertical {
+        display: inline;
     }
 }
 

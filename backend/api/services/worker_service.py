@@ -241,16 +241,24 @@ class WorkerService:
         Args:
             worker: Worker model
             path: Base path to search
-            query: Search query
+            query: Search query (will be wrapped with wildcards for substring matching)
             db: Database session
             recursive: Whether to search recursively
 
         Returns:
             WorkerCommandResponse with search results
         """
+        # Wrap query with wildcards for substring matching (unless already present)
+        # This allows "anoth" to match "anotherdir"
+        pattern = query
+        if query and not query.startswith("*"):
+            pattern = f"*{pattern}"
+        if query and not query.endswith("*"):
+            pattern = f"{pattern}*"
+
         command = WorkerRequest(
             command="search",
-            params={"path": path, "pattern": query, "recursive": recursive},
+            params={"path": path, "pattern": pattern, "recursive": recursive},
         )
 
         return await self.send_command(worker, command, db)
