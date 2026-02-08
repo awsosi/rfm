@@ -185,6 +185,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
 ## COMPLETED (Compact Log)
 
+### 2026-02-08 - Fix WebSocket fallback polling triggered despite connection (placeholder function always returns false)
+- **Bug:** Console showed "WebSocket not connected, falling back to polling" and "WebSocket disconnected, using fallback polling for operations" even though WebSocket was connected and working (heartbeats visible, real-time events coming through). Fallback polling was running unnecessarily every 30s/60s.
+- **Root cause:** `app.js` line 1215-1218 had a placeholder `isWebSocketConnected()` function that always returned `false`. The real implementation existed in `api.js` line 495-497 (`return wsConnection && wsConnection.readyState === WebSocket.OPEN`), but it wasn't imported into `app.js`. Every check for WebSocket connectivity returned false, triggering fallback polling logic despite an active connection.
+- **Fix:** Added `isWebSocketConnected` to the import list from `api.js` in `app.js` line 20. Removed the placeholder function. Now the real WebSocket state is checked correctly.
+- **Why it was invisible:** WebSocket worked fine for real-time updates (events came through, heartbeats visible). The only symptom was unnecessary console messages and background polling. No functional impact, just wasted resources.
+- **Lesson learned:** When implementing a TODO/placeholder function, add a clear comment with a deadline or link to the real implementation. Better: grep for the function name before adding a placeholder - the real implementation may already exist elsewhere.
+
 ### 2026-02-08 - Fix WebSocket 500 error (wrong import - decode_token doesn't exist)
 - **Bug:** WebSocket connection to `wss://api.ff.vitkac.local/ws/operations?token=xyz` failed with "Unexpected response code: 500" during handshake. Backend logs showed: `ImportError: cannot import name 'decode_token' from 'api.middleware.auth'`.
 - **Root cause:** The WebSocket endpoint (`app.py:1197`) imported `decode_token` from `api.middleware.auth`, but this function doesn't exist. The correct function name is `verify_token`, which requires both the token string and settings as parameters.

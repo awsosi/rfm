@@ -18,6 +18,7 @@ import {
     connectWebSocket,
     disconnectWebSocket,
     onWebSocketEvent,
+    isWebSocketConnected,
     startPolling,
     pushOperation,
     pullOperation,
@@ -1208,14 +1209,6 @@ function handlePollingUpdate(operations) {
     });
 }
 
-/**
- * Check if WebSocket is connected
- * @returns {boolean}
- */
-function isWebSocketConnected() {
-    // Import from api.js if needed, or implement check here
-    return false; // Placeholder
-}
 
 /**
  * Open settings modal and load current preferences
