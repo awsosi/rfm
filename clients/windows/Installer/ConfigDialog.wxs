@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <UI>
+      <!-- Custom configuration dialog -->
+      <Dialog Id="ConfigDialog" Width="370" Height="270" Title="RFM Configuration">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>{\WixUI_Font_Title}RFM Server Configuration</Text>
+        </Control>
+
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="20" Transparent="yes" NoPrefix="yes">
+          <Text>Please enter your RFM server URL and allowed network paths.</Text>
+        </Control>
+
+        <!-- API URL -->
+        <Control Id="ApiUrlLabel" Type="Text" X="25" Y="55" Width="320" Height="10" TabSkip="no" Text="&amp;API Server URL:" />
+        <Control Id="ApiUrlEdit" Type="Edit" X="25" Y="67" Width="320" Height="18" Property="API_URL" />
+        <Control Id="ApiUrlNote" Type="Text" X="25" Y="87" Width="320" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>Example: https://rfm.company.com</Text>
+        </Control>
+
+        <!-- Allowed Paths -->
+        <Control Id="PathsLabel" Type="Text" X="25" Y="110" Width="320" Height="10" TabSkip="no" Text="Allowed &amp;Paths (one per line):" />
+        <Control Id="PathsEdit" Type="Edit" X="25" Y="122" Width="320" Height="50" Property="ALLOWED_PATHS" Multiline="yes" />
+        <Control Id="PathsNote" Type="Text" X="25" Y="174" Width="320" Height="20" Transparent="yes" NoPrefix="yes">
+          <Text>Example: \\server\share or C:\LocalPath</Text>
+        </Control>
+
+        <!-- Language selection -->
+        <Control Id="LanguageLabel" Type="Text" X="25" Y="200" Width="100" Height="10" TabSkip="no" Text="&amp;Language:" />
+        <Control Id="LanguageCombo" Type="ComboBox" X="25" Y="212" Width="100" Height="18" Property="UI_LANGUAGE" ComboList="yes">
+          <ComboBox Property="UI_LANGUAGE">
+            <ListItem Text="English" Value="en-US" />
+            <ListItem Text="Polski" Value="pl-PL" />
+          </ComboBox>
+        </Control>
+
+        <!-- Navigation buttons -->
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&amp;Back">
+          <Publish Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+        </Control>
+
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+        </Control>
+
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+      </Dialog>
+    </UI>
+  </Fragment>
+</Wix>

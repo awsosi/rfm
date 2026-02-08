@@ -22,6 +22,12 @@
     <Property Id="ARPHELPLINK" Value="https://github.com/your-org/rfm" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/your-org/rfm" />
 
+    <!-- Configuration Properties (can be set via command line) -->
+    <Property Id="API_URL" Value="https://rfm.company.com" />
+    <Property Id="ALLOWED_PATHS" Value="C:\" />
+    <Property Id="UI_LANGUAGE" Value="en-US" />
+    <Property Id="CREDENTIAL_PREFIX" Value="RFM_ContextMenu" />
+
     <!-- Ensure .NET Framework 4.8 is installed -->
     <PropertyRef Id="WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED"/>
     <Condition Message="This application requires .NET Framework 4.8 or later. Please install the .NET Framework then run this installer again.">
@@ -30,6 +36,7 @@
 
     <!-- Directory Structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="SystemFolder" />
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="RFM">
 
@@ -40,9 +47,10 @@
                   Source="$(var.RFMLauncher.TargetPath)"
                   KeyPath="yes" />
 
-            <!-- Configuration file -->
+            <!-- Configuration file (will be generated during install) -->
             <File Id="config.json"
-                  Source="Files\config.json" />
+                  Source="Files\config.json"
+                  KeyPath="no" />
 
             <!-- NuGet dependencies -->
             <File Id="Newtonsoft.Json.dll"
@@ -50,6 +58,19 @@
 
             <File Id="CredentialManagement.dll"
                   Source="$(var.RFMLauncher.TargetDir)CredentialManagement.dll" />
+
+            <!-- JWT and Identity Model libraries -->
+            <File Id="System.IdentityModel.Tokens.Jwt.dll"
+                  Source="$(var.RFMLauncher.TargetDir)System.IdentityModel.Tokens.Jwt.dll" />
+
+            <File Id="Microsoft.IdentityModel.Tokens.dll"
+                  Source="$(var.RFMLauncher.TargetDir)Microsoft.IdentityModel.Tokens.dll" />
+
+            <File Id="Microsoft.IdentityModel.Logging.dll"
+                  Source="$(var.RFMLauncher.TargetDir)Microsoft.IdentityModel.Logging.dll" />
+
+            <File Id="Microsoft.IdentityModel.JsonWebTokens.dll"
+                  Source="$(var.RFMLauncher.TargetDir)Microsoft.IdentityModel.JsonWebTokens.dll" />
 
             <!-- Locale files -->
             <File Id="enUS.json"
@@ -134,10 +155,30 @@
     </Feature>
 
     <!-- User Interface -->
-    <UIRef Id="WixUI_Minimal" />
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <UIRef Id="WixUI_ErrorProgressText" />
 
+    <!-- Custom UI sequence to include configuration dialog -->
+    <UI>
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="ConfigDialog" Order="3">LicenseAccepted = "1"</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="ConfigDialog">1</Publish>
+    </UI>
+
     <!-- Custom Actions -->
+    <Binary Id="GenerateConfigVbs" SourceFile="GenerateConfig.vbs" />
+
+    <CustomAction Id="SetGenerateConfigData"
+                  Property="GenerateConfigJson"
+                  Value="[INSTALLFOLDER]|[API_URL]|[ALLOWED_PATHS]|[UI_LANGUAGE]|[CREDENTIAL_PREFIX]" />
+
+    <CustomAction Id="GenerateConfigJson"
+                  BinaryKey="GenerateConfigVbs"
+                  VBScriptCall=""
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
     <CustomAction Id="RestartExplorer"
                   ExeCommand="cmd.exe /c taskkill /f /im explorer.exe &amp; start explorer.exe"
                   Directory="SystemFolder"
@@ -147,7 +188,13 @@
 
     <!-- Install Sequence -->
     <InstallExecuteSequence>
-      <Custom Action="RestartExplorer" After="InstallFinalize">
+      <Custom Action="SetGenerateConfigData" Before="GenerateConfigJson">
+        NOT REMOVE
+      </Custom>
+      <Custom Action="GenerateConfigJson" After="InstallFiles">
+        NOT REMOVE
+      </Custom>
+      <Custom Action="RestartExplorer" Before="InstallFinalize">
         NOT REMOVE
       </Custom>
     </InstallExecuteSequence>
