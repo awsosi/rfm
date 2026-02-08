@@ -214,6 +214,7 @@ services:
       API_WORKERS: ${API_WORKERS:-4}
       API_RELOAD: ${API_RELOAD:-false}
       API_URL_PUBLIC: ${API_URL_PUBLIC:-http://localhost:8000}
+      FRONTEND_URL_PUBLIC: ${FRONTEND_URL_PUBLIC:-http://localhost:3000}
 
       # Security
       SECRET_KEY: ${SECRET_KEY:-CHANGE_ME_TO_RANDOM_64_BYTE_STRING}

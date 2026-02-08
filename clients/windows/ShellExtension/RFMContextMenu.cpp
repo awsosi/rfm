@@ -49,15 +49,20 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 		return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
 	}
 
-	// Get localized strings
-	std::wstring prepareText = Utils::GetLocalizedString(L"contextMenu.prepare");
-	std::wstring sendText = Utils::GetLocalizedString(L"contextMenu.send");
+	// Load localized strings if not already loaded
+	if (m_prepareText.empty())
+	{
+		m_prepareText = Utils::GetLocalizedString(L"contextMenu.prepare");
+		m_sendText = Utils::GetLocalizedString(L"contextMenu.send");
+		m_prepareHelpText = Utils::GetLocalizedString(L"contextMenu.prepareHelp");
+		m_sendHelpText = Utils::GetLocalizedString(L"contextMenu.sendHelp");
+	}
 
 	// Add "Prepare selected to be sent with RFM" menu item
 	MENUITEMINFO mii = { sizeof(mii) };
 	mii.fMask = MIIM_STRING | MIIM_ID;
 	mii.wID = idCmdFirst + IDM_RFM_PREPARE;
-	mii.dwTypeData = const_cast<LPWSTR>(prepareText.c_str());
+	mii.dwTypeData = const_cast<LPWSTR>(m_prepareText.c_str());
 	InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 
 	UINT itemsAdded = 1;
@@ -66,7 +71,7 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 	if (m_isSingleSelection)
 	{
 		mii.wID = idCmdFirst + IDM_RFM_SEND;
-		mii.dwTypeData = const_cast<LPWSTR>(sendText.c_str());
+		mii.dwTypeData = const_cast<LPWSTR>(m_sendText.c_str());
 		InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 		itemsAdded++;
 	}
@@ -123,25 +128,25 @@ STDMETHODIMP CRFMContextMenu::GetCommandString(
 		return E_NOTIMPL;
 	}
 
-	std::wstring helpText;
+	LPCWSTR helpText = nullptr;
 
 	switch (idCmd)
 	{
 	case IDM_RFM_PREPARE:
-		helpText = Utils::GetLocalizedString(L"contextMenu.prepareHelp");
+		helpText = m_prepareHelpText.c_str();
 		break;
 
 	case IDM_RFM_SEND:
-		helpText = Utils::GetLocalizedString(L"contextMenu.sendHelp");
+		helpText = m_sendHelpText.c_str();
 		break;
 
 	default:
 		return E_INVALIDARG;
 	}
 
-	if (!helpText.empty())
+	if (helpText && *helpText)
 	{
-		wcsncpy_s(reinterpret_cast<LPWSTR>(pszName), cchMax, helpText.c_str(), _TRUNCATE);
+		wcsncpy_s(reinterpret_cast<LPWSTR>(pszName), cchMax, helpText, _TRUNCATE);
 		return S_OK;
 	}
 

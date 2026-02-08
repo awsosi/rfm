@@ -23,6 +23,12 @@ private:
 	bool m_isSingleSelection;
 	bool m_isDirectory;
 
+	// Localized menu strings (cached)
+	std::wstring m_prepareText;
+	std::wstring m_sendText;
+	std::wstring m_prepareHelpText;
+	std::wstring m_sendHelpText;
+
 	// Helper methods
 	HRESULT GetPathFromDataObject(IDataObject* pDataObj);
 	bool IsPathAllowed(const std::wstring& path);

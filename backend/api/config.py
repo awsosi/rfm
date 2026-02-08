@@ -38,7 +38,11 @@ class Settings(BaseSettings):
     api_reload: bool = False
     api_url_public: str = Field(
         default="http://localhost:8000",
-        description="Public-facing API URL for external clients (used for device authorization, etc.)",
+        description="Public-facing API URL for external clients",
+    )
+    frontend_url_public: str = Field(
+        default="http://localhost:3000",
+        description="Public-facing frontend URL for browser pages (device authorization, etc.)",
     )
 
     # Database
