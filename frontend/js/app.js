@@ -236,45 +236,42 @@ async function init() {
 /**
  * Start auto-refresh for Operation History and file listings (VF Redesign)
  *
- * NOTE: With WebSocket support, polling is now a FALLBACK mechanism only.
- * WebSocket provides real-time updates. Polling runs at much longer intervals
- * (30s for operations, 60s for files) to catch any updates if WebSocket fails.
+ * CRITICAL: Polling runs SILENTLY in the background without showing loading indicators.
+ * - WebSocket provides instant updates for operations
+ * - Polling (5s) detects external file changes (files added/modified outside the app)
+ * - No visual interruption: no loading spinners, no flicker, typing is not interrupted
+ * - Only user-initiated actions (clicking refresh, navigating) show loading indicators
  */
 function startAutoRefresh() {
-    // Fallback polling: Refresh Operation History every 30 seconds (was 3s)
+    // Silent background polling: Refresh Operation History every 10 seconds
     // Primary updates come via WebSocket 'operation_update' events
+    // Polling is slower here because operations always go through the API (always trigger WebSocket)
     state.autoRefreshIntervals.operationHistory = setInterval(async () => {
         try {
-            // Only poll if WebSocket is not connected
-            if (!isWebSocketConnected()) {
-                console.log('WebSocket disconnected, using fallback polling for operations');
-                await loadOperationHistory(false);
-            }
+            // Note: loadOperationHistory doesn't show loading indicator anyway
+            await loadOperationHistory(false);
         } catch (error) {
-            console.error('Auto-refresh operation history failed:', error);
+            console.error('[Polling] Auto-refresh operation history failed:', error);
         }
-    }, 30000);
+    }, 10000);
 
-    // Fallback polling: Refresh Path A file listing every 60 seconds (was 5s)
-    // Primary updates come via WebSocket 'file_list_changed' events
+    // Silent background polling: Refresh Path A file listing every 5 seconds
+    // This is CRITICAL for detecting external file changes (files added/modified outside the app)
+    // Uses silent mode - no loading indicator, no visual interruption
     state.autoRefreshIntervals.fileList = setInterval(async () => {
         try {
-            // Only poll if WebSocket is not connected
-            if (!isWebSocketConnected()) {
-                console.log('WebSocket disconnected, using fallback polling for file list');
-                // Skip refresh if user is actively interacting
-                if (shouldSkipAutoRefresh('a')) {
-                    console.log('Skipping auto-refresh: user is interacting');
-                    return;
-                }
-                await refreshPane('a');
+            // Skip refresh if user is actively typing in path or search input
+            if (shouldSkipAutoRefresh('a')) {
+                return;
             }
+            // SILENT refresh - updates data without showing loading indicator
+            await refreshPane('a', true);  // silent = true
         } catch (error) {
-            console.error('Auto-refresh file list failed:', error);
+            console.error('[Polling] Auto-refresh file list failed:', error);
         }
-    }, 60000);
+    }, 5000);
 
-    console.log('Fallback polling started (30s for operations, 60s for files). WebSocket provides real-time updates.');
+    console.log('Silent background polling started (5s for files, 10s for operations). No loading indicators, no flicker.');
 }
 
 /**
@@ -434,36 +431,27 @@ function setupPaneControls(paneId) {
     const searchBtn = document.getElementById(`search-btn-${paneId}`);
     if (searchBtn) {
         searchBtn.addEventListener('click', async () => {
-            console.log(`[Search] Search button clicked for pane ${paneId}`);
             await handleSearch(paneId);
         });
-        console.log(`[Init] Search button event listener attached for pane ${paneId}`);
-    } else {
-        console.error(`[Init] Search button not found for pane ${paneId}`);
     }
 
-    // Search input enter key
+    // Search input enter key and debounced input
     const searchInput = document.getElementById(`search-${paneId}`);
     if (searchInput) {
         searchInput.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
-                console.log(`[Search] Enter key pressed in search input for pane ${paneId}`);
                 await handleSearch(paneId);
             }
         });
 
         // Search input with debounce
         searchInput.addEventListener('input', debounce(async () => {
-            console.log(`[Search] Search input changed for pane ${paneId}, value: "${searchInput.value}"`);
             if (searchInput.value) {
                 await handleSearch(paneId);
             } else {
                 await refreshPane(paneId);
             }
         }, 500));
-        console.log(`[Init] Search input event listeners attached for pane ${paneId}`);
-    } else {
-        console.error(`[Init] Search input not found for pane ${paneId}`);
     }
 
     // Load more button
@@ -614,8 +602,9 @@ function validatePathA(path) {
  * Load directory contents
  * @param {string} paneId - Pane ID
  * @param {string} path - Directory path
+ * @param {boolean} silent - If true, don't show loading indicator (for background polling)
  */
-async function loadDirectory(paneId, path) {
+async function loadDirectory(paneId, path, silent = false) {
     const normalizedPath = normalizePath(path);
 
     // Validate Path A
@@ -623,14 +612,17 @@ async function loadDirectory(paneId, path) {
         validatePathA(normalizedPath);
     } catch (error) {
         showError(error.message);
-        hideLoading(paneId);
+        if (!silent) hideLoading(paneId);
         return;
     }
 
     // Set loading flag to prevent race conditions with auto-refresh
     state.panes[paneId].isLoading = true;
 
-    showLoading(paneId);
+    // Only show loading indicator if not silent (user-initiated actions only)
+    if (!silent) {
+        showLoading(paneId);
+    }
     state.panes[paneId].isSearching = false;
     state.panes[paneId].offset = 0;
 
@@ -694,10 +686,12 @@ async function loadDirectory(paneId, path) {
     } catch (error) {
         console.error(`Error loading directory for pane ${paneId}:`, error);
         showError(t('errors.failedToLoadDirectory', { error: error.message }));
-        hideLoading(paneId);
+        if (!silent) hideLoading(paneId);
     } finally {
         // Clear loading flag after navigation completes
         state.panes[paneId].isLoading = false;
+        // Always hide loading indicator on completion (even in silent mode, in case it was shown before)
+        if (!silent) hideLoading(paneId);
     }
 }
 
@@ -773,10 +767,11 @@ function sortFiles(files, sortBy, sortOrder) {
 /**
  * Refresh pane contents
  * @param {string} paneId - Pane ID
+ * @param {boolean} silent - If true, don't show loading indicator (for background polling)
  */
-async function refreshPane(paneId) {
+async function refreshPane(paneId, silent = false) {
     const currentPath = state.panes[paneId].currentPath;
-    await loadDirectory(paneId, currentPath);
+    await loadDirectory(paneId, currentPath, silent);
 }
 
 /**
@@ -810,25 +805,19 @@ async function loadMoreFiles(paneId) {
  * @param {string} paneId - Pane ID
  */
 async function handleSearch(paneId) {
-    console.log(`[Search] handleSearch called for pane ${paneId}`);
-
     const searchInput = document.getElementById(`search-${paneId}`);
     if (!searchInput) {
-        console.error(`[Search] Search input element not found for pane ${paneId}`);
         return;
     }
 
     const pattern = searchInput.value.trim();
-    console.log(`[Search] Search pattern: "${pattern}"`);
 
     if (!pattern) {
-        console.log('[Search] Empty pattern, refreshing pane');
         await refreshPane(paneId);
         return;
     }
 
     const currentPath = state.panes[paneId].currentPath;
-    console.log(`[Search] Searching in path: ${currentPath}, workerId: ${state.workerId}`);
 
     // Set loading flag to prevent race conditions with auto-refresh
     state.panes[paneId].isLoading = true;
@@ -838,9 +827,7 @@ async function handleSearch(paneId) {
 
     try {
         // Pass workerId explicitly to search function
-        console.log(`[Search] Calling searchFiles API...`);
         const files = await searchFiles(currentPath, pattern, state.workerId);
-        console.log(`[Search] Received ${files.length} results`);
 
         state.panes[paneId].files = files;
 
@@ -853,9 +840,8 @@ async function handleSearch(paneId) {
         // Update sort arrows
         updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
 
-        console.log('[Search] Search completed successfully');
     } catch (error) {
-        console.error(`[Search] Error searching files in pane ${paneId}:`, error);
+        console.error(`Error searching files in pane ${paneId}:`, error);
         showError(t('errors.searchFailed', { error: error.message }));
     } finally {
         hideLoading(paneId);
@@ -1131,8 +1117,6 @@ async function loadActiveOperations() {
  * @param {Object} data - Event data
  */
 function handleWebSocketEvent(data) {
-    console.log('WebSocket event:', data);
-
     // VF Redesign: Check if we're on the redesigned layout
     const isVFRedesign = document.body.classList.contains('vf-redesign');
 
@@ -1141,7 +1125,6 @@ function handleWebSocketEvent(data) {
         switch (data.event_type || data.type) {
             case 'operation_update':
                 // Real-time operation status updates from backend
-                console.log('Real-time operation update via WebSocket:', data);
                 handleVFOperationUpdate(data);
                 break;
 
@@ -1154,28 +1137,23 @@ function handleWebSocketEvent(data) {
 
             case 'file_list_changed':
                 // Real-time file listing change notification
-                console.log('Real-time file list changed via WebSocket:', data.path);
                 handleFileListChanged(data);
                 break;
 
             case 'file_changed':
                 // Legacy file change event
                 if (data.path && data.path.startsWith(state.panes.a.currentPath)) {
-                    refreshPane('a');
+                    refreshPane('a', true);  // silent refresh
                 }
                 break;
 
             case 'connected':
                 // WebSocket connection established
-                console.log('WebSocket connection established');
                 break;
 
             case 'heartbeat':
                 // Heartbeat/ping from server (no action needed)
                 break;
-
-            default:
-                console.log('Unhandled WebSocket event type:', data.event_type || data.type);
         }
     } else {
         // Legacy dual-pane event handling
@@ -1467,7 +1445,6 @@ function setupVFRedesignControls() {
     const queueSearchInput = document.getElementById('queue-search-input');
     if (queueSearchBtn && queueSearchInput) {
         queueSearchBtn.addEventListener('click', async () => {
-            console.log(`[OpHistory] Queue search button clicked, query: "${queueSearchInput.value}"`);
             state.operationQueue.searchQuery = queueSearchInput.value.trim();
             state.operationQueue.offset = 0;
             await loadOperationHistory();
@@ -1476,15 +1453,11 @@ function setupVFRedesignControls() {
         // Also trigger search on Enter key
         queueSearchInput.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
-                console.log(`[OpHistory] Enter key pressed in queue search input, query: "${queueSearchInput.value}"`);
                 state.operationQueue.searchQuery = queueSearchInput.value.trim();
                 state.operationQueue.offset = 0;
                 await loadOperationHistory();
             }
         });
-        console.log('[Init] Queue search event listeners attached');
-    } else {
-        console.error(`[Init] Queue search elements not found: btn=${!!queueSearchBtn}, input=${!!queueSearchInput}`);
     }
 
     // Queue clear search button
@@ -1633,12 +1606,10 @@ function updateOperationQueueSortArrows(sortBy, sortOrder) {
  * Load operation history (VF Redesign)
  */
 async function loadOperationHistory(append = false) {
-    console.log(`[OpHistory] loadOperationHistory called, append: ${append}`);
     showQueueLoading();
 
     try {
         const hasSearchQuery = state.operationQueue.searchQuery && state.operationQueue.searchQuery.trim() !== '';
-        console.log(`[OpHistory] Has search query: ${hasSearchQuery}, query: "${state.operationQueue.searchQuery}"`);
         let operations;
 
         if (hasSearchQuery) {
@@ -1650,11 +1621,9 @@ async function loadOperationHistory(append = false) {
                 operation_type: state.operationQueue.filters.type,
                 status: state.operationQueue.filters.status
             };
-            console.log('[OpHistory] Using searchOperations API with params:', searchParams);
 
             const result = await searchOperations(searchParams);
             operations = result.operations;
-            console.log(`[OpHistory] searchOperations returned ${operations?.length || 0} results`);
         } else {
             // Use regular history API
             const filters = {
@@ -1663,10 +1632,8 @@ async function loadOperationHistory(append = false) {
                 operation_type: state.operationQueue.filters.type,
                 status: state.operationQueue.filters.status
             };
-            console.log('[OpHistory] Using getOperationHistory API with filters:', filters);
 
             operations = await getOperationHistory(filters);
-            console.log(`[OpHistory] getOperationHistory returned ${operations?.length || 0} results`);
         }
 
         if (append) {
@@ -1798,9 +1765,11 @@ async function handlePullOperation() {
         await loadOperationHistory();
 
         // Refresh Path A if we're in the same directory
-        if (state.panes.a.currentPath === operation.original_path ||
-            operation.original_path.startsWith(state.panes.a.currentPath)) {
-            await refreshPane('a');
+        if (operation.original_path) {
+            if (state.panes.a.currentPath === operation.original_path ||
+                operation.original_path.startsWith(state.panes.a.currentPath)) {
+                await refreshPane('a');
+            }
         }
 
     } catch (error) {
@@ -1829,11 +1798,7 @@ function updateVFButtonStates() {
  * Handle WebSocket operation updates for VF redesign (REAL-TIME)
  */
 function handleVFOperationUpdate(data) {
-    console.log('[WebSocket] Real-time operation update:', data);
-
     // Real-time refresh: Update operation history when ANY operation status changes
-    // This replaces the 3-second polling with instant updates
-    console.log('[WebSocket] Refreshing operation history in real-time');
     loadOperationHistory(false).catch(err => {
         console.error('Failed to refresh operation history:', err);
     });
@@ -1863,8 +1828,6 @@ function handleVFOperationUpdate(data) {
  * @param {Object} data - File list changed event data
  */
 function handleFileListChanged(data) {
-    console.log('[WebSocket] Real-time file list changed:', data.path);
-
     // Check if the changed path affects the currently displayed directory
     const currentPath = state.panes.a.currentPath;
 
@@ -1880,16 +1843,13 @@ function handleFileListChanged(data) {
     if (shouldRefresh) {
         // Skip refresh if user is actively interacting
         if (shouldSkipAutoRefresh('a')) {
-            console.log('[WebSocket] Skipping refresh: user is interacting');
             return;
         }
 
-        console.log('[WebSocket] Refreshing file listing in real-time');
-        refreshPane('a').catch(err => {
+        // Use silent mode - no loading indicator for real-time updates
+        refreshPane('a', true).catch(err => {
             console.error('Failed to refresh file listing:', err);
         });
-    } else {
-        console.log('[WebSocket] Changed path does not affect current view, skipping refresh');
     }
 }
 

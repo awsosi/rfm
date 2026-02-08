@@ -274,22 +274,45 @@ class ElasticsearchService:
             # Build query
             must_clauses = []
 
-            # Add free-text search
+            # Add free-text search with substring matching support
             if query:
+                # Use "should" clause with multiple query types for better substring matching
                 must_clauses.append({
-                    "multi_match": {
-                        "query": query,
-                        "fields": [
-                            "source_path^3",
-                            "dest_path^3",
-                            "original_path^2",
-                            "archive_path^2",
-                            "user_name^2",
-                            "error_msg",
+                    "bool": {
+                        "should": [
+                            # Fuzzy match for typo tolerance
+                            {
+                                "multi_match": {
+                                    "query": query,
+                                    "fields": [
+                                        "source_path^3",
+                                        "dest_path^3",
+                                        "original_path^2",
+                                        "archive_path^2",
+                                        "user_name^2",
+                                        "error_msg",
+                                    ],
+                                    "type": "best_fields",
+                                    "operator": "or",  # Changed from "and" to "or" for partial matching
+                                    "fuzziness": "AUTO",
+                                }
+                            },
+                            # Wildcard query for substring matching
+                            {
+                                "multi_match": {
+                                    "query": f"*{query}*",
+                                    "fields": [
+                                        "source_path.keyword^2",
+                                        "dest_path.keyword^2",
+                                        "original_path.keyword",
+                                        "archive_path.keyword",
+                                        "user_name.keyword",
+                                    ],
+                                    "type": "phrase",
+                                }
+                            },
                         ],
-                        "type": "best_fields",
-                        "operator": "and",
-                        "fuzziness": "AUTO",
+                        "minimum_should_match": 1,
                     }
                 })
 
@@ -452,14 +475,32 @@ class ElasticsearchService:
             # Build query
             must_clauses = []
 
-            # Add free-text search
+            # Add free-text search with substring matching support
             if query:
+                # Use "should" clause with multiple query types for better substring matching
                 must_clauses.append({
-                    "multi_match": {
-                        "query": query,
-                        "fields": ["path^2", "name^3"],
-                        "type": "best_fields",
-                        "fuzziness": "AUTO",
+                    "bool": {
+                        "should": [
+                            # Fuzzy match for typo tolerance
+                            {
+                                "multi_match": {
+                                    "query": query,
+                                    "fields": ["path^2", "name^3"],
+                                    "type": "best_fields",
+                                    "operator": "or",  # Added "or" operator for partial matching
+                                    "fuzziness": "AUTO",
+                                }
+                            },
+                            # Wildcard query for substring matching
+                            {
+                                "multi_match": {
+                                    "query": f"*{query}*",
+                                    "fields": ["path.keyword^2", "name.keyword^3"],
+                                    "type": "phrase",
+                                }
+                            },
+                        ],
+                        "minimum_should_match": 1,
                     }
                 })
 

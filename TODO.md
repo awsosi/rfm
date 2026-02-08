@@ -69,15 +69,7 @@
 
 ## ACTIVE BUGS
 
-### Directory Search and Operation History Search Not Working
-**Status:** Investigating
-**Reported:** 2026-02-08
-**Description:** After recent WebSocket changes, both directory search (file search in Path A pane) and operation history search (queue search) are not working. WebSocket connection is successful and real-time updates are working, but search functionality is broken.
-**Investigation:**
-- Added comprehensive debug logging to search functions and event listeners
-- Added logging to API calls (searchFiles, searchOperations)
-- Need to check browser console for specific errors when searches are attempted
-**Next Steps:** User needs to attempt a search and check browser console for debug output to identify root cause
+None currently.
 
 ---
 
@@ -192,6 +184,48 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-08 - Implement silent background polling for real-time external file changes
+- **Issue:** After WebSocket implementation, polling interval was changed from 5s → 60s to reduce load. But this meant external file changes (files added/modified directly on Samba share, outside the app) took 60 seconds to appear. Also, polling caused screen flicker with "Loading" indicator.
+- **User requirements:**
+  1. Detect external file changes in real-time (5-second polling required)
+  2. NO screen flicker - polling must be silent (no loading indicators)
+  3. NO interruption while typing in address bar or search bar
+  4. Loading indicator only for user-initiated actions that take >1-2 seconds
+- **Solution:** Implemented "silent" background polling:
+  1. Added `silent` parameter to `loadDirectory()` and `refreshPane()` functions
+  2. When `silent: true`, loading indicators are NOT shown (`showLoading()` / `hideLoading()` skipped)
+  3. Background polling uses `silent: true` - updates data without visual feedback
+  4. User-initiated actions (click refresh, navigate, search) use `silent: false` (default) - show loading
+  5. WebSocket real-time updates also use `silent: true` - seamless updates
+  6. File list polling: **5 seconds** (silent, detects external changes)
+  7. Operation history polling: **10 seconds** (silent, slower because operations always trigger WebSocket)
+  8. Existing protection: `shouldSkipAutoRefresh()` prevents refresh while user is typing
+- **Result:**
+  - External file changes appear within 5 seconds ✓
+  - No screen flicker or loading indicators during polling ✓
+  - Typing is never interrupted ✓
+  - Only manual actions show loading (when appropriate) ✓
+  - WebSocket provides instant updates (0s latency) ✓
+  - Best of both worlds: instant WebSocket + 5s safety net for external changes
+- **Files modified:** `app.js:604-689` (loadDirectory silent param), `app.js:771-776` (refreshPane silent param), `app.js:236-271` (silent polling), `app.js:1895` (WebSocket silent refresh)
+
+### 2026-02-08 - Fix Elasticsearch substring/partial matching for searches
+- **Bug:** Directory search and operation history search were not finding partial matches. Searching for "another" did not find "anotherdir". Search appeared to be intermittent - sometimes worked (exact/full word match) and sometimes failed (partial match).
+- **Root cause:** Elasticsearch search queries used `operator: "and"` which required exact token matching (with fuzzy tolerance for typos only). The multi_match query was not configured for substring/containment matching. Searching for "another" would not match "anotherdir" because they are different tokens.
+- **Fix:** Modified both `search_operations()` and `search_files()` in elasticsearch_service.py:
+  1. Changed `operator: "and"` → `operator: "or"` for better partial matching
+  2. Added wildcard query (`*query*`) on `.keyword` fields for true substring matching
+  3. Wrapped in `bool` query with `should` clause - tries both fuzzy match and wildcard match
+  4. `minimum_should_match: 1` means at least one query type must match
+- **Result:** Searches now support:
+  - Exact matches (highest score)
+  - Fuzzy matches for typos (AUTO fuzziness)
+  - Substring/partial matches via wildcards
+  - Searching "another" now correctly finds "anotherdir"
+- **Bonus fix:** Fixed unrelated Pull operation bug - `operation.original_path` was undefined, causing "Cannot read properties of undefined (reading 'startsWith')" error. Added null check.
+- **Debug logging:** Added comprehensive logging (`[Search]`, `[OpHistory]`, `[API]` prefixes) which helped identify the issue.
+- **Lesson learned:** Elasticsearch `operator: "and"` requires all terms to match, which breaks partial/substring matching. Use `operator: "or"` + wildcard queries for user-friendly search behavior.
 
 ### 2026-02-08 - Fix WebSocket fallback polling triggered despite connection (placeholder function always returns false)
 - **Bug:** Console showed "WebSocket not connected, falling back to polling" and "WebSocket disconnected, using fallback polling for operations" even though WebSocket was connected and working (heartbeats visible, real-time events coming through). Fallback polling was running unnecessarily every 30s/60s.

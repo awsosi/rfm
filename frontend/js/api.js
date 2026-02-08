@@ -94,20 +94,13 @@ export async function listFiles(path, offset = 0, limit = 50, workerId = 1) {
  * @returns {Promise<Array>}
  */
 export async function searchFiles(path, pattern, workerId = 1) {
-    try {
-        const params = new URLSearchParams({
-            worker_id: workerId.toString(),
-            path,
-            query: pattern  // Backend expects 'query' not 'pattern'
-        });
-        console.log(`[API] searchFiles - URL: /api/files/search?${params}`);
-        const response = await apiRequest(`/api/files/search?${params}`);
-        console.log(`[API] searchFiles - Response:`, response);
-        return response.results || [];
-    } catch (error) {
-        console.error('[API] searchFiles - Error:', error);
-        throw error;
-    }
+    const params = new URLSearchParams({
+        worker_id: workerId.toString(),
+        path,
+        query: pattern  // Backend expects 'query' not 'pattern'
+    });
+    const response = await apiRequest(`/api/files/search?${params}`);
+    return response.results || [];
 }
 
 /**
@@ -239,20 +232,12 @@ export async function getOperationHistory(filters = {}) {
  * @returns {Promise<Object>} - Returns { total, operations, offset, limit }
  */
 export async function searchOperations(params = {}) {
-    try {
-        const { q = '', limit = 50, offset = 0, operation_type = null, status = null, sort_by = 'created_at', sort_order = 'desc' } = params;
-        let queryParams = `?limit=${limit}&offset=${offset}&sort_by=${sort_by}&sort_order=${sort_order}`;
-        if (q) queryParams += `&q=${encodeURIComponent(q)}`;
-        if (operation_type) queryParams += `&operation_type=${operation_type}`;
-        if (status) queryParams += `&status=${status}`;
-        console.log(`[API] searchOperations - URL: /api/operations/search${queryParams}`);
-        const response = await apiRequest(`/api/operations/search${queryParams}`);
-        console.log(`[API] searchOperations - Response:`, response);
-        return response;
-    } catch (error) {
-        console.error('[API] searchOperations - Error:', error);
-        throw error;
-    }
+    const { q = '', limit = 50, offset = 0, operation_type = null, status = null, sort_by = 'created_at', sort_order = 'desc' } = params;
+    let queryParams = `?limit=${limit}&offset=${offset}&sort_by=${sort_by}&sort_order=${sort_order}`;
+    if (q) queryParams += `&q=${encodeURIComponent(q)}`;
+    if (operation_type) queryParams += `&operation_type=${operation_type}`;
+    if (status) queryParams += `&status=${status}`;
+    return await apiRequest(`/api/operations/search${queryParams}`);
 }
 
 /**
