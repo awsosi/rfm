@@ -20,15 +20,18 @@
         </Control>
 
         <!-- Allowed Paths -->
-        <Control Id="PathsLabel" Type="Text" X="25" Y="110" Width="320" Height="10" TabSkip="no" Text="Allowed &amp;Paths (one per line):" />
-        <Control Id="PathsEdit" Type="Edit" X="25" Y="122" Width="320" Height="50" Property="ALLOWED_PATHS" Multiline="yes" />
-        <Control Id="PathsNote" Type="Text" X="25" Y="174" Width="320" Height="20" Transparent="yes" NoPrefix="yes">
-          <Text>Example: \\server\share or C:\LocalPath</Text>
+        <Control Id="PathsLabel" Type="Text" X="25" Y="110" Width="320" Height="10" TabSkip="no" Text="Allowed &amp;Paths (use semicolon ; to separate):" />
+        <Control Id="PathsEdit" Type="Edit" X="25" Y="122" Width="320" Height="18" Property="ALLOWED_PATHS" />
+        <Control Id="PathsExample" Type="Text" X="25" Y="142" Width="320" Height="10" Transparent="yes" NoPrefix="yes">
+          <Text>Example: \\server\share;C:\LocalPath;G:\</Text>
+        </Control>
+        <Control Id="PathsNote2" Type="Text" X="25" Y="154" Width="320" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>Or use command line: ALLOWED_PATHS="path1;path2;path3"</Text>
         </Control>
 
         <!-- Language selection -->
-        <Control Id="LanguageLabel" Type="Text" X="25" Y="200" Width="100" Height="10" TabSkip="no" Text="&amp;Language:" />
-        <Control Id="LanguageCombo" Type="ComboBox" X="25" Y="212" Width="100" Height="18" Property="UI_LANGUAGE" ComboList="yes">
+        <Control Id="LanguageLabel" Type="Text" X="25" Y="175" Width="100" Height="10" TabSkip="no" Text="&amp;Language:" />
+        <Control Id="LanguageCombo" Type="ComboBox" X="25" Y="187" Width="100" Height="18" Property="UI_LANGUAGE" ComboList="yes">
           <ComboBox Property="UI_LANGUAGE">
             <ListItem Text="English" Value="en-US" />
             <ListItem Text="Polski" Value="pl-PL" />
