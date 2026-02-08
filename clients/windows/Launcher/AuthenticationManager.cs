@@ -302,7 +302,7 @@ namespace RFMLauncher
                     Username = username,
                     Password = accessToken,
                     Type = CredentialType.Generic,
-                    PersistanceType = PersistanceType.LocalMachine
+                    PersistanceType = PersistanceType.Enterprise
                 })
                 {
                     // Store refresh token in description field (not ideal but works)
