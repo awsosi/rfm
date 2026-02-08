@@ -1,0 +1,33 @@
+HKCR
+{
+	NoRemove *
+	{
+		NoRemove shellex
+		{
+			NoRemove ContextMenuHandlers
+			{
+				ForceRemove RFM = s '{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}'
+			}
+		}
+	}
+	NoRemove Directory
+	{
+		NoRemove shellex
+		{
+			NoRemove ContextMenuHandlers
+			{
+				ForceRemove RFM = s '{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}'
+			}
+		}
+	}
+	NoRemove Folder
+	{
+		NoRemove shellex
+		{
+			NoRemove ContextMenuHandlers
+			{
+				ForceRemove RFM = s '{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}'
+			}
+		}
+	}
+}

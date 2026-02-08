@@ -1184,6 +1184,49 @@ select {
     font-size: 13px;
 }
 
+.success-message {
+    padding: var(--spacing-md);
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-md);
+    font-size: 13px;
+}
+
+/* ==========================================
+   Device Authorization Page
+   ========================================== */
+
+.user-code-display {
+    text-align: center;
+    padding: var(--spacing-xl);
+    margin: var(--spacing-lg) 0;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--primary-color);
+    border-radius: var(--radius-lg);
+}
+
+.user-code-display h3 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary-color);
+    letter-spacing: 4px;
+    margin: 0;
+}
+
+.button-group {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+    margin-top: var(--spacing-lg);
+}
+
+.button-group .btn {
+    flex: 1;
+    max-width: 200px;
+}
+
 /* ==========================================
    Worker Control Cards (System Tab)
    ========================================== */

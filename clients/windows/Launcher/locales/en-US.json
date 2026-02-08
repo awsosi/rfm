@@ -1,0 +1,14 @@
+{
+  "auth": {
+    "browserOpening": "Opening browser for authentication...",
+    "waitingApproval": "Waiting for approval. Please enter this code in your browser: {code}",
+    "authSuccess": "Authentication successful!",
+    "authFailed": "Authentication failed or timed out."
+  },
+  "errors": {
+    "configNotFound": "Configuration file not found: {path}",
+    "invalidConfig": "Invalid configuration file",
+    "networkError": "Network error: {error}",
+    "authTimeout": "Authentication timed out after 15 minutes"
+  }
+}

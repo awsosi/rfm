@@ -122,6 +122,42 @@ async function init() {
     // Update page title
     document.title = t('explorer.pageTitle');
 
+    // Parse URL parameters for deep linking (Windows client integration)
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');       // 'prepare' or 'push'
+    const path = urlParams.get('path');           // Real Windows path
+    const token = urlParams.get('token');         // JWT token
+
+    // Token-based auto-login (if token provided and not already logged in)
+    if (token && !checkAuth()) {
+        const { TOKEN_KEY, USER_KEY, API_BASE_URL } = await import('./auth.js');
+        sessionStorage.setItem(TOKEN_KEY, token);
+
+        // Validate token by fetching user data
+        try {
+            const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (userResponse.ok) {
+                const userData = await userResponse.json();
+                sessionStorage.setItem(USER_KEY, JSON.stringify({
+                    id: userData.user_id,
+                    username: userData.username,
+                    role: userData.role
+                }));
+            } else {
+                // Invalid token, redirect to login
+                window.location.href = 'login.html';
+                return;
+            }
+        } catch (error) {
+            console.error('Token validation failed:', error);
+            window.location.href = 'login.html';
+            return;
+        }
+    }
+
     // Check authentication
     if (!checkAuth()) {
         window.location.href = 'login.html';
@@ -228,6 +264,22 @@ async function init() {
     // VF Redesign: Start auto-refresh for operation history and file list
     if (isVFRedesign) {
         startAutoRefresh();
+    }
+
+    // Handle deep link actions (Windows client integration)
+    if (action && path) {
+        if (action === 'prepare') {
+            handlePrepareAction(path);
+        } else if (action === 'push') {
+            await handlePushAction(path);
+        }
+
+        // Clean URL parameters (prevent re-trigger on refresh)
+        const url = new URL(window.location);
+        url.searchParams.delete('action');
+        url.searchParams.delete('path');
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', url);
     }
 
     console.log('Application initialized');
@@ -1851,6 +1903,94 @@ function handleFileListChanged(data) {
             console.error('Failed to refresh file listing:', err);
         });
     }
+}
+
+/**
+ * Handle "prepare" action from Windows client deep link
+ * Pre-select item in file list based on real Windows path
+ *
+ * @param {string} targetPath - Real Windows path (e.g., "\\server\share\folder" or "G:\folder")
+ */
+function handlePrepareAction(targetPath) {
+    // Extract folder name from path (last component)
+    const pathComponents = targetPath.split(/[\\\/]/).filter(Boolean);
+    const folderName = pathComponents[pathComponents.length - 1];
+
+    console.log('Deep link: Preparing to select folder:', folderName, 'from path:', targetPath);
+
+    // Find and select the radio button for this folder
+    setTimeout(() => {
+        const fileListBody = document.getElementById('file-list-body-a');
+        if (!fileListBody) {
+            console.error('File list body not found');
+            return;
+        }
+
+        const rows = fileListBody.querySelectorAll('tr');
+        let found = false;
+
+        for (const row of rows) {
+            const nameCell = row.querySelector('.file-name');
+            if (nameCell && nameCell.textContent.trim() === folderName) {
+                const radio = row.querySelector('input[type="radio"]');
+                if (radio) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    // Brief highlight
+                    const originalBg = row.style.backgroundColor;
+                    row.style.backgroundColor = 'var(--color-primary-light, #dbeafe)';
+                    setTimeout(() => {
+                        row.style.backgroundColor = originalBg;
+                    }, 2000);
+
+                    found = true;
+                    console.log('Deep link: Successfully selected folder:', folderName);
+                    break;
+                }
+            }
+        }
+
+        if (!found) {
+            console.warn('Deep link: Folder not found in current directory:', folderName);
+            showInfo(t('errors.pathNotAllowed'));
+        }
+    }, 500); // Delay for file list rendering
+}
+
+/**
+ * Handle "push" action from Windows client deep link
+ * Auto-trigger push operation after pre-selecting item
+ *
+ * @param {string} targetPath - Real Windows path
+ */
+async function handlePushAction(targetPath) {
+    console.log('Deep link: Auto-triggering push for path:', targetPath);
+
+    // First, select the item
+    handlePrepareAction(targetPath);
+
+    // Wait for selection to register, then trigger push
+    setTimeout(async () => {
+        const selectedFiles = getSelectedFiles('a');
+
+        if (selectedFiles.length === 1 && selectedFiles[0].is_directory) {
+            try {
+                await handlePushOperation();
+                console.log('Deep link: Push operation triggered successfully');
+            } catch (error) {
+                console.error('Deep link: Push operation failed:', error);
+                showError(t('operations.pushFailed').replace('{error}', error.message));
+            }
+        } else if (selectedFiles.length === 0) {
+            console.error('Deep link: No directory selected for push');
+            showError(t('operations.selectDirectory'));
+        } else {
+            console.error('Deep link: Selected item is not a directory');
+            showError(t('operations.selectDirectoryNotFile'));
+        }
+    }, 1000);
 }
 
 // Initialize app when DOM is ready

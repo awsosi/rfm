@@ -20,6 +20,10 @@ bld/
 *.userosscache
 *.sln.docstates
 
+# Claude
+.claude/
+*/settings.local.json
+
 # User-specific files
 *.rsuser
 

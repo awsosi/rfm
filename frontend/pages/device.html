@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="device.pageTitle">Authorize Device - RFM</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <h1 data-i18n="app.title">File Manager</h1>
+            <h2 data-i18n="device.header">Device Authorization</h2>
+
+            <div id="error-message" class="error-message hidden"></div>
+            <div id="success-message" class="success-message hidden"></div>
+
+            <div id="auth-content">
+                <p data-i18n="device.instruction">To authorize the Windows context menu integration, enter this code:</p>
+
+                <div class="user-code-display">
+                    <h3 id="user-code-text"></h3>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn btn-primary" id="approve-btn" data-i18n="device.approve">
+                        Approve Device
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="deny-btn" data-i18n="device.deny">
+                        Deny
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../js/device.js"></script>
+    <script type="module" src="../js/i18n.js"></script>
+</body>
+</html>

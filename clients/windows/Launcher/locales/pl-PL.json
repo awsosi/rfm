@@ -1,0 +1,14 @@
+{
+  "auth": {
+    "browserOpening": "Otwieranie przeglądarki do uwierzytelnienia...",
+    "waitingApproval": "Oczekiwanie na zatwierdzenie. Wprowadź ten kod w przeglądarce: {code}",
+    "authSuccess": "Uwierzytelnienie powiodło się!",
+    "authFailed": "Uwierzytelnienie nie powiodło się lub przekroczono czas."
+  },
+  "errors": {
+    "configNotFound": "Nie znaleziono pliku konfiguracji: {path}",
+    "invalidConfig": "Nieprawidłowy plik konfiguracji",
+    "networkError": "Błąd sieci: {error}",
+    "authTimeout": "Przekroczono czas uwierzytelnienia po 15 minutach"
+  }
+}

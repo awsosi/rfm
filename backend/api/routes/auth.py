@@ -19,9 +19,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import get_settings, Settings
 from api.middleware.auth import get_current_user
 from api.middleware.logging import AuditLogger, get_client_ip
-from api.schemas import LoginRequest, LoginResponse
+from api.schemas import (
+    LoginRequest,
+    LoginResponse,
+    DeviceAuthorizationResponse,
+    DeviceAuthorizationPollRequest,
+    DeviceAuthorizationApprovalRequest,
+)
 from database import get_db
-from models import Session as SessionModel, User, UserRole
+from models import Session as SessionModel, User, UserRole, DeviceAuthorizationRequest
 
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -539,3 +545,268 @@ async def refresh_token(
         username=current_user.username,
         role=current_user.role,
     )
+
+
+# =============================================================================
+# Device Authorization Flow (OAuth Device Flow - RFC 8628)
+# =============================================================================
+
+
+def generate_device_code() -> str:
+    """Generate a secure device code (32 bytes hex)."""
+    import secrets
+    return secrets.token_hex(32)
+
+
+def generate_user_code() -> str:
+    """Generate a user-friendly code (format: ABC-123)."""
+    import secrets
+    import string
+    # Generate 6 random uppercase alphanumeric characters
+    chars = string.ascii_uppercase + string.digits
+    code = ''.join(secrets.choice(chars) for _ in range(6))
+    # Format as XXX-XXX for readability
+    return f"{code[:3]}-{code[3:]}"
+
+
+@router.post("/device/request", response_model=DeviceAuthorizationResponse)
+async def device_authorization_request(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Request device authorization (step 1 of OAuth device flow).
+
+    Generates device_code and user_code for device authorization.
+    Client should poll /device/poll with device_code and direct user to verification_uri.
+
+    Returns:
+        DeviceAuthorizationResponse with device_code, user_code, verification_uri, and expires_in
+    """
+    # Generate codes
+    device_code = generate_device_code()
+    user_code = generate_user_code()
+
+    # Set expiration (15 minutes)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    # Create device authorization request
+    device_auth = DeviceAuthorizationRequest(
+        device_code=device_code,
+        user_code=user_code,
+        user_id=None,
+        approved=False,
+        expires_at=expires_at,
+    )
+
+    db.add(device_auth)
+    await db.commit()
+
+    # Build verification URI
+    # Get base URL from request
+    base_url = str(request.base_url).rstrip('/')
+    verification_uri = f"{base_url}/pages/device.html"
+
+    # Calculate expires_in
+    expires_in = 900  # 15 minutes in seconds
+
+    return DeviceAuthorizationResponse(
+        device_code=device_code,
+        user_code=user_code,
+        verification_uri=verification_uri,
+        expires_in=expires_in,
+    )
+
+
+@router.post("/device/poll", response_model=LoginResponse)
+async def device_authorization_poll(
+    request: Request,
+    poll_request: DeviceAuthorizationPollRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Poll for device authorization approval (step 2 of OAuth device flow).
+
+    Client should poll this endpoint with device_code until user approves or request expires.
+
+    Args:
+        poll_request: Contains device_code
+
+    Returns:
+        LoginResponse if approved, or error if pending/expired
+
+    Raises:
+        HTTPException 400: authorization_pending or expired_token
+    """
+    # Find device authorization request
+    stmt = select(DeviceAuthorizationRequest).where(
+        DeviceAuthorizationRequest.device_code == poll_request.device_code
+    )
+    result = await db.execute(stmt)
+    device_auth = result.scalar_one_or_none()
+
+    if not device_auth:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="expired_token",
+        )
+
+    # Check if expired
+    if device_auth.is_expired:
+        # Clean up expired request
+        await db.delete(device_auth)
+        await db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="expired_token",
+        )
+
+    # Check if approved
+    if not device_auth.approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="authorization_pending",
+        )
+
+    # Approved - get user
+    stmt = select(User).where(User.id == device_auth.user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found",
+        )
+
+    # Create session for the device
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.access_token_expire_days
+    )
+
+    session = SessionModel(
+        user_id=user.id,
+        token="",  # Will be set after generating JWT
+        expires_at=expires_at,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.add(session)
+    await db.flush()
+
+    # Generate JWT token
+    token_data = {
+        "user_id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "session_id": session.id,
+        "exp": expires_at,
+    }
+
+    access_token = jwt.encode(
+        token_data,
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+    # Update session with token
+    session.token = access_token
+    await db.commit()
+
+    # Clean up device authorization request
+    await db.delete(device_auth)
+    await db.commit()
+
+    # Log successful device authorization
+    await AuditLogger.log_authentication(
+        user_id=user.id,
+        action="device_authorization_success",
+        success=True,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details={"device_code": device_auth.device_code, "user_code": device_auth.user_code},
+    )
+
+    # Calculate expires_in seconds
+    expires_in = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+
+    # Generate refresh token (same as access token for now, can be different in future)
+    refresh_token = access_token
+
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        refresh_token=refresh_token,
+    )
+
+
+@router.post("/device/approve")
+async def device_authorization_approve(
+    request: Request,
+    approval_request: DeviceAuthorizationApprovalRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Approve device authorization (step 3 of OAuth device flow - user action).
+
+    User must be authenticated via web browser to approve device.
+    Finds pending device authorization by user_code and approves it.
+
+    Args:
+        approval_request: Contains user_code to approve
+        current_user: Authenticated user (from web browser)
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If user_code not found or expired
+    """
+    # Find device authorization request by user_code
+    stmt = select(DeviceAuthorizationRequest).where(
+        DeviceAuthorizationRequest.user_code == approval_request.user_code
+    )
+    result = await db.execute(stmt)
+    device_auth = result.scalar_one_or_none()
+
+    if not device_auth:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired authorization code",
+        )
+
+    # Check if expired
+    if device_auth.is_expired:
+        # Clean up expired request
+        await db.delete(device_auth)
+        await db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authorization code has expired",
+        )
+
+    # Approve the request
+    device_auth.approved = True
+    device_auth.user_id = current_user.id
+    await db.commit()
+
+    # Log device approval
+    await AuditLogger.log_authentication(
+        user_id=current_user.id,
+        action="device_authorization_approved",
+        success=True,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details={"user_code": device_auth.user_code},
+    )
+
+    return {"message": "Device authorized successfully"}

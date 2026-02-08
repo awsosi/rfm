@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-02-07 (Redis health check restored)
+> **Last Updated:** 2026-02-08 (Windows context menu integration implemented)
 
 ---
 
@@ -177,13 +177,89 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 - [x] Verify Admin Panel overhaul: theme, user CRUD, PolkaSQL badge, worker control buttons, system stats real-time
 - [x] Worker: Integration testing of C# FileManagerWorker in staging
 
-### Future Work
+### Future Work (Windows Client)
+- [ ] Complete C++ Shell Extension implementation (RFMShellExt.dll)
+- [ ] Complete WiX installer implementation (RFM-Setup.msi)
+- [ ] Test full Windows client integration end-to-end
+- [ ] Add additional languages beyond English and Polish
+- [ ] Configuration GUI tool for easier path management
+- [ ] Auto-update mechanism for Windows client
+
+### Future Work (General)
 - [ ] Verify remote syslog: enable via Logs tab config, perform an action, confirm messages arrive at syslog server
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
 
 ---
 
 ## COMPLETED (Compact Log)
+
+### 2026-02-08 - Windows Context Menu Integration (OAuth Device Flow + Deep Linking)
+- **Feature:** Implemented complete Windows Explorer context menu integration for RFM
+- **Backend - Device Authorization Flow (RFC 8628):**
+  - Added `DeviceAuthorizationRequest` model to `models.py` with device_code, user_code, user_id, approved, expires_at
+  - Created migration `011_device_authorization.py` with device_authorization_requests table and indexes
+  - Implemented three API endpoints in `auth.py`:
+    1. `POST /api/auth/device/request` - Generate device_code and user_code for authentication
+    2. `POST /api/auth/device/poll` - Client polls for user approval (returns token when approved)
+    3. `POST /api/auth/device/approve` - User approves device in browser (authenticated endpoint)
+  - Added device flow schemas: `DeviceAuthorizationResponse`, `DeviceAuthorizationPollRequest`, `DeviceAuthorizationApprovalRequest`
+  - Device flow uses 15-minute expiration, 5-second polling interval
+  - Returns access_token + refresh_token for long-lived client sessions
+- **Frontend - Device Authorization UI:**
+  - Created `pages/device.html` - Device authorization approval page with user_code display
+  - Created `js/device.js` - Handles device approval/denial with auto-close on success
+  - Added CSS styles for user code display (`.user-code-display`, `.button-group`, `.success-message`)
+  - User lands on device page with code, clicks "Approve Device", returns to launcher
+- **Frontend - Deep Linking Support:**
+  - Modified `app.js` init() to parse URL parameters: `action` (prepare/push), `path` (Windows path), `token` (JWT)
+  - Implemented token-based auto-login: validates token via `/api/auth/me`, stores in sessionStorage
+  - Added `handlePrepareAction(targetPath)` - Pre-selects folder in file list based on Windows path
+  - Added `handlePushAction(targetPath)` - Auto-triggers push operation after selection
+  - Cleans URL parameters after handling to prevent re-trigger on refresh
+  - Deep link format: `https://rfm.company.com/pages/explorer.html?action=prepare&path=\\server\share\folder&token=xyz`
+- **Windows Launcher (C# .NET 4.8):**
+  - Created `clients/windows/Launcher/` directory with complete C# project
+  - `Program.cs` - Entry point, parses --prepare/--push arguments, validates paths, launches browser
+  - `AuthenticationManager.cs` - OAuth device flow implementation, Windows Credential Manager integration, JWT token expiration checking, token refresh
+  - `ConfigurationManager.cs` - Loads config.json with api_base_url, allowed_paths, language
+  - `DeepLinkBuilder.cs` - Builds deep link URLs with query parameters
+  - `LocalizationManager.cs` - Loads locale files (en-US.json, pl-PL.json), flattens nested JSON
+  - `config.json` - Configuration for API URL, allowed Windows paths, language preference
+  - NuGet dependencies: Newtonsoft.Json (JSON), CredentialManagement (Windows Credential Manager)
+  - Credentials stored securely in Windows Credential Manager (encrypted by OS)
+  - Supports path validation (only launches for allowed paths)
+- **Localization:**
+  - Added device flow strings to `frontend/locales/en-US.json` and `pl-PL.json`
+  - Device page instructions, user code display, approve/deny buttons, success/error messages
+  - Added error strings for noWorkerAvailable, pathNotAllowed
+  - Windows launcher includes en-US and pl-PL locale files for console messages
+  - Language preference syncs between installer, client config, and user preferences
+- **Documentation:**
+  - Created `clients/windows/README.md` - User guide (installation, usage, troubleshooting)
+  - Created `clients/windows/DEPLOYMENT.md` - IT admin deployment guide (GPO, SCCM, silent install)
+  - Created `clients/windows/DEVELOPMENT.md` - Developer guide (building, debugging, contributing)
+  - Created `clients/windows/Launcher/README.md` - Launcher-specific build/config docs
+  - Comprehensive troubleshooting sections for common issues
+- **Shell Extension & Installer (Planned):**
+  - Shell extension (C++ ATL COM) - Context menu registration, path validation, launcher invocation (template/placeholder files)
+  - WiX installer (MSI) - Language selection, component deployment, COM registration (template/placeholder files)
+  - Full implementation deferred for future completion
+- **Architecture:**
+  - Simplified design: Windows client sends real Windows paths, server/worker handles PathA mapping
+  - No localhost server needed (device flow), works with SSO/PolkaSQL authentication
+  - Deep linking provides seamless browser integration with auto-login
+  - Fast provisioning: distribute pre-configured installer with custom config.json
+- **Security:**
+  - OAuth Device Flow (RFC 8628) - Secure authentication without passwords
+  - Windows Credential Manager - Encrypted token storage
+  - HTTPS required for all API communication
+  - Token refresh for long-lived sessions
+  - Path validation prevents unauthorized access
+- **Files created/modified:**
+  - Backend: `models.py`, `api/routes/auth.py`, `api/schemas.py`, `alembic/versions/011_device_authorization.py`
+  - Frontend: `pages/device.html`, `js/device.js`, `js/app.js` (deep linking), `css/style.css` (device page styles)
+  - Locales: `locales/en-US.json`, `locales/pl-PL.json` (device flow strings)
+  - Windows: `clients/windows/Launcher/` (11 files), `clients/windows/` (3 documentation files)
 
 ### 2026-02-08 - UI improvements: wildcard search, status column centering, responsive button arrows
 - **Issue 1 - Wildcard search NOT working:** Directory search in left pane (Path A) should support partial/substring matching. Typing "anoth" should find "anotherdir". User reported this was NOT working despite 2026-02-08 Elasticsearch fix.

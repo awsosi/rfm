@@ -108,14 +108,28 @@
     "selectOperation": "Wybierz operację WYŚLIJ do cofnięcia",
     "operationNotFound": "Wybrana operacja nie została znaleziona"
   },
+  "device": {
+    "pageTitle": "Autoryzacja urządzenia - RFM",
+    "header": "Autoryzacja urządzenia",
+    "instruction": "Aby autoryzować integrację menu kontekstowego Windows, wpisz ten kod:",
+    "userCode": "Kod: {code}",
+    "approve": "Zatwierdź urządzenie",
+    "deny": "Odrzuć",
+    "success": "Urządzenie zostało pomyślnie autoryzowane! Możesz zamknąć to okno.",
+    "error": "Autoryzacja nie powiodła się: {error}",
+    "expired": "Ten kod autoryzacji wygasł. Spróbuj ponownie.",
+    "notFound": "Nieprawidłowy kod autoryzacji."
+  },
   "errors": {
     "pathEmpty": "Ścieżka nie może być pusta",
-    "pathInvalid": "Operacje na Ścieżce A muszą używać ścieżek zaczynających się od „A:”. Inne litery dysków (B:, C:) są niedozwolone.",
-    "driveLetterNotAllowed": "Nieprawidłowa ścieżka: litera dysku „{letter}” jest niedozwolona w Ścieżce A. Używaj wyłącznie ścieżek względnych.",
+    "pathInvalid": "Operacje na Ścieżce A muszą używać ścieżek zaczynających się od \"A:\". Inne litery dysków (B:, C:) są niedozwolone.",
+    "driveLetterNotAllowed": "Nieprawidłowa ścieżka: litera dysku \"{letter}\" jest niedozwolona w Ścieżce A. Używaj wyłącznie ścieżek względnych.",
     "failedToLoadDirectory": "Nie udało się wczytać katalogu: {error}",
     "failedToLoadMore": "Nie udało się wczytać kolejnych plików: {error}",
     "searchFailed": "Wyszukiwanie nie powiodło się: {error}",
-    "failedToLoadOperationHistory": "Nie udało się wczytać historii operacji: {error}"
+    "failedToLoadOperationHistory": "Nie udało się wczytać historii operacji: {error}",
+    "noWorkerAvailable": "Brak dostępnego workera do obsługi tej ścieżki. Skontaktuj się z administratorem.",
+    "pathNotAllowed": "Wybrana ścieżka nie jest skonfigurowana dla operacji RFM."
   },
   "time": {
     "justNow": "Przed chwilą",

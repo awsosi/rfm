@@ -53,6 +53,28 @@ class LoginResponse(BaseModel):
     user_id: int
     username: str
     role: UserRole
+    refresh_token: Optional[str] = Field(None, description="Refresh token for device flow")
+
+
+class DeviceAuthorizationResponse(BaseModel):
+    """Device authorization request response (OAuth device flow)."""
+
+    device_code: str = Field(..., description="Device code for polling")
+    user_code: str = Field(..., description="User-friendly code for approval")
+    verification_uri: str = Field(..., description="URL for user to approve device")
+    expires_in: int = Field(..., description="Expiration time in seconds")
+
+
+class DeviceAuthorizationPollRequest(BaseModel):
+    """Device authorization polling request."""
+
+    device_code: str = Field(..., min_length=1, max_length=64)
+
+
+class DeviceAuthorizationApprovalRequest(BaseModel):
+    """Device authorization approval request."""
+
+    user_code: str = Field(..., min_length=1, max_length=16)
 
 
 class TokenData(BaseModel):

@@ -1,0 +1,23 @@
+// RFMShellExt.idl : IDL source for RFMShellExt
+//
+
+import "oaidl.idl";
+import "ocidl.idl";
+import "shobjidl.idl";
+
+[
+	uuid(B1C2D3E4-F5A6-7890-BCDE-F12345678901),
+	version(1.0),
+]
+library RFMShellExtLib
+{
+	importlib("stdole2.tlb");
+
+	[
+		uuid(C3D4E5F6-A7B8-9012-CDEF-123456789ABC)
+	]
+	coclass RFMContextMenu
+	{
+		[default] interface IUnknown;
+	};
+};

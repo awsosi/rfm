@@ -1,0 +1,9 @@
+; RFMShellExt.def : Declares the module parameters for the DLL.
+
+LIBRARY
+
+EXPORTS
+	DllCanUnloadNow		PRIVATE
+	DllGetClassObject	PRIVATE
+	DllRegisterServer	PRIVATE
+	DllUnregisterServer	PRIVATE

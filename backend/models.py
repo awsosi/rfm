@@ -564,3 +564,41 @@ class UserPreferences(Base):
 
     def __repr__(self) -> str:
         return f"<UserPreferences(user_id={self.user_id}, theme='{self.ui_theme}')>"
+
+
+class DeviceAuthorizationRequest(Base):
+    """
+    Device authorization requests for OAuth device flow (RFC 8628).
+
+    Used for Windows context menu integration and other device-based clients.
+    Clients request a device code, user approves via browser, client polls for token.
+    """
+    __tablename__ = "device_authorization_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_code = Column(String(64), unique=True, nullable=False, index=True)
+    user_code = Column(String(16), unique=True, nullable=False, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    approved = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Relationships
+    user = relationship("User")
+
+    def __repr__(self) -> str:
+        return f"<DeviceAuthorizationRequest(id={self.id}, user_code='{self.user_code}', approved={self.approved})>"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if authorization request has expired."""
+        return datetime.now(timezone.utc) > self.expires_at

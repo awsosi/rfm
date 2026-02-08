@@ -108,6 +108,18 @@
     "selectOperation": "Please select a PUSH operation to revert",
     "operationNotFound": "Selected operation not found"
   },
+  "device": {
+    "pageTitle": "Authorize Device - RFM",
+    "header": "Device Authorization",
+    "instruction": "To authorize the Windows context menu integration, enter this code:",
+    "userCode": "Code: {code}",
+    "approve": "Approve Device",
+    "deny": "Deny",
+    "success": "Device authorized successfully! You can close this window.",
+    "error": "Authorization failed: {error}",
+    "expired": "This authorization code has expired. Please try again.",
+    "notFound": "Invalid authorization code."
+  },
   "errors": {
     "pathEmpty": "Path cannot be empty",
     "pathInvalid": "Path A operations must use paths starting with \"A:\". Other drive letters (B:, C:) are not allowed.",
@@ -115,7 +127,9 @@
     "failedToLoadDirectory": "Failed to load directory: {error}",
     "failedToLoadMore": "Failed to load more files: {error}",
     "searchFailed": "Search failed: {error}",
-    "failedToLoadOperationHistory": "Failed to load operation history: {error}"
+    "failedToLoadOperationHistory": "Failed to load operation history: {error}",
+    "noWorkerAvailable": "No worker is available to handle this path. Please contact your administrator.",
+    "pathNotAllowed": "The selected path is not configured for RFM operations."
   },
   "time": {
     "justNow": "Just now",

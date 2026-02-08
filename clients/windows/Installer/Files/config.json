@@ -1,0 +1,10 @@
+{
+  "api_base_url": "https://rfm.company.com",
+  "allowed_paths": [
+    "\\\\192.168.100.4\\DaneFoto-test",
+    "\\\\HV2012R2.vitkac.local\\DaneFoto-test",
+    "G:\\"
+  ],
+  "language": "en-US",
+  "credential_target_prefix": "RFM_ContextMenu"
+}

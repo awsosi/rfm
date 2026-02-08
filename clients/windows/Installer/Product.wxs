@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="RFM Windows Integration"
+           Language="1033"
+           Version="1.0.0.0"
+           Manufacturer="RFM"
+           UpgradeCode="E6F7A8B9-C0D1-2345-EF01-234567890ABC">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="RFM Windows Context Menu Integration"
+             Comments="Integrates RFM with Windows Explorer context menu" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Properties -->
+    <Property Id="LANGUAGE_CHOICE" Value="en-US" />
+    <Property Id="ARPPRODUCTICON" Value="RFMIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/your-org/rfm" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/your-org/rfm" />
+
+    <!-- Ensure .NET Framework 4.8 is installed -->
+    <PropertyRef Id="WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED"/>
+    <Condition Message="This application requires .NET Framework 4.8 or later. Please install the .NET Framework then run this installer again.">
+      <![CDATA[Installed OR WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED]]>
+    </Condition>
+
+    <!-- Directory Structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="RFM">
+
+          <!-- Launcher Component -->
+          <Component Id="LauncherComponent" Guid="F1A2B3C4-D5E6-7890-ABCD-EF1234567890">
+            <!-- Main executable -->
+            <File Id="RFMLauncher.exe"
+                  Source="$(var.RFMLauncher.TargetPath)"
+                  KeyPath="yes" />
+
+            <!-- Configuration file -->
+            <File Id="config.json"
+                  Source="Files\config.json" />
+
+            <!-- NuGet dependencies -->
+            <File Id="Newtonsoft.Json.dll"
+                  Source="$(var.RFMLauncher.TargetDir)Newtonsoft.Json.dll" />
+
+            <File Id="CredentialManagement.dll"
+                  Source="$(var.RFMLauncher.TargetDir)CredentialManagement.dll" />
+
+            <!-- Locale files -->
+            <File Id="enUS.json"
+                  Source="$(var.RFMLauncher.TargetDir)locales\en-US.json" />
+
+            <File Id="plPL.json"
+                  Source="$(var.RFMLauncher.TargetDir)locales\pl-PL.json" />
+          </Component>
+
+          <!-- Shell Extension Component -->
+          <Component Id="ShellExtComponent" Guid="A3B4C5D6-E7F8-9012-CDEF-123456789ABC">
+            <File Id="RFMShellExt.dll"
+                  Source="$(var.RFMShellExt.TargetPath)"
+                  KeyPath="yes" />
+
+            <!-- Self-registration for COM -->
+            <RegistryValue Root="HKCR"
+                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
+                          Value="RFM Context Menu"
+                          Type="string" />
+
+            <RegistryValue Root="HKCR"
+                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32"
+                          Value="[INSTALLFOLDER]RFMShellExt.dll"
+                          Type="string" />
+
+            <RegistryValue Root="HKCR"
+                          Key="CLSID\{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}\InprocServer32"
+                          Name="ThreadingModel"
+                          Value="Apartment"
+                          Type="string" />
+
+            <!-- Context menu handler registration for directories -->
+            <RegistryValue Root="HKCR"
+                          Key="Directory\shellex\ContextMenuHandlers\RFM"
+                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
+                          Type="string" />
+
+            <!-- Context menu handler registration for files/folders -->
+            <RegistryValue Root="HKCR"
+                          Key="*\shellex\ContextMenuHandlers\RFM"
+                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
+                          Type="string" />
+
+            <RegistryValue Root="HKCR"
+                          Key="Folder\shellex\ContextMenuHandlers\RFM"
+                          Value="{C3D4E5F6-A7B8-9012-CDEF-123456789ABC}"
+                          Type="string" />
+          </Component>
+
+        </Directory>
+      </Directory>
+
+      <!-- Start Menu Folder -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="RFM">
+          <Component Id="ApplicationShortcutComponent" Guid="B5C6D7E8-F9A0-1234-BCDE-F01234567890">
+            <Shortcut Id="UninstallShortcut"
+                      Name="Uninstall RFM Integration"
+                      Target="[SystemFolder]msiexec.exe"
+                      Arguments="/x [ProductCode]"
+                      Description="Uninstalls RFM Windows Integration" />
+
+            <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+
+            <RegistryValue Root="HKCU"
+                          Key="Software\RFM\Integration"
+                          Name="installed"
+                          Type="integer"
+                          Value="1"
+                          KeyPath="yes"/>
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <!-- Features -->
+    <Feature Id="ProductFeature" Title="RFM Windows Integration" Level="1">
+      <ComponentRef Id="LauncherComponent" />
+      <ComponentRef Id="ShellExtComponent" />
+      <ComponentRef Id="ApplicationShortcutComponent" />
+    </Feature>
+
+    <!-- User Interface -->
+    <UIRef Id="WixUI_Minimal" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <!-- Custom Actions -->
+    <CustomAction Id="RestartExplorer"
+                  ExeCommand="cmd.exe /c taskkill /f /im explorer.exe &amp; start explorer.exe"
+                  Directory="SystemFolder"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <!-- Install Sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="RestartExplorer" After="InstallFinalize">
+        NOT REMOVE
+      </Custom>
+    </InstallExecuteSequence>
+
+    <!-- Localization -->
+    <WixVariable Id="WixUILicenseRtf" Value="Files\License.rtf" />
+  </Product>
+</Wix>
