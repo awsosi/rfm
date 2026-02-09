@@ -11,17 +11,17 @@ namespace RFMLauncher
         /// <summary>
         /// Build deep link URL with action, path, and token
         /// </summary>
-        /// <param name="apiBaseUrl">Base URL of RFM server</param>
+        /// <param name="frontendBaseUrl">Base URL of RFM frontend/WebUI</param>
         /// <param name="action">Action: "prepare" or "push"</param>
         /// <param name="path">Real Windows path</param>
         /// <param name="token">JWT access token</param>
         /// <returns>Complete deep link URL</returns>
-        public static string Build(string apiBaseUrl, string action, string path, string token)
+        public static string Build(string frontendBaseUrl, string action, string path, string token)
         {
             try
             {
-                // Build URL: https://rfm.company.com/pages/explorer.html?action=prepare&path=...&token=...
-                var uriBuilder = new UriBuilder(apiBaseUrl);
+                // Build URL: https://ff.vitkac.local/pages/explorer.html?action=prepare&path=...&token=...
+                var uriBuilder = new UriBuilder(frontendBaseUrl);
                 uriBuilder.Path = "/pages/explorer.html";
 
                 // Build query string

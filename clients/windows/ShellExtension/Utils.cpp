@@ -225,16 +225,28 @@ std::wstring Utils::GetLanguage()
 		return L"en-US";  // Default
 	}
 
-	// Read config file
-	std::wifstream file(configPath);
+	// Read config file as UTF-8
+	std::ifstream file(configPath, std::ios::binary);
 	if (!file.is_open())
 	{
 		return L"en-US";  // Default
 	}
 
-	std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
-		std::istreambuf_iterator<wchar_t>());
+	// Read as UTF-8 bytes
+	std::string utf8Content((std::istreambuf_iterator<char>(file)),
+		std::istreambuf_iterator<char>());
 	file.close();
+
+	// Convert UTF-8 to wide string
+	int wideSize = MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, NULL, 0);
+	if (wideSize == 0)
+	{
+		return L"en-US";
+	}
+
+	std::wstring content(wideSize, 0);
+	MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, &content[0], wideSize);
+	content.resize(wideSize - 1); // Remove null terminator
 
 	// Simple JSON parsing for "language" field
 	size_t langStart = content.find(L"\"language\"");
@@ -302,16 +314,28 @@ std::wstring Utils::GetLocalizedString(const std::wstring& key)
 		return key;  // Return key if no localization found
 	}
 
-	// Read localization file
-	std::wifstream file(localesPath);
+	// Read localization file as UTF-8
+	std::ifstream file(localesPath, std::ios::binary);
 	if (!file.is_open())
 	{
 		return key;
 	}
 
-	std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
-		std::istreambuf_iterator<wchar_t>());
+	// Read as UTF-8 bytes
+	std::string utf8Content((std::istreambuf_iterator<char>(file)),
+		std::istreambuf_iterator<char>());
 	file.close();
+
+	// Convert UTF-8 to wide string
+	int wideSize = MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, NULL, 0);
+	if (wideSize == 0)
+	{
+		return key;
+	}
+
+	std::wstring content(wideSize, 0);
+	MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, &content[0], wideSize);
+	content.resize(wideSize - 1); // Remove null terminator
 
 	// Simple JSON parsing - find the key
 	std::wstring searchKey = L"\"" + key + L"\"";

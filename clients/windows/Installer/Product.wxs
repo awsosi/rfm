@@ -25,6 +25,7 @@
 
     <!-- Configuration Properties (can be set via command line) -->
     <Property Id="API_URL" Value="https://rfm.company.com" />
+    <Property Id="FRONTEND_BASE_URL" />
     <Property Id="ALLOWED_PATHS" Value="C:\" />
     <Property Id="UI_LANGUAGE" Value="en-US" />
     <Property Id="CREDENTIAL_PREFIX" Value="RFM_ContextMenu" />
@@ -156,7 +157,7 @@
 
     <CustomAction Id="SetGenerateConfigData"
                   Property="GenerateConfigJson"
-                  Value="[INSTALLFOLDER]|[API_URL]|[ALLOWED_PATHS]|[UI_LANGUAGE]|[CREDENTIAL_PREFIX]" />
+                  Value="[INSTALLFOLDER]|[API_URL]|[FRONTEND_BASE_URL]|[ALLOWED_PATHS]|[UI_LANGUAGE]|[CREDENTIAL_PREFIX]" />
 
     <CustomAction Id="GenerateConfigJson"
                   BinaryKey="GenerateConfigVbs"

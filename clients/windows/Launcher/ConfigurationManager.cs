@@ -14,6 +14,9 @@ namespace RFMLauncher
         [JsonProperty("api_base_url")]
         public string ApiBaseUrl { get; set; }
 
+        [JsonProperty("frontend_base_url")]
+        public string FrontendBaseUrl { get; set; }
+
         [JsonProperty("allowed_paths")]
         public List<string> AllowedPaths { get; set; }
 

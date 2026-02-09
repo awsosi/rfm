@@ -82,8 +82,13 @@ namespace RFMLauncher
                 }
 
                 // Build deep link URL
+                // Use frontend URL if available, otherwise fall back to API URL
+                string frontendUrl = !string.IsNullOrEmpty(config.FrontendBaseUrl)
+                    ? config.FrontendBaseUrl
+                    : config.ApiBaseUrl;
+
                 var deepLink = DeepLinkBuilder.Build(
-                    config.ApiBaseUrl,
+                    frontendUrl,
                     action,
                     selectedPath,
                     accessToken

@@ -1,7 +1,7 @@
 On Error Resume Next
 
-' Get CustomActionData (format: "INSTALLFOLDER|API_URL|ALLOWED_PATHS|UI_LANGUAGE|CREDENTIAL_PREFIX")
-Dim customData, dataParts, installFolder, apiUrl, allowedPaths, language, credPrefix
+' Get CustomActionData (format: "INSTALLFOLDER|API_URL|FRONTEND_URL|ALLOWED_PATHS|UI_LANGUAGE|CREDENTIAL_PREFIX")
+Dim customData, dataParts, installFolder, apiUrl, frontendUrl, allowedPaths, language, credPrefix
 Dim fso, configFile, json, pathArray, i, pathCount, currentPath
 
 customData = Session.Property("CustomActionData")
@@ -10,15 +10,17 @@ customData = Session.Property("CustomActionData")
 dataParts = Split(customData, "|")
 
 ' Extract values with defaults
-If UBound(dataParts) >= 4 Then
+If UBound(dataParts) >= 5 Then
     installFolder = dataParts(0)
     apiUrl = dataParts(1)
-    allowedPaths = dataParts(2)
-    language = dataParts(3)
-    credPrefix = dataParts(4)
+    frontendUrl = dataParts(2)
+    allowedPaths = dataParts(3)
+    language = dataParts(4)
+    credPrefix = dataParts(5)
 Else
     installFolder = "C:\Program Files\RFM"
     apiUrl = "https://rfm.company.com"
+    frontendUrl = ""
     allowedPaths = "C:\"
     language = "en-US"
     credPrefix = "RFM_ContextMenu"
@@ -33,6 +35,12 @@ pathArray = Split(allowedPaths, ";")
 ' Build JSON
 json = "{" & vbCrLf
 json = json & "  ""api_base_url"": """ & EscapeJson(apiUrl) & """," & vbCrLf
+
+' Add frontend_base_url if provided
+If frontendUrl <> "" Then
+    json = json & "  ""frontend_base_url"": """ & EscapeJson(frontendUrl) & """," & vbCrLf
+End If
+
 json = json & "  ""allowed_paths"": [" & vbCrLf
 
 ' Add paths to JSON array
