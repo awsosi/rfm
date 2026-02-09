@@ -1911,52 +1911,85 @@ function handleFileListChanged(data) {
  *
  * @param {string} targetPath - Real Windows path (e.g., "\\server\share\folder" or "G:\folder")
  */
-function handlePrepareAction(targetPath) {
-    // Extract folder name from path (last component)
-    const pathComponents = targetPath.split(/[\\\/]/).filter(Boolean);
-    const folderName = pathComponents[pathComponents.length - 1];
+async function handlePrepareAction(targetPath) {
+    console.log('Deep link: Preparing to select folder from path:', targetPath);
 
-    console.log('Deep link: Preparing to select folder:', folderName, 'from path:', targetPath);
+    try {
+        // Call path resolution API to convert Windows path to virtual path
+        const { API_BASE_URL, getToken } = await import('./auth.js');
+        const token = getToken();
 
-    // Find and select the radio button for this folder
-    setTimeout(() => {
-        const fileListBody = document.getElementById('file-list-body-a');
-        if (!fileListBody) {
-            console.error('File list body not found');
-            return;
+        const response = await fetch(`${API_BASE_URL}/api/path/resolve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                windows_path: targetPath,
+                worker_id: state.workerId
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to resolve path');
         }
 
-        const rows = fileListBody.querySelectorAll('tr');
-        let found = false;
+        const pathInfo = await response.json();
+        console.log('Deep link: Path resolved:', pathInfo);
 
-        for (const row of rows) {
-            const nameCell = row.querySelector('.file-name');
-            if (nameCell && nameCell.textContent.trim() === folderName) {
-                const radio = row.querySelector('input[type="radio"]');
-                if (radio) {
-                    radio.checked = true;
-                    radio.dispatchEvent(new Event('change', { bubbles: true }));
-                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Navigate to parent directory first
+        if (pathInfo.parent_path !== state.panes.a.currentPath) {
+            console.log('Deep link: Navigating to parent directory:', pathInfo.parent_path);
+            await loadDirectory('a', pathInfo.parent_path);
+        }
 
-                    // Brief highlight
-                    const originalBg = row.style.backgroundColor;
-                    row.style.backgroundColor = 'var(--color-primary-light, #dbeafe)';
-                    setTimeout(() => {
-                        row.style.backgroundColor = originalBg;
-                    }, 2000);
+        // Wait for directory to load, then select the folder
+        setTimeout(() => {
+            const fileListBody = document.getElementById('file-list-body-a');
+            if (!fileListBody) {
+                console.error('File list body not found');
+                showError(t('errors.pathNotAllowed'));
+                return;
+            }
 
-                    found = true;
-                    console.log('Deep link: Successfully selected folder:', folderName);
-                    break;
+            const rows = fileListBody.querySelectorAll('tr');
+            let found = false;
+
+            for (const row of rows) {
+                const nameCell = row.querySelector('.file-name');
+                if (nameCell && nameCell.textContent.trim() === pathInfo.folder_name) {
+                    const radio = row.querySelector('input[type="radio"]');
+                    if (radio) {
+                        radio.checked = true;
+                        radio.dispatchEvent(new Event('change', { bubbles: true }));
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // Brief highlight
+                        const originalBg = row.style.backgroundColor;
+                        row.style.backgroundColor = 'var(--color-primary-light, #dbeafe)';
+                        setTimeout(() => {
+                            row.style.backgroundColor = originalBg;
+                        }, 2000);
+
+                        found = true;
+                        console.log('Deep link: Successfully selected folder:', pathInfo.folder_name);
+                        break;
+                    }
                 }
             }
-        }
 
-        if (!found) {
-            console.warn('Deep link: Folder not found in current directory:', folderName);
-            showInfo(t('errors.pathNotAllowed'));
-        }
-    }, 500); // Delay for file list rendering
+            if (!found) {
+                console.warn('Deep link: Folder not found in directory:', pathInfo.folder_name);
+                showError(t('errors.pathNotAllowed'));
+            }
+        }, 800); // Increased delay to ensure directory has loaded
+
+    } catch (error) {
+        console.error('Deep link: Failed to resolve path:', error);
+        showError(t('errors.pathNotAllowed') + ': ' + error.message);
+    }
 }
 
 /**
@@ -1968,29 +2001,34 @@ function handlePrepareAction(targetPath) {
 async function handlePushAction(targetPath) {
     console.log('Deep link: Auto-triggering push for path:', targetPath);
 
-    // First, select the item
-    handlePrepareAction(targetPath);
+    try {
+        // First, select the item (await completion)
+        await handlePrepareAction(targetPath);
 
-    // Wait for selection to register, then trigger push
-    setTimeout(async () => {
-        const selectedFiles = getSelectedFiles('a');
+        // Wait for selection to register, then trigger push
+        setTimeout(async () => {
+            const selectedFiles = getSelectedFiles('a');
 
-        if (selectedFiles.length === 1 && selectedFiles[0].is_directory) {
-            try {
-                await handlePushOperation();
-                console.log('Deep link: Push operation triggered successfully');
-            } catch (error) {
-                console.error('Deep link: Push operation failed:', error);
-                showError(t('operations.pushFailed').replace('{error}', error.message));
+            if (selectedFiles.length === 1 && selectedFiles[0].is_directory) {
+                try {
+                    await handlePushOperation();
+                    console.log('Deep link: Push operation triggered successfully');
+                } catch (error) {
+                    console.error('Deep link: Push operation failed:', error);
+                    showError(t('operations.pushFailed').replace('{error}', error.message));
+                }
+            } else if (selectedFiles.length === 0) {
+                console.error('Deep link: No directory selected for push');
+                showError(t('operations.selectDirectory'));
+            } else {
+                console.error('Deep link: Selected item is not a directory');
+                showError(t('operations.selectDirectoryNotFile'));
             }
-        } else if (selectedFiles.length === 0) {
-            console.error('Deep link: No directory selected for push');
-            showError(t('operations.selectDirectory'));
-        } else {
-            console.error('Deep link: Selected item is not a directory');
-            showError(t('operations.selectDirectoryNotFile'));
-        }
-    }, 1000);
+        }, 1200); // Increased delay to ensure selection is complete
+    } catch (error) {
+        console.error('Deep link: Failed to prepare push action:', error);
+        showError(t('operations.pushFailed') + ': ' + error.message);
+    }
 }
 
 // Initialize app when DOM is ready

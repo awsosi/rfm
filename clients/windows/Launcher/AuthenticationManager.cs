@@ -102,8 +102,8 @@ namespace RFMLauncher
                 {
                     Console.WriteLine("Token expired, attempting refresh...");
 
-                    // Try to refresh using refresh_token
-                    string refreshToken = cred.SecurePassword?.ToString();
+                    // Try to refresh using refresh_token stored in Description field
+                    string refreshToken = cred.Description;
                     if (!string.IsNullOrEmpty(refreshToken))
                     {
                         string newToken = RefreshToken(refreshToken);

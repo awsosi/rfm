@@ -37,6 +37,7 @@ from api.routes.admin import router as admin_router
 from api.routes.admin_system import router as admin_system_router
 from api.routes.preferences import router as preferences_router
 from api.routes.worker import router as worker_router
+from api.routes.path import router as path_router
 
 
 async def _sync_env_config_to_db(settings: Settings) -> None:
@@ -217,6 +218,7 @@ app.include_router(admin_router)
 app.include_router(admin_system_router)
 app.include_router(preferences_router)
 app.include_router(worker_router)
+app.include_router(path_router)
 
 
 # =============================================================================
