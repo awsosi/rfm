@@ -288,6 +288,29 @@ Windows paths must be resolved to virtual paths via `/api/path/resolve` endpoint
 - **KISS**: Only add what's requested or clearly necessary. No premature optimization or abstraction.
 - **DRY**: Extract common patterns to shared functions. Use config files for repeated values.
 
+### 8. Windows Platform Compatibility
+
+**NEVER use Unix-specific shell patterns on Windows**:
+- ❌ `command > /dev/null` (Unix null device)
+- ❌ `command 2> /dev/null` (Unix stderr redirect)
+- ✅ `command > NUL` (Windows null device)
+- ✅ `command 2> NUL` (Windows stderr redirect)
+- ✅ Use Python/cross-platform solutions when possible
+
+**Why**: `/dev/null` redirects fail silently or cause errors on Windows. This affects Bash tool usage in Claude Code on Windows systems. See: https://github.com/anthropics/claude-code/issues/4928
+
+**Examples**:
+```bash
+# WRONG - Unix-specific
+git status > /dev/null 2>&1
+
+# CORRECT - Windows
+git status > NUL 2>&1
+
+# BEST - Cross-platform Python
+python -c "import subprocess; subprocess.run(['git', 'status'], capture_output=True)"
+```
+
 ---
 
 ## Testing
@@ -351,6 +374,18 @@ pytest --cov=. --cov-report=html   # Coverage report
 1. Restart services (env vars read on startup)
 2. Check variable is in `_sync_env_config_to_db()` in `backend/api/app.py`
 3. Verify naming convention matches (use `ENABLE_*` prefix)
+
+### Shell Commands Fail on Windows
+
+**Symptom**: Bash commands using `> /dev/null` fail or behave unexpectedly on Windows.
+
+**Fix**: Use Windows-compatible redirects:
+- Replace `> /dev/null` with `> NUL`
+- Replace `2> /dev/null` with `2> NUL`
+- Replace `> /dev/null 2>&1` with `> NUL 2>&1`
+- Or use cross-platform Python solutions instead
+
+**Reference**: https://github.com/anthropics/claude-code/issues/4928
 
 ---
 

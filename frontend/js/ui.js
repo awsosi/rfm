@@ -48,10 +48,19 @@ export function renderFileList(paneId, files, append = false) {
 
     // Restore selection after rendering (single selection)
     if (selectedPath) {
-        const radio = document.querySelector(`#file-list-body-${paneId} .file-radio[data-path="${selectedPath}"]`);
-        if (radio) {
-            radio.checked = true;
-            radio.closest('tr').classList.add('selected');
+        // Find radio by iterating (more robust than CSS selector with special chars in path)
+        const radios = tbody.querySelectorAll('.file-radio');
+        for (const radio of radios) {
+            if (radio.dataset.path === selectedPath) {
+                radio.checked = true;
+                const row = radio.closest('tr');
+                if (row) {
+                    row.classList.add('selected');
+                }
+                // Dispatch change event to update button states
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+                break;
+            }
         }
     }
 
