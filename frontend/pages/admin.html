@@ -427,6 +427,18 @@
                                         <option value="TCP">TCP</option>
                                     </select>
                                 </div>
+                                <div class="form-group">
+                                    <label for="log-config-syslog-format">Syslog Format</label>
+                                    <select id="log-config-syslog-format" name="syslog_format" class="form-control">
+                                        <option value="RFC5424">RFC 5424 (Modern)</option>
+                                        <option value="RFC3164">RFC 3164 (BSD/Legacy)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="log-config-syslog-hostname">Syslog Hostname</label>
+                                    <input type="text" id="log-config-syslog-hostname" name="syslog_hostname" class="form-control" placeholder="Auto-detected from system">
+                                    <small>Leave empty to auto-detect from system hostname</small>
+                                </div>
                             </div>
                             <div class="config-section">
                                 <h3>Log Retention</h3>

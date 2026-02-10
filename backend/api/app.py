@@ -55,6 +55,13 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "polka_auth_url": settings.polka_auth_url or "",
         "polka_auth_api_key": settings.polka_auth_api_key or "",
         "polka_auth_timeout": str(settings.polka_auth_timeout),
+        # Syslog
+        "enable_syslog": str(settings.enable_syslog).lower(),
+        "syslog_host": settings.syslog_host or "",
+        "syslog_port": str(settings.syslog_port),
+        "syslog_protocol": settings.syslog_protocol or "UDP",
+        "syslog_format": settings.syslog_format or "RFC5424",
+        "syslog_hostname": settings.syslog_hostname or "",
         # ROSAPI
         "rosapi_enabled": str(settings.rosapi_enabled).lower(),
         "rosapi_base_url": settings.rosapi_base_url or "",
@@ -111,7 +118,10 @@ async def _reconfigure_logging_from_db() -> None:
     handler = lm_logger._global_handler
 
     async with DatabaseManager.session() as session:
-        config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
+        config_keys = [
+            'enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol',
+            'syslog_format', 'syslog_hostname',
+        ]
         config_values = {}
         for key in config_keys:
             stmt = select(Config).where(Config.key == key)
@@ -124,14 +134,19 @@ async def _reconfigure_logging_from_db() -> None:
     host = config_values.get('syslog_host')
     port = int(config_values.get('syslog_port', '514'))
     protocol = config_values.get('syslog_protocol', 'UDP')
+    syslog_format = config_values.get('syslog_format', 'RFC5424')
+    syslog_hostname = config_values.get('syslog_hostname') or None
 
     # Check if syslog handler already exists (from env vars)
     has_syslog = any(isinstance(h, SyslogHandler) for h in handler.handlers)
 
     if is_enabled and host and not has_syslog:
-        syslog_handler = SyslogHandler(host=host, port=port, protocol=protocol)
+        syslog_handler = SyslogHandler(
+            host=host, port=port, protocol=protocol,
+            syslog_format=syslog_format, hostname=syslog_hostname,
+        )
         handler.add_handler(syslog_handler)
-        logger.info(f"Syslog handler configured from DB: {host}:{port}/{protocol}")
+        logger.info(f"Syslog handler configured from DB: {host}:{port}/{protocol} format={syslog_format}")
     elif not is_enabled and has_syslog:
         # DB says disabled but env started it — remove
         handler.handlers = [

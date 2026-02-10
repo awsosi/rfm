@@ -125,12 +125,70 @@ class DatabaseHandler:
         pass
 
 
+# Syslog facility mapping by audit action
+# RFC 5424 facility codes:
+#   1 = user-level messages
+#   4 = security/authorization (auth)
+#   10 = security/authorization (authpriv)
+#   13 = log audit (security/audit)
+FACILITY_AUTH = 10       # authpriv - login, logout, device auth
+FACILITY_USER = 1        # user - file operations (push, pull)
+FACILITY_AUDIT = 13      # log audit - admin actions, config changes, worker mgmt
+FACILITY_LOCAL0 = 16     # local0 - fallback
+
+# Action -> facility mapping
+ACTION_FACILITY_MAP = {
+    # Authentication events -> authpriv (10)
+    "login_success": FACILITY_AUTH,
+    "login_failed": FACILITY_AUTH,
+    "logout": FACILITY_AUTH,
+    "device_authorization_success": FACILITY_AUTH,
+    "device_authorization_approved": FACILITY_AUTH,
+    # File operations -> user (1)
+    "push": FACILITY_USER,
+    "pull": FACILITY_USER,
+    "file_copy": FACILITY_USER,
+    "file_move": FACILITY_USER,
+    "file_delete": FACILITY_USER,
+    "directory_create": FACILITY_USER,
+    "operation_copy": FACILITY_USER,
+    "operation_move": FACILITY_USER,
+    "operation_delete": FACILITY_USER,
+    "operation_COPY": FACILITY_USER,
+    "operation_MOVE": FACILITY_USER,
+    "operation_DELETE": FACILITY_USER,
+    "operation_PUSH": FACILITY_USER,
+    "operation_PULL": FACILITY_USER,
+    # Admin actions -> security/audit (13)
+    "user_create": FACILITY_AUDIT,
+    "user_update": FACILITY_AUDIT,
+    "user_delete": FACILITY_AUDIT,
+    "user_create_polka_auth": FACILITY_AUDIT,
+    "worker_update": FACILITY_AUDIT,
+    "worker_approve": FACILITY_AUDIT,
+    "worker_suspend": FACILITY_AUDIT,
+    "worker_delete": FACILITY_AUDIT,
+    "worker_provision": FACILITY_AUDIT,
+    "worker_command": FACILITY_AUDIT,
+    "worker_register": FACILITY_AUDIT,
+    "config_update": FACILITY_AUDIT,
+    "config_bulk_update": FACILITY_AUDIT,
+    "logging_config_update": FACILITY_AUDIT,
+    "samba_path_create": FACILITY_AUDIT,
+    "samba_path_update": FACILITY_AUDIT,
+    "samba_path_delete": FACILITY_AUDIT,
+    "test_path": FACILITY_AUDIT,
+    "index_files": FACILITY_AUDIT,
+}
+
+
 class SyslogHandler:
     """
     Asynchronous syslog handler.
 
-    Sends RFC 5424 structured syslog messages (UDP or TCP).
+    Sends RFC 5424 or RFC 3164 syslog messages (UDP or TCP).
     Non-blocking with circular buffer for failed sends.
+    Assigns syslog facility based on audit action type.
     """
 
     def __init__(
@@ -138,6 +196,8 @@ class SyslogHandler:
         host: str,
         port: int = 514,
         protocol: str = "UDP",
+        syslog_format: str = "RFC5424",
+        hostname: Optional[str] = None,
         buffer_size: int = 1000,
     ):
         """
@@ -147,11 +207,15 @@ class SyslogHandler:
             host: Syslog server hostname
             port: Syslog server port
             protocol: "UDP" or "TCP"
+            syslog_format: "RFC5424" or "RFC3164"
+            hostname: Custom hostname for syslog messages (auto-detected if None)
             buffer_size: Circular buffer size for failed sends
         """
         self.host = host
         self.port = port
         self.protocol = protocol.upper()
+        self.syslog_format = syslog_format.upper()
+        self.custom_hostname = hostname
         self.buffer = CircularBuffer(max_size=buffer_size)
         self._socket: Optional[socket.socket] = None
         self._lock = asyncio.Lock()
@@ -189,6 +253,18 @@ class SyslogHandler:
             sock.sendto(message_bytes, (self.host, self.port))
         elif self.protocol == "TCP":
             sock.sendall(message_bytes + b"\n")
+
+    def _get_facility(self, action: str) -> int:
+        """
+        Determine syslog facility from audit action.
+
+        Args:
+            action: Audit action string (e.g. "login_success", "push")
+
+        Returns:
+            Syslog facility code
+        """
+        return ACTION_FACILITY_MAP.get(action, FACILITY_LOCAL0)
 
     async def write_log(self, log_entry: LogEntry) -> None:
         """
@@ -233,15 +309,26 @@ class SyslogHandler:
                         elif "restore_to" in log_entry.details:
                             structured_data["directory"] = log_entry.details["restore_to"]
 
-                # Create syslog message
+                # Determine facility from action
+                facility = self._get_facility(log_entry.action)
+
+                # Determine hostname: custom override > auto-detected
+                hostname = self.custom_hostname or get_hostname()
+
+                # Create syslog message with per-action facility
                 syslog_msg = SyslogMessage(
-                    hostname=get_hostname(),
+                    facility=facility,
+                    hostname=hostname,
                     structured_data=structured_data,
                     message=log_entry.message,
                 )
 
-                # Format as RFC 5424
-                message_str = syslog_msg.to_rfc5424()
+                # Format based on configured RFC standard
+                if self.syslog_format == "RFC3164":
+                    message_str = syslog_msg.to_rfc3164()
+                else:
+                    message_str = syslog_msg.to_rfc5424()
+
                 message_bytes = message_str.encode("utf-8")
 
                 # Send via executor to avoid blocking the event loop

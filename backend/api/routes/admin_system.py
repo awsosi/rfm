@@ -964,6 +964,7 @@ async def get_logging_config(
     # Get config values from database
     config_keys = [
         'enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol',
+        'syslog_format', 'syslog_hostname',
         'log_retention_days', 'enable_log_compression'
     ]
 
@@ -983,6 +984,8 @@ async def get_logging_config(
         syslog_host=config_values.get('syslog_host'),
         syslog_port=int(config_values.get('syslog_port', '514')),
         syslog_protocol=config_values.get('syslog_protocol', 'UDP'),
+        syslog_format=config_values.get('syslog_format', 'RFC5424'),
+        syslog_hostname=config_values.get('syslog_hostname') or None,
         log_retention_days=int(config_values.get('log_retention_days', '14')),
         enable_log_compression=config_values.get('enable_log_compression', 'true').lower() == 'true',
     )
@@ -1005,6 +1008,8 @@ async def update_logging_config(
         'syslog_host': 'syslog_host',
         'syslog_port': 'syslog_port',
         'syslog_protocol': 'syslog_protocol',
+        'syslog_format': 'syslog_format',
+        'syslog_hostname': 'syslog_hostname',
         'log_retention_days': 'log_retention_days',
         'enable_log_compression': 'enable_log_compression',
     }
@@ -1052,7 +1057,8 @@ async def update_logging_config(
         handler = lm_logger._global_handler
 
         # If any syslog setting changed, reconfigure
-        if any(k in updates for k in ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']):
+        syslog_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol', 'syslog_format', 'syslog_hostname']
+        if any(k in updates for k in syslog_keys):
             # Remove existing syslog handlers
             handler.handlers = [
                 h for h in handler.handlers
@@ -1060,7 +1066,7 @@ async def update_logging_config(
             ]
 
             # Re-read full config from DB to get current values
-            config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
+            config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol', 'syslog_format', 'syslog_hostname']
             config_values = {}
             for key in config_keys:
                 stmt = select(Config).where(Config.key == key)
@@ -1073,11 +1079,16 @@ async def update_logging_config(
             host = config_values.get('syslog_host')
             port = int(config_values.get('syslog_port', '514'))
             protocol = config_values.get('syslog_protocol', 'UDP')
+            syslog_format = config_values.get('syslog_format', 'RFC5424')
+            syslog_hostname = config_values.get('syslog_hostname') or None
 
             if is_enabled and host:
-                new_syslog = SyslogHandler(host=host, port=port, protocol=protocol)
+                new_syslog = SyslogHandler(
+                    host=host, port=port, protocol=protocol,
+                    syslog_format=syslog_format, hostname=syslog_hostname,
+                )
                 handler.add_handler(new_syslog)
-                logger.info(f"Syslog handler reconfigured: {host}:{port}/{protocol}")
+                logger.info(f"Syslog handler reconfigured: {host}:{port}/{protocol} format={syslog_format}")
 
     except Exception as exc:
         logger.warning(f"Failed to reconfigure syslog handler at runtime: {exc}")

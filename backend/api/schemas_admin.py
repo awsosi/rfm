@@ -281,6 +281,8 @@ class LogConfigUpdate(BaseModel):
     syslog_host: Optional[str] = None
     syslog_port: Optional[int] = Field(None, ge=1, le=65535)
     syslog_protocol: Optional[str] = Field(None, pattern="^(UDP|TCP)$")
+    syslog_format: Optional[str] = Field(None, pattern="^(RFC3164|RFC5424)$")
+    syslog_hostname: Optional[str] = None
     log_retention_days: Optional[int] = Field(None, ge=1, le=365)
     enable_log_compression: Optional[bool] = None
 
@@ -294,5 +296,7 @@ class LogConfigResponse(BaseModel):
     syslog_host: Optional[str]
     syslog_port: int
     syslog_protocol: str
+    syslog_format: str
+    syslog_hostname: Optional[str]
     log_retention_days: int
     enable_log_compression: bool

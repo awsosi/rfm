@@ -66,6 +66,8 @@ def get_config() -> LoggingConfig:
         syslog_host=os.getenv("SYSLOG_HOST"),
         syslog_port=int(os.getenv("SYSLOG_PORT", "514")),
         syslog_protocol=os.getenv("SYSLOG_PROTOCOL", "UDP"),
+        syslog_format=os.getenv("SYSLOG_FORMAT", "RFC5424"),
+        syslog_hostname=os.getenv("SYSLOG_HOSTNAME") or None,
         # External API
         enable_external_api=os.getenv(
             "ENABLE_REMOTE_AUDIT_API", "false"
@@ -130,6 +132,8 @@ async def setup_logging(config: Optional[LoggingConfig] = None) -> MultiHandler:
                 host=config.syslog_host,
                 port=config.syslog_port,
                 protocol=config.syslog_protocol,
+                syslog_format=config.syslog_format,
+                hostname=config.syslog_hostname or None,
             )
             handler.add_handler(syslog_handler)
         except Exception as exc:

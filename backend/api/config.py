@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     syslog_host: Optional[str] = None
     syslog_port: int = 514
     syslog_protocol: str = "UDP"
+    syslog_format: str = "RFC5424"
+    syslog_hostname: Optional[str] = None
 
     enable_remote_audit_api: bool = False
     remote_audit_api_url: Optional[str] = None

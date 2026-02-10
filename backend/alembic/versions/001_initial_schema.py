@@ -333,6 +333,8 @@ def upgrade() -> None:
         ('syslog_host', '', 'STRING', 'Syslog server hostname'),
         ('syslog_port', '514', 'INT', 'Syslog server port'),
         ('syslog_protocol', 'UDP', 'STRING', 'Syslog protocol (UDP/TCP)'),
+        ('syslog_format', 'RFC5424', 'STRING', 'Syslog message format (RFC3164 or RFC5424)'),
+        ('syslog_hostname', '', 'STRING', 'Custom hostname for syslog messages (empty = auto-detect)'),
         # Remote audit API
         ('enable_remote_audit_api', 'false', 'BOOLEAN', 'Enable remote audit log API push'),
         ('remote_audit_api_url', '', 'STRING', 'Remote audit API endpoint URL'),

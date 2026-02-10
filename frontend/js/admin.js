@@ -871,6 +871,8 @@ async function loadLogConfig() {
         if (el('log-config-syslog-host')) el('log-config-syslog-host').value = config.syslog_host || '';
         if (el('log-config-syslog-port')) el('log-config-syslog-port').value = config.syslog_port || 514;
         if (el('log-config-syslog-protocol')) el('log-config-syslog-protocol').value = config.syslog_protocol || 'UDP';
+        if (el('log-config-syslog-format')) el('log-config-syslog-format').value = config.syslog_format || 'RFC5424';
+        if (el('log-config-syslog-hostname')) el('log-config-syslog-hostname').value = config.syslog_hostname || '';
         if (el('log-config-retention')) el('log-config-retention').value = config.log_retention_days || 14;
         if (el('log-config-compression')) el('log-config-compression').checked = config.enable_log_compression;
     } catch (error) {
@@ -886,6 +888,8 @@ async function saveLogConfig() {
         syslog_host: el('log-config-syslog-host')?.value || null,
         syslog_port: parseInt(el('log-config-syslog-port')?.value) || 514,
         syslog_protocol: el('log-config-syslog-protocol')?.value || 'UDP',
+        syslog_format: el('log-config-syslog-format')?.value || 'RFC5424',
+        syslog_hostname: el('log-config-syslog-hostname')?.value || '',
         log_retention_days: parseInt(el('log-config-retention')?.value) || 14,
         enable_log_compression: el('log-config-compression')?.checked || false,
     };

@@ -121,9 +121,10 @@ class AuditLogEntry(BaseModel):
 
 class SyslogMessage(BaseModel):
     """
-    RFC 5424 structured syslog message.
+    Syslog message supporting both RFC 5424 and RFC 3164 formats.
 
-    Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
+    RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
+    RFC 3164: <PRI>TIMESTAMP HOSTNAME APP-NAME[PID]: MSG
     """
     facility: int = 16  # Local0
     severity: int = 6   # Informational
@@ -149,7 +150,9 @@ class SyslogMessage(BaseModel):
         # Structured data format: [sd-id param="value" ...]
         sd_parts = []
         for key, value in self.structured_data.items():
-            sd_parts.append(f'{key}="{value}"')
+            # RFC 5424 requires escaping \, ], " in param values
+            escaped = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("]", "\\]")
+            sd_parts.append(f'{key}="{escaped}"')
         sd_str = f"[filemanager {' '.join(sd_parts)}]" if sd_parts else "-"
 
         return (
@@ -161,6 +164,39 @@ class SyslogMessage(BaseModel):
             f"{self.msg_id} "
             f"{sd_str} "
             f"{self.message}"
+        )
+
+    def to_rfc3164(self) -> str:
+        """
+        Format as RFC 3164 (BSD syslog) message.
+
+        Format: <PRI>TIMESTAMP HOSTNAME TAG: MSG
+        Timestamp is BSD format: "Mmm dd HH:MM:SS"
+
+        Returns:
+            Formatted syslog string
+        """
+        now = datetime.utcnow()
+        # RFC 3164 timestamp: "Feb 10 20:53:28" (day is space-padded, not zero-padded)
+        day = f"{now.day:2d}"
+        timestamp = now.strftime(f"%b {day} %H:%M:%S")
+
+        # RFC 3164 has no structured data; include key context in message body
+        context_parts = []
+        for key, value in self.structured_data.items():
+            context_parts.append(f"{key}={value}")
+        context_str = " ".join(context_parts)
+
+        msg = f"{self.message} [{context_str}]" if context_parts else self.message
+
+        # RFC 3164: <PRI>TIMESTAMP HOSTNAME TAG: MSG
+        # TAG is app_name (max 32 chars per RFC), no space between TAG and colon
+        return (
+            f"<{self.priority}>"
+            f"{timestamp} "
+            f"{self.hostname} "
+            f"{self.app_name}: "
+            f"{msg}"
         )
 
 
@@ -204,6 +240,8 @@ class LoggingConfig(BaseModel):
     syslog_host: Optional[str] = None
     syslog_port: int = 514
     syslog_protocol: str = "UDP"  # UDP or TCP
+    syslog_format: str = "RFC5424"  # RFC3164 or RFC5424
+    syslog_hostname: Optional[str] = None  # Custom hostname override
 
     # External API
     enable_external_api: bool = False
