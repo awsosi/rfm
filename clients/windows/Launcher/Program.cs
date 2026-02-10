@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace RFMLauncher
 {
@@ -9,6 +10,21 @@ namespace RFMLauncher
     /// </summary>
     class Program
     {
+        // Win32 API for console allocation (only used for error display)
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AllocConsole();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool FreeConsole();
+
+        /// <summary>
+        /// Allocate a console window for error messages
+        /// </summary>
+        private static void ShowErrorConsole()
+        {
+            AllocConsole();
+        }
+
         static void Main(string[] args)
         {
             try
@@ -19,8 +35,11 @@ namespace RFMLauncher
 
                 if (args.Length < 2)
                 {
+                    ShowErrorConsole();
                     Console.WriteLine("Usage: RFMLauncher.exe --prepare|--push <path>");
                     Console.WriteLine("Example: RFMLauncher.exe --prepare \"\\\\server\\share\\folder\"");
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     return;
                 }
 
@@ -30,7 +49,10 @@ namespace RFMLauncher
                 // Validate action
                 if (action != "prepare" && action != "push")
                 {
+                    ShowErrorConsole();
                     Console.WriteLine("Invalid action. Use --prepare or --push");
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     return;
                 }
 
@@ -38,7 +60,10 @@ namespace RFMLauncher
                 var config = ConfigurationManager.LoadConfig();
                 if (config == null)
                 {
+                    ShowErrorConsole();
                     Console.WriteLine("Failed to load configuration. Please check config.json");
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     return;
                 }
 
@@ -46,19 +71,25 @@ namespace RFMLauncher
                 var localization = LocalizationManager.Load(config.Language);
                 if (localization == null)
                 {
+                    ShowErrorConsole();
                     Console.WriteLine("Failed to load localization for language: " + config.Language);
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     return;
                 }
 
                 // Check if path is allowed
                 if (!IsPathAllowed(selectedPath, config))
                 {
+                    ShowErrorConsole();
                     Console.WriteLine("Path not allowed: " + selectedPath);
                     Console.WriteLine("Allowed paths:");
                     foreach (var allowedPath in config.AllowedPaths)
                     {
                         Console.WriteLine("  - " + allowedPath);
                     }
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     return;
                 }
 
@@ -68,24 +99,18 @@ namespace RFMLauncher
 
                 if (accessToken == null)
                 {
-                    // Not authenticated or token expired
-                    Console.WriteLine(localization["auth.browserOpening"]);
+                    // Not authenticated or token expired - perform device flow (shows in browser, not console)
                     accessToken = authManager.PerformDeviceFlow(localization);
 
                     if (accessToken == null)
                     {
+                        ShowErrorConsole();
                         Console.WriteLine(localization["auth.authFailed"]);
                         Console.WriteLine("\nPress any key to exit...");
                         Console.ReadKey();
                         return;
                     }
-
-                    Console.WriteLine();
-                    Console.WriteLine("Authentication successful! Token saved for future use.");
-                }
-                else
-                {
-                    Console.WriteLine("Using saved authentication token...");
+                    // Authentication successful - no need to show console for success
                 }
 
                 // Build deep link URL
@@ -101,39 +126,18 @@ namespace RFMLauncher
                     accessToken
                 );
 
-                Console.WriteLine();
-                Console.WriteLine($"Opening RFM in browser with action: {action}");
-                Console.WriteLine($"Target path: {selectedPath}");
-                Console.WriteLine();
-
-                // Open browser
+                // Open browser silently
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = deepLink,
                     UseShellExecute = true
                 });
 
-                Console.WriteLine("Browser opened successfully!");
-                Console.WriteLine();
-                Console.WriteLine("The browser should now:");
-                if (action == "prepare")
-                {
-                    Console.WriteLine("  1. Navigate to the parent folder");
-                    Console.WriteLine("  2. Select the target folder");
-                    Console.WriteLine("  3. Highlight it for you to work with");
-                }
-                else if (action == "push")
-                {
-                    Console.WriteLine("  1. Navigate to the parent folder");
-                    Console.WriteLine("  2. Select the target folder");
-                    Console.WriteLine("  3. Show push confirmation dialog");
-                }
-                Console.WriteLine();
-                Console.WriteLine("Press any key to close this window...");
-                Console.ReadKey();
+                // Success - exit silently (no console window shown)
             }
             catch (Exception ex)
             {
+                ShowErrorConsole();
                 Console.WriteLine("Error: " + ex.Message);
                 Console.WriteLine(ex.StackTrace);
                 Console.WriteLine("\nPress any key to exit...");
