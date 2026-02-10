@@ -17,6 +17,8 @@ Usage:
 import os
 from typing import Any, Optional
 
+from loguru import logger
+
 from logging_module.handlers import (
     FileHandler,
     DatabaseHandler,
@@ -100,38 +102,51 @@ async def setup_logging(config: Optional[LoggingConfig] = None) -> MultiHandler:
 
     _config = config
 
-    # Create multi-handler
+    # Create multi-handler — always set _global_handler even if
+    # individual handlers fail, so syslog can be added later.
     handler = MultiHandler()
 
     # File logging
     if config.enable_file_logging:
-        rotator = LogRotator(config.rotation_config)
-        file_handler = FileHandler(config.log_file_path, rotator)
-        handler.add_handler(file_handler)
+        try:
+            rotator = LogRotator(config.rotation_config)
+            file_handler = FileHandler(config.log_file_path, rotator)
+            handler.add_handler(file_handler)
+        except Exception as exc:
+            logger.warning(f"Failed to initialize file handler: {exc}")
 
     # Database logging
     if config.enable_database_logging:
-        db_handler = DatabaseHandler()
-        handler.add_handler(db_handler)
+        try:
+            db_handler = DatabaseHandler()
+            handler.add_handler(db_handler)
+        except Exception as exc:
+            logger.warning(f"Failed to initialize database handler: {exc}")
 
     # Syslog
     if config.enable_syslog and config.syslog_host:
-        syslog_handler = SyslogHandler(
-            host=config.syslog_host,
-            port=config.syslog_port,
-            protocol=config.syslog_protocol,
-        )
-        handler.add_handler(syslog_handler)
+        try:
+            syslog_handler = SyslogHandler(
+                host=config.syslog_host,
+                port=config.syslog_port,
+                protocol=config.syslog_protocol,
+            )
+            handler.add_handler(syslog_handler)
+        except Exception as exc:
+            logger.warning(f"Failed to initialize syslog handler: {exc}")
 
     # External API
     if config.enable_external_api and config.external_api_url:
-        api_handler = ExternalAPIHandler(
-            api_url=config.external_api_url,
-            api_token=config.external_api_token,
-            timeout=config.external_api_timeout,
-            retries=config.external_api_retries,
-        )
-        handler.add_handler(api_handler)
+        try:
+            api_handler = ExternalAPIHandler(
+                api_url=config.external_api_url,
+                api_token=config.external_api_token,
+                timeout=config.external_api_timeout,
+                retries=config.external_api_retries,
+            )
+            handler.add_handler(api_handler)
+        except Exception as exc:
+            logger.warning(f"Failed to initialize external API handler: {exc}")
 
     _global_handler = handler
     return handler

@@ -257,8 +257,8 @@ async def create_audit_log(
             ]
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
-    except Exception:
-        pass  # DB audit log is the primary record; syslog is best-effort
+    except Exception as exc:
+        logger.warning(f"Failed to forward audit log to syslog/external handlers: {exc}")
 
     return audit_log
 

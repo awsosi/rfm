@@ -83,11 +83,16 @@ async def _reconfigure_logging_from_db() -> None:
     """
     from database import DatabaseManager
     from sqlalchemy import select
-    from logging_module.logger import _global_handler
-    from logging_module.handlers import SyslogHandler
+    import logging_module.logger as lm_logger
+    from logging_module.handlers import SyslogHandler, MultiHandler
 
-    if _global_handler is None:
-        return
+    # Create MultiHandler if it doesn't exist (e.g. setup_structured_logging
+    # was skipped or failed).  Without this, syslog can never be added.
+    if lm_logger._global_handler is None:
+        lm_logger._global_handler = MultiHandler()
+        logger.info("Created MultiHandler for logging reconfiguration (was None)")
+
+    handler = lm_logger._global_handler
 
     async with DatabaseManager.session() as session:
         config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
@@ -105,16 +110,16 @@ async def _reconfigure_logging_from_db() -> None:
     protocol = config_values.get('syslog_protocol', 'UDP')
 
     # Check if syslog handler already exists (from env vars)
-    has_syslog = any(isinstance(h, SyslogHandler) for h in _global_handler.handlers)
+    has_syslog = any(isinstance(h, SyslogHandler) for h in handler.handlers)
 
     if is_enabled and host and not has_syslog:
         syslog_handler = SyslogHandler(host=host, port=port, protocol=protocol)
-        _global_handler.add_handler(syslog_handler)
+        handler.add_handler(syslog_handler)
         logger.info(f"Syslog handler configured from DB: {host}:{port}/{protocol}")
     elif not is_enabled and has_syslog:
         # DB says disabled but env started it — remove
-        _global_handler.handlers = [
-            h for h in _global_handler.handlers
+        handler.handlers = [
+            h for h in handler.handlers
             if not isinstance(h, SyslogHandler)
         ]
         logger.info("Syslog handler removed (disabled in DB config)")

@@ -47,7 +47,7 @@ None currently.
 ## ACTIVE TODO ITEMS
 
 ### Known Issues
-- [ ] **Remote syslog delivery not working:** Settings persist across restart, but audit messages never arrive at syslog server. Config loads/saves correctly, but actual delivery fails.
+- [x] **Remote syslog delivery not working:** Fixed — see DONE.md 2026-02-10 entry.
 
 ### Future Work (Windows Client)
 - [ ] Device authorization page localization (currently English-only, installer has Polish)

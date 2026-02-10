@@ -1041,43 +1041,43 @@ async def update_logging_config(
 
     # Reconfigure syslog handler at runtime
     try:
-        from logging_module.logger import _global_handler, get_config
-        from logging_module.handlers import SyslogHandler
+        import logging_module.logger as lm_logger
+        from logging_module.handlers import SyslogHandler, MultiHandler
 
-        if _global_handler is not None:
-            # Read final config values from DB
-            syslog_enabled = updates.get('enable_syslog')
-            syslog_host = updates.get('syslog_host')
-            syslog_port = updates.get('syslog_port')
-            syslog_protocol = updates.get('syslog_protocol')
+        # Create MultiHandler if it doesn't exist
+        if lm_logger._global_handler is None:
+            lm_logger._global_handler = MultiHandler()
+            logger.info("Created MultiHandler for syslog reconfiguration (was None)")
 
-            # If any syslog setting changed, reconfigure
-            if any(k in updates for k in ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']):
-                # Remove existing syslog handlers
-                _global_handler.handlers = [
-                    h for h in _global_handler.handlers
-                    if not isinstance(h, SyslogHandler)
-                ]
+        handler = lm_logger._global_handler
 
-                # Re-read full config from DB to get current values
-                config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
-                config_values = {}
-                for key in config_keys:
-                    stmt = select(Config).where(Config.key == key)
-                    result = await db.execute(stmt)
-                    cfg = result.scalar_one_or_none()
-                    if cfg:
-                        config_values[key] = cfg.value
+        # If any syslog setting changed, reconfigure
+        if any(k in updates for k in ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']):
+            # Remove existing syslog handlers
+            handler.handlers = [
+                h for h in handler.handlers
+                if not isinstance(h, SyslogHandler)
+            ]
 
-                is_enabled = config_values.get('enable_syslog', 'false').lower() == 'true'
-                host = config_values.get('syslog_host')
-                port = int(config_values.get('syslog_port', '514'))
-                protocol = config_values.get('syslog_protocol', 'UDP')
+            # Re-read full config from DB to get current values
+            config_keys = ['enable_syslog', 'syslog_host', 'syslog_port', 'syslog_protocol']
+            config_values = {}
+            for key in config_keys:
+                stmt = select(Config).where(Config.key == key)
+                result = await db.execute(stmt)
+                cfg = result.scalar_one_or_none()
+                if cfg:
+                    config_values[key] = cfg.value
 
-                if is_enabled and host:
-                    new_syslog = SyslogHandler(host=host, port=port, protocol=protocol)
-                    _global_handler.add_handler(new_syslog)
-                    logger.info(f"Syslog handler reconfigured: {host}:{port}/{protocol}")
+            is_enabled = config_values.get('enable_syslog', 'false').lower() == 'true'
+            host = config_values.get('syslog_host')
+            port = int(config_values.get('syslog_port', '514'))
+            protocol = config_values.get('syslog_protocol', 'UDP')
+
+            if is_enabled and host:
+                new_syslog = SyslogHandler(host=host, port=port, protocol=protocol)
+                handler.add_handler(new_syslog)
+                logger.info(f"Syslog handler reconfigured: {host}:{port}/{protocol}")
 
     except Exception as exc:
         logger.warning(f"Failed to reconfigure syslog handler at runtime: {exc}")

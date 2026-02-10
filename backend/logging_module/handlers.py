@@ -176,6 +176,20 @@ class SyslogHandler:
 
         return self._socket
 
+    def _send_sync(self, message_bytes: bytes) -> None:
+        """
+        Synchronous socket send (runs in executor thread).
+
+        Args:
+            message_bytes: Encoded syslog message
+        """
+        sock = self._get_socket()
+
+        if self.protocol == "UDP":
+            sock.sendto(message_bytes, (self.host, self.port))
+        elif self.protocol == "TCP":
+            sock.sendall(message_bytes + b"\n")
+
     async def write_log(self, log_entry: LogEntry) -> None:
         """
         Send log entry to syslog server.
@@ -230,13 +244,11 @@ class SyslogHandler:
                 message_str = syslog_msg.to_rfc5424()
                 message_bytes = message_str.encode("utf-8")
 
-                # Send to syslog server
-                sock = self._get_socket()
-
-                if self.protocol == "UDP":
-                    sock.sendto(message_bytes, (self.host, self.port))
-                elif self.protocol == "TCP":
-                    sock.sendall(message_bytes + b"\n")
+                # Send via executor to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None, self._send_sync, message_bytes
+                )
 
             except Exception as exc:
                 # Reset socket on failure so next attempt creates a fresh one

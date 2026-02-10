@@ -6,6 +6,21 @@
 
 ---
 
+## 2026-02-10 - Fix: Remote Syslog Delivery Not Working
+- **Issue:** Syslog settings persisted correctly but audit messages never arrived at remote syslog server.
+- **Root causes (5 interconnected bugs):**
+  1. `setup_logging()` in `logger.py` had no error isolation — if FileHandler init failed (e.g. can't create `/var/log/file-manager/`), `_global_handler` was never set (`None`), making syslog permanently broken.
+  2. `_reconfigure_logging_from_db()` in `app.py` silently returned when `_global_handler` was `None` — no recovery path.
+  3. Admin UI reconfiguration in `admin_system.py` skipped when `_global_handler` was `None` — same issue.
+  4. `SyslogHandler.write_log()` used synchronous socket I/O, blocking the async event loop.
+  5. `create_audit_log()` in middleware had `except Exception: pass` — all syslog errors silently swallowed, making diagnosis impossible.
+- **Fixes applied:**
+  - `logger.py`: Each handler init wrapped in its own try-except; `_global_handler` always set even if individual handlers fail.
+  - `app.py`: `_reconfigure_logging_from_db()` creates a `MultiHandler` if `_global_handler` is None.
+  - `admin_system.py`: Admin reconfiguration creates `MultiHandler` if `_global_handler` is None.
+  - `handlers.py`: Socket I/O moved to `run_in_executor()` to avoid blocking the event loop.
+  - `middleware/logging.py`: Silent `pass` replaced with `logger.warning()` for error visibility.
+
 ## 2026-02-09 - Verification: Admin Panel, Elasticsearch, Logging, Audit, Windows Client
 - Verified Elasticsearch shows "Connected" in System Health
 - Verified syslog settings persist across restart (but delivery still broken - messages don't arrive)

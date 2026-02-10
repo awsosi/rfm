@@ -123,6 +123,44 @@ const folderName = targetPath.split(/[\\\/]/).pop();
 
 ---
 
+## Multi-Handler Init Must Be Fault-Isolated Per Handler
+
+**Problem:** Remote syslog never delivered any messages despite correct configuration (enabled, host set, port set). Settings persisted across restart. No errors visible anywhere.
+
+**Root Cause:** `setup_logging()` in `logging_module/logger.py` initialized handlers sequentially without error isolation. When `FileHandler` init failed (e.g. can't create `/var/log/file-manager/` — permission issue, missing volume, running on Windows), the exception propagated, `_global_handler` was never set, and stayed `None`. Downstream code (`_reconfigure_logging_from_db()`, admin UI, `create_audit_log()`) all checked `if _global_handler is not None` and silently skipped. The catch-all `except Exception: pass` in `create_audit_log()` hid the failure completely.
+
+**Anti-pattern:**
+```python
+# BAD - One handler failure breaks ALL handlers
+handler = MultiHandler()
+rotator = LogRotator(config)           # If THIS fails...
+file_handler = FileHandler(path, rotator)
+handler.add_handler(file_handler)
+handler.add_handler(SyslogHandler(...))  # ...this never runs
+_global_handler = handler               # ...and this is never reached
+```
+
+**Correct pattern:**
+```python
+# GOOD - Each handler isolated
+handler = MultiHandler()
+try:
+    handler.add_handler(FileHandler(path, LogRotator(config)))
+except Exception as exc:
+    logger.warning(f"File handler failed: {exc}")
+try:
+    handler.add_handler(SyslogHandler(...))
+except Exception as exc:
+    logger.warning(f"Syslog handler failed: {exc}")
+_global_handler = handler  # Always set — some handlers may work even if others fail
+```
+
+**Additional rule:** When a global singleton (`_global_handler`) can be None, any code that needs to SET it must use `import module` (not `from module import var`), because `from X import Y` only copies the reference and can't update the module-level variable.
+
+**Why it's invisible:** Five layers of silent swallowing: (1) `setup_logging()` exception caught by lifespan with just a warning, (2) `_reconfigure_logging_from_db()` silently returns on None, (3) admin UI reconfiguration silently skips on None, (4) `create_audit_log()` catches all exceptions with `pass`, (5) UDP socket sends "succeed" locally even if no server receives them. No single layer produces a visible error.
+
+---
+
 ## WebSocket Query Parameters Must Be Manually Parsed
 
 **Problem:** WebSocket connections failing with 400 Bad Request during handshake. Token parameter sent in URL (`/ws/operations?token=xyz`) but backend receives `None` or validation fails, immediately rejects connection, client sees "Unexpected response code: 400".
