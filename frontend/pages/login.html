@@ -61,9 +61,13 @@
         // Update page title
         document.title = t('login.pageTitle');
 
+        // Get return URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnUrl = urlParams.get('return');
+
         // Redirect if already logged in
         if (checkAuth()) {
-            window.location.href = 'explorer.html';
+            window.location.href = returnUrl || 'explorer.html';
         }
 
         const loginForm = document.getElementById('login-form');
@@ -119,8 +123,8 @@
                 const result = await login(username, password, authMethod);
 
                 if (result.success) {
-                    // Redirect to explorer
-                    window.location.href = 'explorer.html';
+                    // Redirect to return URL or explorer
+                    window.location.href = returnUrl || 'explorer.html';
                 } else {
                     // Show error
                     errorMessage.textContent = result.error || t('login.loginFailed');
