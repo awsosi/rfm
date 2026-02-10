@@ -118,6 +118,25 @@ class Settings(BaseSettings):
     remote_audit_api_token: Optional[str] = None
     remote_audit_api_timeout: int = 5
 
+    # ROSAPI - Remote Operation Signalling API (PIM Integration)
+    rosapi_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices('enable_rosapi', 'rosapi_enabled'),
+    )
+    rosapi_base_url: Optional[str] = None
+    rosapi_auth_email: Optional[str] = None
+    rosapi_auth_password: Optional[str] = None
+    rosapi_timeout: int = 10
+    rosapi_push_enabled: bool = True
+    rosapi_push_endpoint: str = "/api/v1/products/tg/{folder_name}/set_image_catalog"
+    rosapi_push_method: str = "POST"
+    rosapi_push_payload: str = '{"generate_thumbnails": false}'
+    rosapi_pull_enabled: bool = False
+    rosapi_pull_endpoint: str = ""
+    rosapi_pull_method: str = "POST"
+    rosapi_pull_payload: str = "{}"
+    rosapi_verify_url: Optional[str] = None
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"

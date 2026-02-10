@@ -55,6 +55,21 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "polka_auth_url": settings.polka_auth_url or "",
         "polka_auth_api_key": settings.polka_auth_api_key or "",
         "polka_auth_timeout": str(settings.polka_auth_timeout),
+        # ROSAPI
+        "rosapi_enabled": str(settings.rosapi_enabled).lower(),
+        "rosapi_base_url": settings.rosapi_base_url or "",
+        "rosapi_auth_email": settings.rosapi_auth_email or "",
+        "rosapi_auth_password": settings.rosapi_auth_password or "",
+        "rosapi_timeout": str(settings.rosapi_timeout),
+        "rosapi_push_enabled": str(settings.rosapi_push_enabled).lower(),
+        "rosapi_push_endpoint": settings.rosapi_push_endpoint or "",
+        "rosapi_push_method": settings.rosapi_push_method or "POST",
+        "rosapi_push_payload": settings.rosapi_push_payload or "{}",
+        "rosapi_pull_enabled": str(settings.rosapi_pull_enabled).lower(),
+        "rosapi_pull_endpoint": settings.rosapi_pull_endpoint or "",
+        "rosapi_pull_method": settings.rosapi_pull_method or "POST",
+        "rosapi_pull_payload": settings.rosapi_pull_payload or "{}",
+        "rosapi_verify_url": settings.rosapi_verify_url or "",
     }
 
     try:
@@ -65,8 +80,9 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
                     {"key": key, "value": value},
                 )
         logger.info(
-            "Synced env config to DB: polka_auth_enabled={}",
+            "Synced env config to DB: polka_auth_enabled={}, rosapi_enabled={}",
             env_configs["polka_auth_enabled"],
+            env_configs["rosapi_enabled"],
         )
     except Exception as exc:
         logger.warning(f"Failed to sync env config to DB: {exc}")

@@ -328,6 +328,18 @@ class OperationService:
             # Broadcast file listing changes for affected paths
             await self._broadcast_file_list_changed(operation)
 
+            # Signal ROSAPI for completed PUSH/PULL operations (fire-and-forget)
+            if operation.type in (OperationType.PUSH, OperationType.PULL):
+                from api.services.rosapi_service import signal_operation_completed_bg
+                asyncio.create_task(
+                    signal_operation_completed_bg(
+                        operation_id=operation.id,
+                        operation_type=operation.type.value,
+                        source_path=operation.source_path,
+                        dest_path=operation.dest_path,
+                    )
+                )
+
             return operation
 
         except Exception as exc:

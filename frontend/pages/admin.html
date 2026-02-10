@@ -169,6 +169,113 @@
                                 </div>
                             </div>
 
+                            <!-- ROSAPI Settings -->
+                            <div class="config-section">
+                                <h3>ROSAPI - Remote Operation Signalling</h3>
+                                <p class="text-muted">Signal an external PIM (Product Image Manager) system when PUSH/PULL operations complete. Supports template variables: <code>{folder_name}</code>, <code>{operation_id}</code>, <code>{source_path}</code>, <code>{dest_path}</code></p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-rosapi-enabled" name="rosapi_enabled">
+                                        <label class="custom-control-label" for="config-rosapi-enabled">Enable ROSAPI Signalling</label>
+                                    </div>
+                                    <small>Enable signalling to external PIM system on operation completion</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-base-url">ROSAPI Base URL</label>
+                                    <input type="text" id="config-rosapi-base-url" name="rosapi_base_url" class="form-control" placeholder="https://pim.example.com">
+                                    <small>Base URL of the ROSAPI endpoint (e.g., https://pim.example.com)</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-auth-email">Authentication Email</label>
+                                    <input type="email" id="config-rosapi-auth-email" name="rosapi_auth_email" class="form-control" placeholder="api@example.com">
+                                    <small>Email for ROSAPI JWT authentication</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-auth-password">Authentication Password</label>
+                                    <input type="password" id="config-rosapi-auth-password" name="rosapi_auth_password" class="form-control">
+                                    <small>Password for ROSAPI JWT authentication</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-timeout">Request Timeout (seconds)</label>
+                                    <input type="number" id="config-rosapi-timeout" name="rosapi_timeout" class="form-control" min="1" max="60" value="10">
+                                    <small>HTTP request timeout for ROSAPI calls</small>
+                                </div>
+
+                                <h4 class="mt-4">PUSH Operation Signal</h4>
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-rosapi-push-enabled" name="rosapi_push_enabled">
+                                        <label class="custom-control-label" for="config-rosapi-push-enabled">Enable PUSH Signalling</label>
+                                    </div>
+                                    <small>Send signal when PUSH operations complete</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-push-endpoint">PUSH Endpoint Template</label>
+                                    <input type="text" id="config-rosapi-push-endpoint" name="rosapi_push_endpoint" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/set_image_catalog">
+                                    <small>Endpoint path template. Variables: <code>{folder_name}</code>, <code>{operation_id}</code>, <code>{source_path}</code>, <code>{dest_path}</code></small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-push-method">PUSH HTTP Method</label>
+                                    <select id="config-rosapi-push-method" name="rosapi_push_method" class="form-control">
+                                        <option value="POST">POST</option>
+                                        <option value="PUT">PUT</option>
+                                        <option value="GET">GET</option>
+                                    </select>
+                                    <small>HTTP method for PUSH signal requests</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-push-payload">PUSH JSON Payload Template</label>
+                                    <textarea id="config-rosapi-push-payload" name="rosapi_push_payload" class="form-control" rows="3" placeholder='{"generate_thumbnails": false}'></textarea>
+                                    <small>JSON payload template. Supports template variables.</small>
+                                </div>
+
+                                <h4 class="mt-4">PULL Operation Signal</h4>
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-rosapi-pull-enabled" name="rosapi_pull_enabled">
+                                        <label class="custom-control-label" for="config-rosapi-pull-enabled">Enable PULL Signalling</label>
+                                    </div>
+                                    <small>Send signal when PULL operations complete</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-pull-endpoint">PULL Endpoint Template</label>
+                                    <input type="text" id="config-rosapi-pull-endpoint" name="rosapi_pull_endpoint" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/sync">
+                                    <small>Endpoint path template. Variables: <code>{folder_name}</code>, <code>{operation_id}</code>, <code>{source_path}</code>, <code>{dest_path}</code></small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-pull-method">PULL HTTP Method</label>
+                                    <select id="config-rosapi-pull-method" name="rosapi_pull_method" class="form-control">
+                                        <option value="POST">POST</option>
+                                        <option value="PUT">PUT</option>
+                                        <option value="GET">GET</option>
+                                    </select>
+                                    <small>HTTP method for PULL signal requests</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-pull-payload">PULL JSON Payload Template</label>
+                                    <textarea id="config-rosapi-pull-payload" name="rosapi_pull_payload" class="form-control" rows="3" placeholder='{}'></textarea>
+                                    <small>JSON payload template. Supports template variables.</small>
+                                </div>
+
+                                <h4 class="mt-4">Verification (Optional)</h4>
+                                <div class="form-group">
+                                    <label for="config-rosapi-verify-url">Verification URL Template</label>
+                                    <input type="text" id="config-rosapi-verify-url" name="rosapi_verify_url" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/verify">
+                                    <small>Optional verification endpoint to check operation status. Supports template variables.</small>
+                                </div>
+                            </div>
+
                             <!-- Worker Settings -->
                             <div class="config-section">
                                 <h3>Worker Configuration</h3>
