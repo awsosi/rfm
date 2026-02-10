@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.db import get_db
-from backend.api.auth import get_current_user
-from backend.models import User, Worker
+from database import get_db
+from api.middleware.auth import get_current_user
+from models import User, Worker
 
 logger = logging.getLogger(__name__)
 
