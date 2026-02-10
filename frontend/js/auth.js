@@ -5,16 +5,16 @@
 
 // API base URL - can be overridden by backend via window.API_URL_PUBLIC
 // This is set by the Flask backend from the API_URL_PUBLIC environment variable
-const API_BASE_URL = window.API_URL_PUBLIC || (
+export const API_BASE_URL = window.API_URL_PUBLIC || (
     window.location.origin.includes('localhost')
         ? 'http://localhost:8000'
         : window.location.origin
 );
 
 // Session storage keys
-const TOKEN_KEY = 'auth_token';
-const USER_KEY = 'current_user';
-const TOKEN_EXPIRY_KEY = 'token_expiry';
+export const TOKEN_KEY = 'auth_token';
+export const USER_KEY = 'current_user';
+export const TOKEN_EXPIRY_KEY = 'token_expiry';
 
 /**
  * Login user with username and password
