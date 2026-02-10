@@ -1629,6 +1629,7 @@ select {
     border-radius: var(--radius-sm);
     font-size: 12px;
     font-weight: 600;
+    vertical-align: middle;
 }
 
 .operation-status::before {

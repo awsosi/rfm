@@ -58,11 +58,18 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 		m_sendHelpText = Utils::GetLocalizedString(L"contextMenu.sendHelp");
 	}
 
+	// Load menu icon if not already loaded
+	if (!m_hMenuBitmap)
+	{
+		m_hMenuBitmap = LoadMenuIcon();
+	}
+
 	// Add "Prepare selected to be sent with RFM" menu item
 	MENUITEMINFO mii = { sizeof(mii) };
-	mii.fMask = MIIM_STRING | MIIM_ID;
+	mii.fMask = MIIM_STRING | MIIM_ID | MIIM_BITMAP;
 	mii.wID = idCmdFirst + IDM_RFM_PREPARE;
 	mii.dwTypeData = const_cast<LPWSTR>(m_prepareText.c_str());
+	mii.hbmpItem = m_hMenuBitmap;
 	InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 
 	UINT itemsAdded = 1;
@@ -72,6 +79,7 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 	{
 		mii.wID = idCmdFirst + IDM_RFM_SEND;
 		mii.dwTypeData = const_cast<LPWSTR>(m_sendText.c_str());
+		mii.hbmpItem = m_hMenuBitmap;
 		InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 		itemsAdded++;
 	}
@@ -244,4 +252,40 @@ bool CRFMContextMenu::LaunchRFM(const std::wstring& action, const std::wstring& 
 	}
 
 	return false;
+}
+
+HBITMAP CRFMContextMenu::LoadMenuIcon()
+{
+	// Load icon from resources
+	HICON hIcon = (HICON)LoadImage(
+		_AtlBaseModule.GetModuleInstance(),
+		MAKEINTRESOURCE(IDI_RFM_ICON),
+		IMAGE_ICON,
+		GetSystemMetrics(SM_CXSMICON),
+		GetSystemMetrics(SM_CYSMICON),
+		LR_DEFAULTCOLOR
+	);
+
+	if (!hIcon)
+	{
+		return NULL;
+	}
+
+	// Convert icon to bitmap
+	ICONINFO iconInfo = { 0 };
+	if (!GetIconInfo(hIcon, &iconInfo))
+	{
+		DestroyIcon(hIcon);
+		return NULL;
+	}
+
+	// Clean up temporary bitmaps from ICONINFO
+	HBITMAP hBitmap = iconInfo.hbmColor;
+	if (iconInfo.hbmMask)
+	{
+		DeleteObject(iconInfo.hbmMask);
+	}
+
+	DestroyIcon(hIcon);
+	return hBitmap;
 }

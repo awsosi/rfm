@@ -29,16 +29,21 @@ private:
 	std::wstring m_prepareHelpText;
 	std::wstring m_sendHelpText;
 
+	// Menu icon
+	HBITMAP m_hMenuBitmap;
+
 	// Helper methods
 	HRESULT GetPathFromDataObject(IDataObject* pDataObj);
 	bool IsPathAllowed(const std::wstring& path);
 	std::wstring GetLauncherPath();
 	bool LaunchRFM(const std::wstring& action, const std::wstring& path);
+	HBITMAP LoadMenuIcon();
 
 public:
 	CRFMContextMenu()
 		: m_isSingleSelection(false)
 		, m_isDirectory(false)
+		, m_hMenuBitmap(NULL)
 	{
 	}
 
@@ -60,6 +65,11 @@ END_COM_MAP()
 
 	void FinalRelease()
 	{
+		if (m_hMenuBitmap)
+		{
+			DeleteObject(m_hMenuBitmap);
+			m_hMenuBitmap = NULL;
+		}
 	}
 
 public:
