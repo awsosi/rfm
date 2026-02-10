@@ -130,7 +130,7 @@ async function init() {
 
     // Token-based auto-login (if token provided and not already logged in)
     if (token && !checkAuth()) {
-        const { TOKEN_KEY, USER_KEY, API_BASE_URL } = await import('./auth.js');
+        const { TOKEN_KEY, USER_KEY, TOKEN_EXPIRY_KEY, API_BASE_URL } = await import('./auth.js');
         sessionStorage.setItem(TOKEN_KEY, token);
 
         // Validate token by fetching user data
@@ -146,6 +146,9 @@ async function init() {
                     username: userData.username,
                     role: userData.role
                 }));
+                // Set token expiry
+                const expiryTime = Date.now() + userData.expires_in * 1000;
+                sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
             } else {
                 // Invalid token, redirect to login
                 window.location.href = 'login.html';

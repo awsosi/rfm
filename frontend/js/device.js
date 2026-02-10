@@ -155,7 +155,15 @@ async function init() {
         return;
     }
 
-    // Set up event listeners
+    // Check authentication FIRST - redirect to login if not authenticated
+    if (!checkAuth()) {
+        // Not logged in - redirect to login immediately
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.location.href = `login.html?return=${returnUrl}`;
+        return;
+    }
+
+    // User is authenticated - set up approve/deny buttons
     approveBtn.addEventListener('click', approveDevice);
     denyBtn.addEventListener('click', denyDevice);
 }
