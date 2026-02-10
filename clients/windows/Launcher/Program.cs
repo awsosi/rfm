@@ -79,6 +79,13 @@ namespace RFMLauncher
                         Console.ReadKey();
                         return;
                     }
+
+                    Console.WriteLine();
+                    Console.WriteLine("Authentication successful! Token saved for future use.");
+                }
+                else
+                {
+                    Console.WriteLine("Using saved authentication token...");
                 }
 
                 // Build deep link URL
@@ -94,8 +101,10 @@ namespace RFMLauncher
                     accessToken
                 );
 
-                Console.WriteLine("Opening RFM in browser...");
-                Console.WriteLine("URL: " + deepLink);
+                Console.WriteLine();
+                Console.WriteLine($"Opening RFM in browser with action: {action}");
+                Console.WriteLine($"Target path: {selectedPath}");
+                Console.WriteLine();
 
                 // Open browser
                 Process.Start(new ProcessStartInfo
@@ -104,11 +113,29 @@ namespace RFMLauncher
                     UseShellExecute = true
                 });
 
-                Console.WriteLine("Browser opened successfully.");
+                Console.WriteLine("Browser opened successfully!");
+                Console.WriteLine();
+                Console.WriteLine("The browser should now:");
+                if (action == "prepare")
+                {
+                    Console.WriteLine("  1. Navigate to the parent folder");
+                    Console.WriteLine("  2. Select the target folder");
+                    Console.WriteLine("  3. Highlight it for you to work with");
+                }
+                else if (action == "push")
+                {
+                    Console.WriteLine("  1. Navigate to the parent folder");
+                    Console.WriteLine("  2. Select the target folder");
+                    Console.WriteLine("  3. Show push confirmation dialog");
+                }
+                Console.WriteLine();
+                Console.WriteLine("Press any key to close this window...");
+                Console.ReadKey();
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Error: " + ex.Message);
+                Console.WriteLine(ex.StackTrace);
                 Console.WriteLine("\nPress any key to exit...");
                 Console.ReadKey();
             }

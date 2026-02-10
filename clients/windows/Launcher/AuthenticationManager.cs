@@ -92,9 +92,11 @@ namespace RFMLauncher
                 var cred = LoadCredential(_config.CredentialTargetPrefix);
                 if (cred == null)
                 {
+                    Console.WriteLine($"No saved credential found for: {_config.CredentialTargetPrefix}");
                     return null;
                 }
 
+                Console.WriteLine($"Credential loaded for user: {cred.Username}");
                 string accessToken = cred.Password;
 
                 // Check if token is expired
@@ -106,23 +108,35 @@ namespace RFMLauncher
                     string refreshToken = cred.Description;
                     if (!string.IsNullOrEmpty(refreshToken))
                     {
+                        Console.WriteLine("Refresh token found, requesting new access token...");
                         string newToken = RefreshToken(refreshToken);
                         if (newToken != null)
                         {
+                            Console.WriteLine("Token refreshed successfully!");
                             // Save new token
                             SaveCredential(_config.CredentialTargetPrefix, cred.Username, newToken, refreshToken);
                             return newToken;
                         }
+                        else
+                        {
+                            Console.WriteLine("Token refresh failed, need to re-authenticate");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("No refresh token available, need to re-authenticate");
                     }
 
                     return null;
                 }
 
+                Console.WriteLine("Saved token is still valid");
                 return accessToken;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to get token: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }
@@ -311,12 +325,23 @@ namespace RFMLauncher
                         cred.Description = refreshToken;
                     }
 
-                    cred.Save();
+                    bool saved = cred.Save();
+                    if (saved)
+                    {
+                        Console.WriteLine($"Credential saved successfully to Windows Credential Manager");
+                        Console.WriteLine($"  Target: {target}");
+                        Console.WriteLine($"  Username: {username}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"WARNING: Failed to save credential (Save() returned false)");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to save credential: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
 
