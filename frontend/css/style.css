@@ -579,10 +579,6 @@ select {
     margin-bottom: var(--spacing-lg);
 }
 
-.operation-status {
-    margin-bottom: var(--spacing-lg);
-}
-
 .status-message {
     padding: var(--spacing-md);
     border-radius: var(--radius-md);
