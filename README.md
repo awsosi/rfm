@@ -316,7 +316,7 @@ UPDATE config SET value = '60' WHERE key = 'worker_heartbeat_interval';
 ```
 
 Key settings:
-- `max_concurrent_users`: Maximum simultaneous users (default: 4)
+- `max_concurrent_users`: Maximum simultaneous users (default: 30)
 - `session_lifetime_days`: Session token lifetime (default: 30)
 - `worker_heartbeat_interval`: Worker check-in frequency (default: 30s)
 - `enable_auto_rollback`: Automatic rollback on failure (default: true)

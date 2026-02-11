@@ -310,6 +310,20 @@ def upgrade() -> None:
     rosapi_pull_payload = os.environ.get('ROSAPI_PULL_PAYLOAD', '{}')
     rosapi_verify_url = os.environ.get('ROSAPI_VERIFY_URL', '')
 
+    # Syslog config values seeded from environment
+    syslog_enabled = os.environ.get('ENABLE_SYSLOG', 'false').lower()
+    syslog_host = os.environ.get('SYSLOG_HOST', '')
+    syslog_port = os.environ.get('SYSLOG_PORT', '514')
+    syslog_protocol = os.environ.get('SYSLOG_PROTOCOL', 'UDP')
+    syslog_format = os.environ.get('SYSLOG_FORMAT', 'RFC5424')
+    syslog_hostname = os.environ.get('SYSLOG_HOSTNAME', '')
+
+    # Remote Audit API config values seeded from environment
+    remote_audit_enabled = os.environ.get('ENABLE_REMOTE_AUDIT_API', 'false').lower()
+    remote_audit_url = os.environ.get('REMOTE_AUDIT_API_URL', '')
+    remote_audit_token = os.environ.get('REMOTE_AUDIT_API_TOKEN', '')
+    remote_audit_timeout = os.environ.get('REMOTE_AUDIT_API_TIMEOUT', '5')
+
     conn = op.get_bind()
     stmt = text(
         "INSERT INTO config (key, value, type, description) "
@@ -318,7 +332,7 @@ def upgrade() -> None:
     )
     config_rows = [
         # Concurrency & sessions
-        ('max_concurrent_users', '4', 'INT', 'Maximum number of concurrent authenticated users'),
+        ('max_concurrent_users', '30', 'INT', 'Maximum number of concurrent authenticated users'),
         ('session_lifetime_days', '30', 'INT', 'Session token lifetime in days'),
         # Path prefixes
         ('global_path_a_prefix', '', 'STRING', 'Global prefix for path A (can be overridden per worker)'),
@@ -328,18 +342,18 @@ def upgrade() -> None:
         ('polka_auth_url', polka_url, 'STRING', 'PolkaSQL authentication API URL (e.g., http://polkaserver.local/RFM_Auth)'),
         ('polka_auth_api_key', polka_api_key, 'STRING', 'API key for PolkaSQL authentication requests'),
         ('polka_auth_timeout', polka_timeout, 'INT', 'PolkaSQL authentication API timeout in seconds'),
-        # Syslog
-        ('enable_syslog', 'false', 'BOOLEAN', 'Enable syslog integration'),
-        ('syslog_host', '', 'STRING', 'Syslog server hostname'),
-        ('syslog_port', '514', 'INT', 'Syslog server port'),
-        ('syslog_protocol', 'UDP', 'STRING', 'Syslog protocol (UDP/TCP)'),
-        ('syslog_format', 'RFC5424', 'STRING', 'Syslog message format (RFC3164 or RFC5424)'),
-        ('syslog_hostname', '', 'STRING', 'Custom hostname for syslog messages (empty = auto-detect)'),
-        # Remote audit API
-        ('enable_remote_audit_api', 'false', 'BOOLEAN', 'Enable remote audit log API push'),
-        ('remote_audit_api_url', '', 'STRING', 'Remote audit API endpoint URL'),
-        ('remote_audit_api_token', '', 'STRING', 'Authentication token for remote audit API'),
-        ('remote_audit_api_timeout', '5', 'INT', 'Remote audit API timeout in seconds'),
+        # Syslog (seeded from env)
+        ('enable_syslog', syslog_enabled, 'BOOLEAN', 'Enable syslog integration'),
+        ('syslog_host', syslog_host, 'STRING', 'Syslog server hostname'),
+        ('syslog_port', syslog_port, 'INT', 'Syslog server port'),
+        ('syslog_protocol', syslog_protocol, 'STRING', 'Syslog protocol (UDP/TCP)'),
+        ('syslog_format', syslog_format, 'STRING', 'Syslog message format (RFC3164 or RFC5424)'),
+        ('syslog_hostname', syslog_hostname, 'STRING', 'Custom hostname for syslog messages (empty = auto-detect)'),
+        # Remote audit API (seeded from env)
+        ('enable_remote_audit_api', remote_audit_enabled, 'BOOLEAN', 'Enable remote audit log API push'),
+        ('remote_audit_api_url', remote_audit_url, 'STRING', 'Remote audit API endpoint URL'),
+        ('remote_audit_api_token', remote_audit_token, 'STRING', 'Authentication token for remote audit API'),
+        ('remote_audit_api_timeout', remote_audit_timeout, 'INT', 'Remote audit API timeout in seconds'),
         # ROSAPI - Remote Operation Signalling (PIM integration)
         ('rosapi_enabled', rosapi_enabled, 'BOOLEAN', 'Enable ROSAPI signalling for completed PUSH/PULL operations'),
         ('rosapi_base_url', rosapi_base_url, 'STRING', 'ROSAPI base URL'),

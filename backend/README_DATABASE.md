@@ -133,7 +133,7 @@ The migration inserts these default configs:
 
 | Key | Value | Type | Description |
 |-----|-------|------|-------------|
-| max_concurrent_users | 4 | int | Maximum concurrent users |
+| max_concurrent_users | 30 | int | Maximum concurrent users |
 | session_lifetime_days | 30 | int | Session token lifetime |
 | global_path_a_prefix | "" | string | Global path A prefix |
 | global_path_b_prefix | "" | string | Global path B prefix |

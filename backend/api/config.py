@@ -148,7 +148,7 @@ class Settings(BaseSettings):
     log_file_path: str = "/var/log/filemanager/api.log"
 
     # Application Limits
-    max_concurrent_users: int = 4
+    max_concurrent_users: int = 30
     operation_timeout: int = 3600
     enable_auto_rollback: bool = True
     max_file_listing_items: int = 1000
