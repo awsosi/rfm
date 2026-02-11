@@ -975,6 +975,14 @@ select {
     padding: var(--spacing-md);
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
+    vertical-align: middle;
+}
+
+/* Flexbox centering for cells containing badges */
+.data-table td:has(.badge),
+.data-table td:has(.status-badge) {
+    display: flex;
+    align-items: center;
 }
 
 .data-table tbody tr:hover {
@@ -992,6 +1000,7 @@ select {
     font-weight: 600;
     text-transform: uppercase;
     border-radius: var(--radius-sm);
+    vertical-align: middle;
 }
 
 .badge-primary {
@@ -1010,6 +1019,7 @@ select {
     font-size: 11px;
     font-weight: 600;
     border-radius: var(--radius-sm);
+    vertical-align: middle;
 }
 
 .status-active {
@@ -1591,6 +1601,13 @@ select {
     vertical-align: middle;
 }
 
+/* Flexbox centering for badge cells */
+.queue-table td.col-status,
+.queue-table td.col-type {
+    display: flex;
+    align-items: center;
+}
+
 .queue-table td.col-directory {
     font-family: 'Courier New', monospace;
     font-size: 12px;
@@ -1608,6 +1625,7 @@ select {
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
+    vertical-align: middle;
 }
 
 .operation-type.push {
