@@ -978,13 +978,6 @@ select {
     vertical-align: middle;
 }
 
-/* Flexbox centering for cells containing badges */
-.data-table td:has(.badge),
-.data-table td:has(.status-badge) {
-    display: flex;
-    align-items: center;
-}
-
 .data-table tbody tr:hover {
     background-color: var(--bg-secondary);
 }
@@ -1601,13 +1594,6 @@ select {
     vertical-align: middle;
 }
 
-/* Flexbox centering for badge cells */
-.queue-table td.col-status,
-.queue-table td.col-type {
-    display: flex;
-    align-items: center;
-}
-
 .queue-table td.col-directory {
     font-family: 'Courier New', monospace;
     font-size: 12px;
@@ -1640,9 +1626,7 @@ select {
 
 /* Operation Status Badge */
 .operation-status {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
+    display: inline-block;
     padding: 4px 10px;
     border-radius: var(--radius-sm);
     font-size: 12px;
@@ -1656,6 +1640,8 @@ select {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+    margin-right: var(--spacing-xs);
+    vertical-align: middle;
 }
 
 .operation-status.pending {
