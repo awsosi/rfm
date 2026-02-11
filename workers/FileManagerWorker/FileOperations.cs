@@ -290,17 +290,35 @@ namespace FileManagerWorker
                         Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
                         File.Copy(resolvedSource, resolvedDest, true);
 
+                        var fileSize = new FileInfo(resolvedDest).Length;
                         result["type"] = "file";
-                        result["size"] = new FileInfo(resolvedDest).Length;
-                        Logger.Info("File copied successfully");
+                        result["size"] = fileSize;
+                        // Backend expects these keys
+                        result["file_count"] = 1;
+                        result["total_size_bytes"] = fileSize;
+                        Logger.Info("File copied successfully: {0} bytes", fileSize);
                     }
                     else if (Directory.Exists(resolvedSource))
                     {
-                        // Copy directory recursively
+                        // Copy directory recursively (includes validation)
                         var filesCopied = CopyDirectorySync(resolvedSource, resolvedDest, progress);
+
+                        // Calculate total size of all files copied
+                        var destFiles = Directory.GetFiles(resolvedDest, "*", SearchOption.AllDirectories);
+                        long totalSize = 0;
+                        foreach (var file in destFiles)
+                        {
+                            totalSize += new FileInfo(file).Length;
+                        }
+
                         result["type"] = "directory";
+                        // Keep legacy key for backward compatibility
                         result["filesCopied"] = filesCopied;
-                        Logger.Info("Directory copied successfully: {0} files", filesCopied);
+                        // Backend expects these keys
+                        result["file_count"] = filesCopied;
+                        result["total_size_bytes"] = totalSize;
+
+                        Logger.Info("Directory copied successfully: {0} files, {1} bytes", filesCopied, totalSize);
                     }
                     else
                     {
@@ -317,33 +335,153 @@ namespace FileManagerWorker
         /// </summary>
         private int CopyDirectorySync(string sourceDir, string destDir, IProgress<int> progress = null)
         {
-            Directory.CreateDirectory(destDir);
+            // Normalize paths to full paths to ensure consistent path calculations
+            sourceDir = Path.GetFullPath(sourceDir);
+            destDir = Path.GetFullPath(destDir);
 
-            // Create ALL subdirectories first (including empty ones)
-            foreach (var dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+            Logger.Info("CopyDirectorySync: Copying '{0}' to '{1}'", sourceDir, destDir);
+
+            try
             {
-                var relativePath = dir.Substring(sourceDir.Length).TrimStart('\\', '/');
-                Directory.CreateDirectory(Path.Combine(destDir, relativePath));
+                // Create destination root directory
+                Directory.CreateDirectory(destDir);
+
+                // Get ALL subdirectories and files for validation
+                var allSourceDirs = Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories);
+                var allSourceFiles = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+
+                Logger.Info("CopyDirectorySync: Found {0} subdirectories and {1} files to copy",
+                    allSourceDirs.Length, allSourceFiles.Length);
+
+                // Create ALL subdirectories first (including empty ones)
+                var createdDirs = new List<string>();
+                foreach (var dir in allSourceDirs)
+                {
+                    // Calculate relative path - ensure sourceDir doesn't have trailing separator
+                    var normalizedSourceDir = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var relativePath = dir.Substring(normalizedSourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var destDirPath = Path.Combine(destDir, relativePath);
+
+                    Logger.Debug("Creating directory: {0} (from {1})", destDirPath, relativePath);
+                    Directory.CreateDirectory(destDirPath);
+                    createdDirs.Add(destDirPath);
+                }
+
+                Logger.Info("CopyDirectorySync: Created {0} subdirectories", createdDirs.Count);
+
+                // Validate all directories were created
+                if (createdDirs.Count != allSourceDirs.Length)
+                {
+                    throw new IOException(
+                        $"Directory creation validation failed: Expected {allSourceDirs.Length} directories, " +
+                        $"but only created {createdDirs.Count}");
+                }
+
+                // Copy all files
+                var totalFiles = allSourceFiles.Length;
+                var copiedFiles = 0;
+                var copiedFilesList = new List<string>();
+
+                foreach (var file in allSourceFiles)
+                {
+                    // Calculate relative path
+                    var normalizedSourceDir = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var relativePath = file.Substring(normalizedSourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var destFile = Path.Combine(destDir, relativePath);
+
+                    Logger.Debug("Copying file: {0} -> {1}", file, destFile);
+
+                    // Ensure destination directory exists (defensive)
+                    var destFileDir = Path.GetDirectoryName(destFile);
+                    if (!Directory.Exists(destFileDir))
+                    {
+                        throw new IOException(
+                            $"Destination directory does not exist for file: {destFile}. " +
+                            $"This indicates a critical path calculation error.");
+                    }
+
+                    File.Copy(file, destFile, true);
+                    copiedFilesList.Add(destFile);
+
+                    copiedFiles++;
+                    if (totalFiles > 0)
+                        progress?.Report((copiedFiles * 100) / totalFiles);
+                }
+
+                Logger.Info("CopyDirectorySync: Copied {0} files", copiedFiles);
+
+                // CRITICAL VALIDATION: Verify all files were copied
+                if (copiedFiles != totalFiles)
+                {
+                    throw new IOException(
+                        $"File copy validation failed: Expected {totalFiles} files, " +
+                        $"but only copied {copiedFiles}");
+                }
+
+                // Final validation: Check that all source items exist in destination
+                Logger.Info("CopyDirectorySync: Running final validation...");
+                ValidateCopyCompleteness(sourceDir, destDir, allSourceDirs.Length, allSourceFiles.Length);
+
+                Logger.Info("CopyDirectorySync: Successfully copied all {0} directories and {1} files",
+                    allSourceDirs.Length, copiedFiles);
+
+                return copiedFiles;
             }
-
-            // Then copy all files
-            var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
-            var totalFiles = files.Length;
-            var copiedFiles = 0;
-
-            foreach (var file in files)
+            catch (Exception ex)
             {
-                var relativePath = file.Substring(sourceDir.Length).TrimStart('\\', '/');
-                var destFile = Path.Combine(destDir, relativePath);
-
-                File.Copy(file, destFile, true);
-
-                copiedFiles++;
-                if (totalFiles > 0)
-                    progress?.Report((copiedFiles * 100) / totalFiles);
+                Logger.Error(ex, "CopyDirectorySync FAILED: Error during copy from '{0}' to '{1}'", sourceDir, destDir);
+                throw new IOException(
+                    $"Failed to copy directory from '{sourceDir}' to '{destDir}': {ex.Message}", ex);
             }
+        }
 
-            return copiedFiles;
+        /// <summary>
+        /// Validates that all directories and files from source were copied to destination
+        /// </summary>
+        private void ValidateCopyCompleteness(string sourceDir, string destDir, int expectedDirs, int expectedFiles)
+        {
+            try
+            {
+                // Normalize paths
+                sourceDir = Path.GetFullPath(sourceDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                destDir = Path.GetFullPath(destDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                // Count directories in destination
+                var destDirs = Directory.GetDirectories(destDir, "*", SearchOption.AllDirectories);
+                if (destDirs.Length != expectedDirs)
+                {
+                    Logger.Error(
+                        "VALIDATION FAILED: Expected {0} directories in destination, but found {1}",
+                        expectedDirs, destDirs.Length);
+                    throw new IOException(
+                        $"Copy validation failed: Expected {expectedDirs} directories in '{destDir}', " +
+                        $"but found {destDirs.Length}. DATA LOSS PREVENTED!");
+                }
+
+                // Count files in destination
+                var destFiles = Directory.GetFiles(destDir, "*", SearchOption.AllDirectories);
+                if (destFiles.Length != expectedFiles)
+                {
+                    Logger.Error(
+                        "VALIDATION FAILED: Expected {0} files in destination, but found {1}",
+                        expectedFiles, destFiles.Length);
+                    throw new IOException(
+                        $"Copy validation failed: Expected {expectedFiles} files in '{destDir}', " +
+                        $"but found {destFiles.Length}. DATA LOSS PREVENTED!");
+                }
+
+                Logger.Info("Validation passed: {0} directories and {1} files in destination match source",
+                    destDirs.Length, destFiles.Length);
+            }
+            catch (IOException)
+            {
+                throw; // Re-throw validation errors
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error during copy validation");
+                throw new IOException($"Copy validation error: {ex.Message}", ex);
+            }
         }
 
         /// <summary>
@@ -397,25 +535,90 @@ namespace FileManagerWorker
                             Logger.Info("Same-volume file move completed");
                         }
 
+                        var fileSize = new FileInfo(resolvedDest).Length;
                         result["type"] = "file";
-                        result["size"] = new FileInfo(resolvedDest).Length;
+                        result["size"] = fileSize;
+                        // Backend expects these keys
+                        result["file_count"] = 1;
+                        result["total_size_bytes"] = fileSize;
                     }
                     else if (Directory.Exists(resolvedSource))
                     {
                         if (isCrossVolume)
                         {
                             // Cross-volume: use copy + delete
+                            Logger.Info("Cross-volume directory move: copying '{0}' to '{1}'", resolvedSource, resolvedDest);
+
+                            // Count source items BEFORE copy for validation
+                            var sourceDirs = Directory.GetDirectories(resolvedSource, "*", SearchOption.AllDirectories);
+                            var sourceFiles = Directory.GetFiles(resolvedSource, "*", SearchOption.AllDirectories);
+                            Logger.Info("Source directory has {0} subdirectories and {1} files", sourceDirs.Length, sourceFiles.Length);
+
+                            // Copy directory (includes validation)
                             var filesCopied = CopyDirectorySync(resolvedSource, resolvedDest);
+
+                            // CopyDirectorySync already validates, but double-check before deleting source
+                            // This is CRITICAL to prevent data loss
+                            Logger.Info("CRITICAL: Validating copy before deleting source directory...");
+                            ValidateCopyCompleteness(resolvedSource, resolvedDest, sourceDirs.Length, sourceFiles.Length);
+
+                            // Only delete source if validation passed
+                            Logger.Info("Validation passed, safe to delete source directory '{0}'", resolvedSource);
                             Directory.Delete(resolvedSource, true);
-                            Logger.Info("Cross-volume directory move completed using copy+delete: {0} files", filesCopied);
+
+                            // Calculate total size of all files moved
+                            var destFiles = Directory.GetFiles(resolvedDest, "*", SearchOption.AllDirectories);
+                            long totalSize = 0;
+                            foreach (var file in destFiles)
+                            {
+                                totalSize += new FileInfo(file).Length;
+                            }
+
+                            Logger.Info("Cross-volume directory move completed using copy+delete: {0} files, {1} bytes", filesCopied, totalSize);
+                            // Keep legacy key for backward compatibility
                             result["filesMoved"] = filesCopied;
+                            // Backend expects these keys
+                            result["file_count"] = filesCopied;
+                            result["total_size_bytes"] = totalSize;
                         }
                         else
                         {
                             // Same volume: use fast move
+                            Logger.Info("Same-volume directory move: '{0}' to '{1}'", resolvedSource, resolvedDest);
+
+                            // Count items for validation
+                            var sourceDirs = Directory.GetDirectories(resolvedSource, "*", SearchOption.AllDirectories);
+                            var sourceFiles = Directory.GetFiles(resolvedSource, "*", SearchOption.AllDirectories);
+                            Logger.Info("Moving directory with {0} subdirectories and {1} files", sourceDirs.Length, sourceFiles.Length);
+
                             Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
                             Directory.Move(resolvedSource, resolvedDest);
-                            Logger.Info("Same-volume directory move completed");
+
+                            // Validate the move completed successfully
+                            Logger.Info("Validating move operation...");
+                            // For move validation, we check the destination has the expected counts
+                            var destDirs = Directory.GetDirectories(resolvedDest, "*", SearchOption.AllDirectories);
+                            var destFiles = Directory.GetFiles(resolvedDest, "*", SearchOption.AllDirectories);
+
+                            if (destDirs.Length != sourceDirs.Length || destFiles.Length != sourceFiles.Length)
+                            {
+                                throw new IOException(
+                                    $"Move validation failed: Expected {sourceDirs.Length} dirs and {sourceFiles.Length} files, " +
+                                    $"but destination has {destDirs.Length} dirs and {destFiles.Length} files. DATA LOSS PREVENTED!");
+                            }
+
+                            // Calculate total size
+                            long totalSize = 0;
+                            foreach (var file in destFiles)
+                            {
+                                totalSize += new FileInfo(file).Length;
+                            }
+
+                            Logger.Info("Same-volume directory move completed and validated: {0} files, {1} bytes", destFiles.Length, totalSize);
+
+                            // Backend expects these keys
+                            result["file_count"] = destFiles.Length;
+                            result["total_size_bytes"] = totalSize;
                         }
 
                         result["type"] = "directory";
@@ -452,13 +655,33 @@ namespace FileManagerWorker
                 {
                     if (File.Exists(resolvedPath))
                     {
+                        var fileSize = new FileInfo(resolvedPath).Length;
                         File.Delete(resolvedPath);
+
                         result["type"] = "file";
+                        result["file_count"] = 1;
+                        result["total_size_bytes"] = fileSize;
+
+                        Logger.Info("File deleted successfully: {0} bytes", fileSize);
                     }
                     else if (Directory.Exists(resolvedPath))
                     {
+                        // Count files and calculate size BEFORE deletion
+                        var files = Directory.GetFiles(resolvedPath, "*", SearchOption.AllDirectories);
+                        var fileCount = files.Length;
+                        long totalSize = 0;
+                        foreach (var file in files)
+                        {
+                            totalSize += new FileInfo(file).Length;
+                        }
+
                         Directory.Delete(resolvedPath, true);
+
                         result["type"] = "directory";
+                        result["file_count"] = fileCount;
+                        result["total_size_bytes"] = totalSize;
+
+                        Logger.Info("Directory deleted successfully: {0} files, {1} bytes", fileCount, totalSize);
                     }
                     else
                     {

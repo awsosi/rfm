@@ -895,11 +895,13 @@ class OperationService:
         db: AsyncSession,
     ) -> WorkerCommandResponse:
         """
-        Execute PUSH operation on worker.
+        Execute PUSH operation on worker with transactional rollback on failure.
 
         Steps:
         1. Copy directory from source to PATH_B
         2. Move directory from source to PATH_C (archive)
+
+        If Step 2 fails, Step 1 is rolled back (delete from PATH_B).
 
         Args:
             operation: PUSH operation to execute
@@ -918,6 +920,8 @@ class OperationService:
         await self._update_worker_status(
             operation, worker, OperationStatus.IN_PROGRESS, db
         )
+
+        copy_completed = False
 
         try:
             # Verify source directory exists before proceeding
@@ -944,13 +948,64 @@ class OperationService:
                 worker, operation.source_path, operation.dest_path, db
             )
 
+            # CRITICAL: Validate copy completed successfully
+            if copy_response.status != "success":
+                raise OperationError(f"PUSH Step 1 failed: Copy to PATH_B failed: {copy_response.message}")
+
+            if not copy_response.file_count or copy_response.file_count == 0:
+                raise OperationError(
+                    f"PUSH Step 1 validation failed: No files copied. "
+                    f"Worker validation may have detected incomplete copy."
+                )
+
+            copy_completed = True
+            logger.info(f"PUSH Step 1 completed: {copy_response.file_count} files, {copy_response.total_size_bytes} bytes")
+
             # Step 2: Move to PATH_C (archive)
             logger.info(f"PUSH Step 2: Archiving {operation.source_path} to {operation.archive_path}")
-            archive_response = await self.worker_service.move_file(
-                worker, operation.source_path, operation.archive_path, db
-            )
+            try:
+                archive_response = await self.worker_service.move_file(
+                    worker, operation.source_path, operation.archive_path, db
+                )
 
-            # Combine results
+                # Validate archive completed
+                if archive_response.status != "success":
+                    raise OperationError(f"PUSH Step 2 failed: Move to PATH_C failed: {archive_response.message}")
+
+                if not archive_response.file_count or archive_response.file_count == 0:
+                    raise OperationError(
+                        f"PUSH Step 2 validation failed: No files moved. "
+                        f"Worker validation may have detected incomplete move."
+                    )
+
+            except Exception as step2_exc:
+                # CRITICAL: Step 2 failed, rollback Step 1
+                logger.error(f"PUSH Step 2 failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
+
+                try:
+                    rollback_response = await self.worker_service.delete_file(
+                        worker, operation.dest_path, db, recursive=True
+                    )
+                    if rollback_response.status == "success":
+                        logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
+                    else:
+                        logger.error(
+                            f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
+                            f"MANUAL CLEANUP REQUIRED!"
+                        )
+                except Exception as rollback_exc:
+                    logger.error(
+                        f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
+                        f"PATH_B may contain partial data at {operation.dest_path}. "
+                        f"MANUAL CLEANUP REQUIRED!"
+                    )
+
+                raise OperationError(
+                    f"PUSH Step 2 (archive to PATH_C) failed: {step2_exc}. "
+                    f"Step 1 (copy to PATH_B) has been rolled back."
+                )
+
+            # Both steps completed successfully
             total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
             total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
 
@@ -974,6 +1029,19 @@ class OperationService:
             )
 
         except WorkerCommunicationError as exc:
+            # If Step 1 completed but Step 2 failed, the rollback would have already happened above
+            await self._update_worker_status(
+                operation, worker, OperationStatus.FAILED, db, str(exc)
+            )
+            raise OperationError(f"PUSH operation failed: {exc}")
+        except Exception as exc:
+            # Unexpected error - may need manual cleanup
+            if copy_completed:
+                logger.error(
+                    f"PUSH operation {operation.id} failed after Step 1 completed. "
+                    f"PATH_B may contain data at {operation.dest_path}. "
+                    f"Consider manual cleanup or investigation."
+                )
             await self._update_worker_status(
                 operation, worker, OperationStatus.FAILED, db, str(exc)
             )
@@ -986,11 +1054,14 @@ class OperationService:
         db: AsyncSession,
     ) -> WorkerCommandResponse:
         """
-        Execute PULL operation on worker.
+        Execute PULL operation on worker with transactional rollback on failure.
 
         Steps:
         1. Copy directory from PATH_B back to original location
         2. Delete directory from PATH_B
+
+        If Step 2 fails, Step 1 is NOT rolled back (restored data remains).
+        This is safer - we'd rather have duplicate data than lost data.
 
         Args:
             operation: PULL operation to execute
@@ -1010,20 +1081,68 @@ class OperationService:
             operation, worker, OperationStatus.IN_PROGRESS, db
         )
 
+        copy_completed = False
+
         try:
+            # Verify source exists in PATH_B before proceeding
+            verify_command = WorkerRequest(
+                command="list",
+                params={"path": operation.source_path},
+            )
+            verify_response = await self.worker_service.send_command(
+                worker, verify_command, db
+            )
+
+            if verify_response.status != "success":
+                raise OperationError(
+                    f"Source directory {operation.source_path} does not exist in PATH_B. "
+                    f"Cannot restore - data may have been already pulled or manually deleted."
+                )
+
+            logger.info(f"PULL: Verified source directory {operation.source_path} exists in PATH_B")
+
             # Step 1: Copy from PATH_B to original location
             logger.info(f"PULL Step 1: Copying {operation.source_path} to {operation.dest_path}")
             copy_response = await self.worker_service.copy_file(
                 worker, operation.source_path, operation.dest_path, db
             )
 
-            # Step 2: Delete from PATH_B
-            logger.info(f"PULL Step 2: Deleting {operation.source_path} from PATH_B")
-            delete_response = await self.worker_service.delete_file(
-                worker, operation.source_path, db, recursive=True
-            )
+            # CRITICAL: Validate copy completed successfully
+            if copy_response.status != "success":
+                raise OperationError(f"PULL Step 1 failed: Copy from PATH_B failed: {copy_response.message}")
 
-            # Update operation metadata
+            if not copy_response.file_count or copy_response.file_count == 0:
+                raise OperationError(
+                    f"PULL Step 1 validation failed: No files copied. "
+                    f"Worker validation may have detected incomplete copy."
+                )
+
+            copy_completed = True
+            logger.info(f"PULL Step 1 completed: {copy_response.file_count} files restored")
+
+            # Step 2: Delete from PATH_B (only if Step 1 succeeded)
+            logger.info(f"PULL Step 2: Deleting {operation.source_path} from PATH_B")
+            try:
+                delete_response = await self.worker_service.delete_file(
+                    worker, operation.source_path, db, recursive=True
+                )
+
+                if delete_response.status != "success":
+                    logger.warning(
+                        f"PULL Step 2 failed: Could not delete {operation.source_path} from PATH_B. "
+                        f"Data was successfully restored to {operation.dest_path}, but PATH_B still contains data. "
+                        f"Manual cleanup may be required."
+                    )
+                    # Don't raise - restore succeeded, cleanup failed is acceptable
+            except Exception as step2_exc:
+                logger.warning(
+                    f"PULL Step 2 failed with exception: {step2_exc}. "
+                    f"Data was successfully restored to {operation.dest_path}, but PATH_B still contains data at {operation.source_path}. "
+                    f"Manual cleanup may be required."
+                )
+                # Don't raise - restore succeeded, cleanup failed is acceptable
+
+            # Update operation metadata (from Step 1 - the restore)
             operation.file_count = copy_response.file_count
             operation.total_size_bytes = copy_response.total_size_bytes
 
@@ -1034,19 +1153,36 @@ class OperationService:
 
             logger.info(
                 f"PULL operation {operation.id} completed: "
-                f"{copy_response.file_count} files restored, {operation.source_path} removed from PATH_B"
+                f"{copy_response.file_count} files restored to {operation.dest_path}"
             )
 
             # Return response
             return WorkerCommandResponse(
                 status="success",
-                message=f"PULL completed: restored to {operation.dest_path} and removed from PATH_B",
+                message=f"PULL completed: restored {copy_response.file_count} files to {operation.dest_path}",
                 file_count=copy_response.file_count,
                 total_size_bytes=copy_response.total_size_bytes,
             )
 
         except WorkerCommunicationError as exc:
+            error_msg = str(exc)
+            if copy_completed:
+                error_msg = (
+                    f"PULL partially completed: Data restored to {operation.dest_path}, "
+                    f"but cleanup from PATH_B failed. Original error: {exc}"
+                )
             await self._update_worker_status(
-                operation, worker, OperationStatus.FAILED, db, str(exc)
+                operation, worker, OperationStatus.FAILED, db, error_msg
             )
-            raise OperationError(f"PULL operation failed: {exc}")
+            raise OperationError(f"PULL operation failed: {error_msg}")
+        except Exception as exc:
+            error_msg = str(exc)
+            if copy_completed:
+                error_msg = (
+                    f"PULL partially completed: Data restored to {operation.dest_path}, "
+                    f"but cleanup from PATH_B failed. Original error: {exc}"
+                )
+            await self._update_worker_status(
+                operation, worker, OperationStatus.FAILED, db, error_msg
+            )
+            raise OperationError(f"PULL operation failed: {error_msg}")
