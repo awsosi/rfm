@@ -26,6 +26,12 @@ STDMETHODIMP CRFMContextMenu::Initialize(
 		return hr;
 	}
 
+	// Only show menu for single directory selection
+	if (!m_isSingleSelection || !m_isDirectory)
+	{
+		return E_FAIL;
+	}
+
 	// Check if path is allowed
 	if (!IsPathAllowed(m_selectedPath))
 	{
@@ -72,20 +78,14 @@ STDMETHODIMP CRFMContextMenu::QueryContextMenu(
 	mii.hbmpItem = m_hMenuBitmap;
 	InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 
-	UINT itemsAdded = 1;
-
-	// Add "Send selected with RFM" menu item (only for single selection)
-	if (m_isSingleSelection)
-	{
-		mii.wID = idCmdFirst + IDM_RFM_SEND;
-		mii.dwTypeData = const_cast<LPWSTR>(m_sendText.c_str());
-		mii.hbmpItem = m_hMenuBitmap;
-		InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
-		itemsAdded++;
-	}
+	// Add "Send selected with RFM" menu item
+	mii.wID = idCmdFirst + IDM_RFM_SEND;
+	mii.dwTypeData = const_cast<LPWSTR>(m_sendText.c_str());
+	mii.hbmpItem = m_hMenuBitmap;
+	InsertMenuItem(hMenu, indexMenu++, TRUE, &mii);
 
 	// Return number of items added
-	return MAKE_HRESULT(SEVERITY_SUCCESS, 0, itemsAdded);
+	return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 2);
 }
 
 STDMETHODIMP CRFMContextMenu::InvokeCommand(CMINVOKECOMMANDINFO* pici)
