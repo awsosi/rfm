@@ -319,6 +319,14 @@ namespace FileManagerWorker
         {
             Directory.CreateDirectory(destDir);
 
+            // Create ALL subdirectories first (including empty ones)
+            foreach (var dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = dir.Substring(sourceDir.Length).TrimStart('\\', '/');
+                Directory.CreateDirectory(Path.Combine(destDir, relativePath));
+            }
+
+            // Then copy all files
             var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
             var totalFiles = files.Length;
             var copiedFiles = 0;
@@ -328,11 +336,11 @@ namespace FileManagerWorker
                 var relativePath = file.Substring(sourceDir.Length).TrimStart('\\', '/');
                 var destFile = Path.Combine(destDir, relativePath);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(destFile));
                 File.Copy(file, destFile, true);
 
                 copiedFiles++;
-                progress?.Report((copiedFiles * 100) / totalFiles);
+                if (totalFiles > 0)
+                    progress?.Report((copiedFiles * 100) / totalFiles);
             }
 
             return copiedFiles;

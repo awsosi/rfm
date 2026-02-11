@@ -250,13 +250,21 @@ async def create_audit_log(
                 user_agent=user_agent,
             )
             # Write to non-DB handlers only (syslog, file, external API)
-            tasks = [
-                h.write_log(log_entry)
-                for h in _global_handler.handlers
+            handlers = [
+                h for h in _global_handler.handlers
                 if not isinstance(h, DatabaseHandler)
             ]
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            if handlers:
+                results = await asyncio.gather(
+                    *(h.write_log(log_entry) for h in handlers),
+                    return_exceptions=True,
+                )
+                for handler, result in zip(handlers, results):
+                    if isinstance(result, Exception):
+                        handler_name = type(handler).__name__
+                        logger.warning(
+                            f"Handler {handler_name} failed for action '{action}': {result}"
+                        )
     except Exception as exc:
         logger.warning(f"Failed to forward audit log to syslog/external handlers: {exc}")
 

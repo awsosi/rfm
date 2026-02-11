@@ -6,12 +6,11 @@ Allows authenticated users to manage their UI preferences and settings.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import get_current_user
-from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import UserPreferencesResponse, UserPreferencesUpdate
 from database import get_db
 from models import User, UserPreferences
@@ -43,7 +42,6 @@ async def get_my_preferences(
 @router.put("/me", response_model=UserPreferencesResponse)
 async def update_my_preferences(
     preferences_data: UserPreferencesUpdate,
-    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -65,21 +63,11 @@ async def update_my_preferences(
     await db.commit()
     await db.refresh(preferences)
 
-    # Audit log
-    await AuditLogger.log_user_action(
-        user_id=current_user.id,
-        action="preferences_update",
-        details={"updated_fields": list(update_data.keys())},
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
-
     return UserPreferencesResponse.model_validate(preferences)
 
 
 @router.delete("/me", response_model=UserPreferencesResponse)
 async def reset_my_preferences(
-    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -104,14 +92,5 @@ async def reset_my_preferences(
 
     await db.commit()
     await db.refresh(preferences)
-
-    # Audit log
-    await AuditLogger.log_user_action(
-        user_id=current_user.id,
-        action="preferences_reset",
-        details={},
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
 
     return UserPreferencesResponse.model_validate(preferences)

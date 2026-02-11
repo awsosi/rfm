@@ -179,9 +179,6 @@ ACTION_FACILITY_MAP = {
     "samba_path_delete": FACILITY_AUDIT,
     "test_path": FACILITY_AUDIT,
     "index_files": FACILITY_AUDIT,
-    # User preferences -> user (1)
-    "preferences_update": FACILITY_USER,
-    "preferences_reset": FACILITY_USER,
 }
 
 
