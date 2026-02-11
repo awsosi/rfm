@@ -16,7 +16,7 @@
     "connectionError": "Connection error. Please try again."
   },
   "explorer": {
-    "pageTitle": "File Explorer - File Manager (VF Redesign)",
+    "pageTitle": "Explorer - File Manager",
     "adminPanel": "Admin Panel",
     "settings": "Settings",
     "logout": "Logout",
@@ -129,6 +129,8 @@
     "searchFailed": "Search failed: {error}",
     "failedToLoadOperationHistory": "Failed to load operation history: {error}",
     "noWorkerAvailable": "No worker is available to handle this path. Please contact your administrator.",
+    "noWorkersAvailable": "No active workers are available. The file explorer cannot function without an active worker. Please contact your administrator.",
+    "failedToLoadWorkers": "Failed to load workers. Some features may not work correctly.",
     "pathNotAllowed": "The selected path is not configured for RFM operations."
   },
   "time": {

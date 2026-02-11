@@ -16,7 +16,7 @@
     "connectionError": "Błąd połączenia. Spróbuj ponownie."
   },
   "explorer": {
-    "pageTitle": "Eksplorator plików – Menedżer plików (VF Redesign)",
+    "pageTitle": "Eksplorator – Menedżer plików",
     "adminPanel": "Panel administracyjny",
     "settings": "Ustawienia",
     "logout": "Wyloguj się",
@@ -129,6 +129,8 @@
     "searchFailed": "Wyszukiwanie nie powiodło się: {error}",
     "failedToLoadOperationHistory": "Nie udało się wczytać historii operacji: {error}",
     "noWorkerAvailable": "Brak dostępnego workera do obsługi tej ścieżki. Skontaktuj się z administratorem.",
+    "noWorkersAvailable": "Brak aktywnych workerów. Eksplorator plików nie może działać bez aktywnego workera. Skontaktuj się z administratorem.",
+    "failedToLoadWorkers": "Nie udało się wczytać workerów. Niektóre funkcje mogą nie działać poprawnie.",
     "pathNotAllowed": "Wybrana ścieżka nie jest skonfigurowana dla operacji RFM."
   },
   "time": {

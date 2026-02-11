@@ -309,6 +309,14 @@ export async function deleteUser(userId) {
 }
 
 /**
+ * List active workers (available to all authenticated users)
+ * @returns {Promise<Array>}
+ */
+export async function listActiveWorkers() {
+    return await apiRequest('/api/workers/list');
+}
+
+/**
  * Get all workers (admin only)
  * @returns {Promise<Array>}
  */

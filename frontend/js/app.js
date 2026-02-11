@@ -23,7 +23,8 @@ import {
     pushOperation,
     pullOperation,
     getOperationHistory,
-    searchOperations
+    searchOperations,
+    listActiveWorkers
 } from './api.js';
 import {
     renderFileList,
@@ -98,7 +99,7 @@ const state = {
         sortOrder: 'desc'
     },
     // VF Redesign: Worker ID (for single worker operations)
-    workerId: 1, // Default to first worker, can be updated from settings
+    workerId: null, // Dynamically set from first active worker on initialization
     // VF Redesign: Auto-refresh intervals
     autoRefreshIntervals: {
         operationHistory: null,
@@ -183,6 +184,26 @@ async function init() {
         document.getElementById('admin-btn').style.display = 'block';
     }
 
+    // Fetch active workers and set worker ID
+    try {
+        const workers = await listActiveWorkers();
+        if (workers && workers.length > 0) {
+            // Set workerId to first active worker
+            state.workerId = workers[0].id;
+            console.log(`Using worker ID: ${state.workerId} (${workers[0].name})`);
+        } else {
+            // No active workers available
+            console.warn('No active workers found');
+            showError(t('errors.noWorkersAvailable') || 'No active workers available. Please contact your administrator.');
+            // Set to null to prevent operations from being attempted
+            state.workerId = null;
+        }
+    } catch (error) {
+        console.error('Failed to fetch active workers:', error);
+        showError(t('errors.failedToLoadWorkers') || 'Failed to load workers. Some features may not work correctly.');
+        // Keep default value of 1 as fallback
+    }
+
     // Load and apply user theme preference
     try {
         const { getPreferences } = await import('./api.js');
@@ -224,27 +245,34 @@ async function init() {
         console.error('Failed to load last path preference:', error);
     }
 
-    if (isVFRedesign) {
-        // Initialize single pane (Path A only)
-        try {
-            await loadDirectory('a', initialPathA);
-        } catch (error) {
-            console.error('Failed to load last path, falling back to root:', error);
-            // Graceful fallback: if last path doesn't exist, load root
-            await loadDirectory('a', 'A:');
-        }
+    // Only load directories if we have a valid worker
+    if (state.workerId !== null) {
+        if (isVFRedesign) {
+            // Initialize single pane (Path A only)
+            try {
+                await loadDirectory('a', initialPathA);
+            } catch (error) {
+                console.error('Failed to load last path, falling back to root:', error);
+                // Graceful fallback: if last path doesn't exist, load root
+                await loadDirectory('a', 'A:');
+            }
 
-        // Load operation history
-        await loadOperationHistory();
-    } else {
-        // Initialize both panes (legacy dual-pane)
-        try {
-            await loadDirectory('a', initialPathA);
-        } catch (error) {
-            console.error('Failed to load last path, falling back to root:', error);
-            await loadDirectory('a', 'A:');
+            // Load operation history
+            await loadOperationHistory();
+        } else {
+            // Initialize both panes (legacy dual-pane)
+            try {
+                await loadDirectory('a', initialPathA);
+            } catch (error) {
+                console.error('Failed to load last path, falling back to root:', error);
+                await loadDirectory('a', 'A:');
+            }
+            await loadDirectory('b', 'B:');
         }
-        await loadDirectory('b', 'B:');
+    } else {
+        // No workers available - show error message in the file list area
+        console.warn('Skipping directory load - no workers available');
+        showError(t('errors.noWorkersAvailable') || 'No active workers available. The file explorer cannot function without an active worker. Please contact your administrator.');
     }
 
     // Connect WebSocket for real-time updates
