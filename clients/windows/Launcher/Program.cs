@@ -113,6 +113,10 @@ namespace RFMLauncher
                     // Authentication successful - no need to show console for success
                 }
 
+                // Normalize path to canonical (first) allowed path prefix
+                // so the backend receives a path matching the worker's path_a_prefix
+                string canonicalPath = NormalizeToCanonicalPath(selectedPath, config);
+
                 // Build deep link URL
                 // Use frontend URL if available, otherwise fall back to API URL
                 string frontendUrl = !string.IsNullOrEmpty(config.FrontendBaseUrl)
@@ -122,7 +126,7 @@ namespace RFMLauncher
                 var deepLink = DeepLinkBuilder.Build(
                     frontendUrl,
                     action,
-                    selectedPath,
+                    canonicalPath,
                     accessToken
                 );
 
@@ -170,6 +174,33 @@ namespace RFMLauncher
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Normalize path to use the canonical (first) allowed path prefix.
+        /// The first entry in allowed_paths must match the worker's path_a_prefix.
+        /// All other entries are treated as aliases (hostname variants, mapped drives, etc.)
+        /// that get rewritten to the canonical prefix before sending to the backend.
+        /// </summary>
+        private static string NormalizeToCanonicalPath(string selectedPath, Config config)
+        {
+            if (config.AllowedPaths == null || config.AllowedPaths.Count == 0)
+                return selectedPath;
+
+            string normalizedSelected = selectedPath.Replace('/', '\\');
+            string canonical = config.AllowedPaths[0].Replace('/', '\\').TrimEnd('\\');
+
+            foreach (var allowedPath in config.AllowedPaths)
+            {
+                string normalizedAllowed = allowedPath.Replace('/', '\\').TrimEnd('\\');
+
+                if (normalizedSelected.StartsWith(normalizedAllowed, StringComparison.OrdinalIgnoreCase))
+                {
+                    return canonical + normalizedSelected.Substring(normalizedAllowed.Length);
+                }
+            }
+
+            return selectedPath;
         }
     }
 }
