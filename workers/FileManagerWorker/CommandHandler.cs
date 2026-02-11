@@ -129,7 +129,7 @@ namespace FileManagerWorker
 
                 // Extract file count and size from result
                 int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
-                long? totalSize = result?.ContainsKey("total_size") == true ? Convert.ToInt64(result["total_size"]) : null;
+                long? totalSize = result?.ContainsKey("total_size_bytes") == true ? Convert.ToInt64(result["total_size_bytes"]) : null;
 
                 return CommandResponse.Success(cmdId, "Copy completed successfully", fileCount, totalSize);
             }
@@ -180,7 +180,7 @@ namespace FileManagerWorker
 
                 // Extract file count and size from result
                 int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
-                long? totalSize = result?.ContainsKey("total_size") == true ? Convert.ToInt64(result["total_size"]) : null;
+                long? totalSize = result?.ContainsKey("total_size_bytes") == true ? Convert.ToInt64(result["total_size_bytes"]) : null;
 
                 return CommandResponse.Success(cmdId, "Move completed successfully", fileCount, totalSize);
             }

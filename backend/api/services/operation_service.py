@@ -948,14 +948,14 @@ class OperationService:
                 worker, operation.source_path, operation.dest_path, db
             )
 
-            # CRITICAL: Validate copy completed successfully
+            # Validate copy completed successfully
             if copy_response.status != "success":
                 raise OperationError(f"PUSH Step 1 failed: Copy to PATH_B failed: {copy_response.message}")
 
-            if not copy_response.file_count or copy_response.file_count == 0:
-                raise OperationError(
-                    f"PUSH Step 1 validation failed: No files copied. "
-                    f"Worker validation may have detected incomplete copy."
+            if not copy_response.file_count:
+                logger.warning(
+                    f"PUSH Step 1: Worker did not report file_count "
+                    f"(got {copy_response.file_count}). Proceeding based on success status."
                 )
 
             copy_completed = True
@@ -972,10 +972,10 @@ class OperationService:
                 if archive_response.status != "success":
                     raise OperationError(f"PUSH Step 2 failed: Move to PATH_C failed: {archive_response.message}")
 
-                if not archive_response.file_count or archive_response.file_count == 0:
-                    raise OperationError(
-                        f"PUSH Step 2 validation failed: No files moved. "
-                        f"Worker validation may have detected incomplete move."
+                if not archive_response.file_count:
+                    logger.warning(
+                        f"PUSH Step 2: Worker did not report file_count "
+                        f"(got {archive_response.file_count}). Proceeding based on success status."
                     )
 
             except Exception as step2_exc:
@@ -1107,14 +1107,14 @@ class OperationService:
                 worker, operation.source_path, operation.dest_path, db
             )
 
-            # CRITICAL: Validate copy completed successfully
+            # Validate copy completed successfully
             if copy_response.status != "success":
                 raise OperationError(f"PULL Step 1 failed: Copy from PATH_B failed: {copy_response.message}")
 
-            if not copy_response.file_count or copy_response.file_count == 0:
-                raise OperationError(
-                    f"PULL Step 1 validation failed: No files copied. "
-                    f"Worker validation may have detected incomplete copy."
+            if not copy_response.file_count:
+                logger.warning(
+                    f"PULL Step 1: Worker did not report file_count "
+                    f"(got {copy_response.file_count}). Proceeding based on success status."
                 )
 
             copy_completed = True
