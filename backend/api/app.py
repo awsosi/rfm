@@ -65,18 +65,28 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         # ROSAPI
         "rosapi_enabled": str(settings.rosapi_enabled).lower(),
         "rosapi_base_url": settings.rosapi_base_url or "",
+        # Authentication
+        "rosapi_auth_base_url": settings.rosapi_auth_base_url or "",
+        "rosapi_auth_login_endpoint": settings.rosapi_auth_login_endpoint or "/api/v1/auth/login",
+        "rosapi_auth_refresh_endpoint": settings.rosapi_auth_refresh_endpoint or "/api/v1/auth/refresh",
         "rosapi_auth_email": settings.rosapi_auth_email or "",
         "rosapi_auth_password": settings.rosapi_auth_password or "",
         "rosapi_timeout": str(settings.rosapi_timeout),
+        # PUSH
         "rosapi_push_enabled": str(settings.rosapi_push_enabled).lower(),
+        "rosapi_push_base_url": settings.rosapi_push_base_url or "",
         "rosapi_push_endpoint": settings.rosapi_push_endpoint or "",
         "rosapi_push_method": settings.rosapi_push_method or "POST",
         "rosapi_push_payload": settings.rosapi_push_payload or "{}",
+        # PULL
         "rosapi_pull_enabled": str(settings.rosapi_pull_enabled).lower(),
+        "rosapi_pull_base_url": settings.rosapi_pull_base_url or "",
         "rosapi_pull_endpoint": settings.rosapi_pull_endpoint or "",
         "rosapi_pull_method": settings.rosapi_pull_method or "POST",
         "rosapi_pull_payload": settings.rosapi_pull_payload or "{}",
-        "rosapi_verify_url": settings.rosapi_verify_url or "",
+        # Verification
+        "rosapi_verify_base_url": settings.rosapi_verify_base_url or "",
+        "rosapi_verify_endpoint": settings.rosapi_verify_endpoint or "",
         # PUSH operation settings
         "enable_push_flatten": str(settings.enable_push_flatten).lower(),
         "enable_push_archive": str(settings.enable_push_archive).lower(),

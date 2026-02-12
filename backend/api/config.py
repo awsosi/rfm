@@ -126,18 +126,32 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices('enable_rosapi', 'rosapi_enabled'),
     )
     rosapi_base_url: Optional[str] = None
+
+    # Authentication configuration
+    rosapi_auth_base_url: Optional[str] = None  # Defaults to rosapi_base_url if not set
+    rosapi_auth_login_endpoint: str = "/api/v1/auth/login"
+    rosapi_auth_refresh_endpoint: str = "/api/v1/auth/refresh"
     rosapi_auth_email: Optional[str] = None
     rosapi_auth_password: Optional[str] = None
     rosapi_timeout: int = 10
+
+    # PUSH operation signalling
     rosapi_push_enabled: bool = True
+    rosapi_push_base_url: Optional[str] = None  # Defaults to rosapi_base_url if not set
     rosapi_push_endpoint: str = "/api/v1/products/tg/{folder_name}/set_image_catalog"
     rosapi_push_method: str = "POST"
     rosapi_push_payload: str = '{"generate_thumbnails": false}'
+
+    # PULL operation signalling
     rosapi_pull_enabled: bool = False
+    rosapi_pull_base_url: Optional[str] = None  # Defaults to rosapi_base_url if not set
     rosapi_pull_endpoint: str = ""
     rosapi_pull_method: str = "POST"
     rosapi_pull_payload: str = "{}"
-    rosapi_verify_url: Optional[str] = None
+
+    # Verification (optional)
+    rosapi_verify_base_url: Optional[str] = None  # Defaults to rosapi_base_url if not set
+    rosapi_verify_endpoint: Optional[str] = None
 
     # Logging
     log_level: str = "INFO"

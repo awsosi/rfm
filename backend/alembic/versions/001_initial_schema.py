@@ -297,18 +297,28 @@ def upgrade() -> None:
     # ROSAPI config values seeded from environment
     rosapi_enabled = os.environ.get('ENABLE_ROSAPI', os.environ.get('ROSAPI_ENABLED', 'false')).lower()
     rosapi_base_url = os.environ.get('ROSAPI_BASE_URL', '')
+    # Authentication
+    rosapi_auth_base_url = os.environ.get('ROSAPI_AUTH_BASE_URL', '')
+    rosapi_auth_login_endpoint = os.environ.get('ROSAPI_AUTH_LOGIN_ENDPOINT', '/api/v1/auth/login')
+    rosapi_auth_refresh_endpoint = os.environ.get('ROSAPI_AUTH_REFRESH_ENDPOINT', '/api/v1/auth/refresh')
     rosapi_auth_email = os.environ.get('ROSAPI_AUTH_EMAIL', '')
     rosapi_auth_password = os.environ.get('ROSAPI_AUTH_PASSWORD', '')
     rosapi_timeout = os.environ.get('ROSAPI_TIMEOUT', '10')
+    # PUSH
     rosapi_push_enabled = os.environ.get('ROSAPI_PUSH_ENABLED', 'true').lower()
+    rosapi_push_base_url = os.environ.get('ROSAPI_PUSH_BASE_URL', '')
     rosapi_push_endpoint = os.environ.get('ROSAPI_PUSH_ENDPOINT', '/api/v1/products/tg/{folder_name}/set_image_catalog')
     rosapi_push_method = os.environ.get('ROSAPI_PUSH_METHOD', 'POST')
     rosapi_push_payload = os.environ.get('ROSAPI_PUSH_PAYLOAD', '{"generate_thumbnails": false}')
+    # PULL
     rosapi_pull_enabled = os.environ.get('ROSAPI_PULL_ENABLED', 'false').lower()
+    rosapi_pull_base_url = os.environ.get('ROSAPI_PULL_BASE_URL', '')
     rosapi_pull_endpoint = os.environ.get('ROSAPI_PULL_ENDPOINT', '')
     rosapi_pull_method = os.environ.get('ROSAPI_PULL_METHOD', 'POST')
     rosapi_pull_payload = os.environ.get('ROSAPI_PULL_PAYLOAD', '{}')
-    rosapi_verify_url = os.environ.get('ROSAPI_VERIFY_URL', '')
+    # Verification
+    rosapi_verify_base_url = os.environ.get('ROSAPI_VERIFY_BASE_URL', '')
+    rosapi_verify_endpoint = os.environ.get('ROSAPI_VERIFY_ENDPOINT', '')
 
     # Syslog config values seeded from environment
     syslog_enabled = os.environ.get('ENABLE_SYSLOG', 'false').lower()
@@ -356,19 +366,29 @@ def upgrade() -> None:
         ('remote_audit_api_timeout', remote_audit_timeout, 'INT', 'Remote audit API timeout in seconds'),
         # ROSAPI - Remote Operation Signalling (PIM integration)
         ('rosapi_enabled', rosapi_enabled, 'BOOLEAN', 'Enable ROSAPI signalling for completed PUSH/PULL operations'),
-        ('rosapi_base_url', rosapi_base_url, 'STRING', 'ROSAPI base URL'),
+        ('rosapi_base_url', rosapi_base_url, 'STRING', 'ROSAPI global base URL (fallback for auth/push/pull/verify)'),
+        # Authentication
+        ('rosapi_auth_base_url', rosapi_auth_base_url, 'STRING', 'ROSAPI authentication base URL (defaults to rosapi_base_url)'),
+        ('rosapi_auth_login_endpoint', rosapi_auth_login_endpoint, 'STRING', 'ROSAPI login endpoint path'),
+        ('rosapi_auth_refresh_endpoint', rosapi_auth_refresh_endpoint, 'STRING', 'ROSAPI token refresh endpoint path'),
         ('rosapi_auth_email', rosapi_auth_email, 'STRING', 'ROSAPI authentication email'),
         ('rosapi_auth_password', rosapi_auth_password, 'STRING', 'ROSAPI authentication password'),
         ('rosapi_timeout', rosapi_timeout, 'INT', 'ROSAPI HTTP request timeout in seconds'),
+        # PUSH
         ('rosapi_push_enabled', rosapi_push_enabled, 'BOOLEAN', 'Enable ROSAPI signal for PUSH operations'),
+        ('rosapi_push_base_url', rosapi_push_base_url, 'STRING', 'ROSAPI PUSH base URL (defaults to rosapi_base_url)'),
         ('rosapi_push_endpoint', rosapi_push_endpoint, 'STRING', 'ROSAPI PUSH endpoint template (supports {folder_name}, {operation_id}, {source_path}, {dest_path})'),
         ('rosapi_push_method', rosapi_push_method, 'STRING', 'ROSAPI PUSH HTTP method (POST/PUT/GET)'),
         ('rosapi_push_payload', rosapi_push_payload, 'STRING', 'ROSAPI PUSH JSON payload template'),
+        # PULL
         ('rosapi_pull_enabled', rosapi_pull_enabled, 'BOOLEAN', 'Enable ROSAPI signal for PULL operations'),
+        ('rosapi_pull_base_url', rosapi_pull_base_url, 'STRING', 'ROSAPI PULL base URL (defaults to rosapi_base_url)'),
         ('rosapi_pull_endpoint', rosapi_pull_endpoint, 'STRING', 'ROSAPI PULL endpoint template'),
         ('rosapi_pull_method', rosapi_pull_method, 'STRING', 'ROSAPI PULL HTTP method'),
         ('rosapi_pull_payload', rosapi_pull_payload, 'STRING', 'ROSAPI PULL JSON payload template'),
-        ('rosapi_verify_url', rosapi_verify_url, 'STRING', 'ROSAPI verification URL template (optional)'),
+        # Verification
+        ('rosapi_verify_base_url', rosapi_verify_base_url, 'STRING', 'ROSAPI verification base URL (defaults to rosapi_base_url)'),
+        ('rosapi_verify_endpoint', rosapi_verify_endpoint, 'STRING', 'ROSAPI verification endpoint template (optional)'),
         # Logging
         ('log_retention_days', '14', 'INT', 'Number of days to retain compressed logs'),
         ('enable_log_compression', 'true', 'BOOLEAN', 'Enable automatic log compression'),

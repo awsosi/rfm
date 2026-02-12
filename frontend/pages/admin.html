@@ -183,9 +183,36 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="config-rosapi-base-url">ROSAPI Base URL</label>
+                                    <label for="config-rosapi-base-url">Global Base URL (Fallback)</label>
                                     <input type="text" id="config-rosapi-base-url" name="rosapi_base_url" class="form-control" placeholder="https://pim.example.com">
-                                    <small>Base URL of the ROSAPI endpoint (e.g., https://pim.example.com)</small>
+                                    <small>Default base URL used when service-specific URLs are not set</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-timeout">Request Timeout (seconds)</label>
+                                    <input type="number" id="config-rosapi-timeout" name="rosapi_timeout" class="form-control" min="1" max="60" value="10">
+                                    <small>HTTP request timeout for ROSAPI calls</small>
+                                </div>
+
+                                <h4 class="mt-4">Authentication Configuration</h4>
+                                <p class="text-muted small">Configure authentication endpoints. Leave base URL empty to use Global Base URL.</p>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-auth-base-url">Auth Base URL (Optional)</label>
+                                    <input type="text" id="config-rosapi-auth-base-url" name="rosapi_auth_base_url" class="form-control" placeholder="https://auth.pim.example.com">
+                                    <small>Base URL for authentication service (defaults to Global Base URL if empty)</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-auth-login-endpoint">Login Endpoint</label>
+                                    <input type="text" id="config-rosapi-auth-login-endpoint" name="rosapi_auth_login_endpoint" class="form-control" placeholder="/api/v1/auth/login" value="/api/v1/auth/login">
+                                    <small>Authentication endpoint path (e.g., /api/v1/auth/login)</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-auth-refresh-endpoint">Refresh Token Endpoint</label>
+                                    <input type="text" id="config-rosapi-auth-refresh-endpoint" name="rosapi_auth_refresh_endpoint" class="form-control" placeholder="/api/v1/auth/refresh" value="/api/v1/auth/refresh">
+                                    <small>Token refresh endpoint path (e.g., /api/v1/auth/refresh)</small>
                                 </div>
 
                                 <div class="form-group">
@@ -200,12 +227,6 @@
                                     <small>Password for ROSAPI JWT authentication</small>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="config-rosapi-timeout">Request Timeout (seconds)</label>
-                                    <input type="number" id="config-rosapi-timeout" name="rosapi_timeout" class="form-control" min="1" max="60" value="10">
-                                    <small>HTTP request timeout for ROSAPI calls</small>
-                                </div>
-
                                 <h4 class="mt-4">PUSH Operation Signal</h4>
                                 <div class="form-group">
                                     <div class="custom-control custom-switch">
@@ -213,6 +234,12 @@
                                         <label class="custom-control-label" for="config-rosapi-push-enabled">Enable PUSH Signalling</label>
                                     </div>
                                     <small>Send signal when PUSH operations complete</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-push-base-url">PUSH Base URL (Optional)</label>
+                                    <input type="text" id="config-rosapi-push-base-url" name="rosapi_push_base_url" class="form-control" placeholder="https://push.pim.example.com">
+                                    <small>Base URL for PUSH operations (defaults to Global Base URL if empty)</small>
                                 </div>
 
                                 <div class="form-group">
@@ -247,6 +274,12 @@
                                 </div>
 
                                 <div class="form-group">
+                                    <label for="config-rosapi-pull-base-url">PULL Base URL (Optional)</label>
+                                    <input type="text" id="config-rosapi-pull-base-url" name="rosapi_pull_base_url" class="form-control" placeholder="https://pull.pim.example.com">
+                                    <small>Base URL for PULL operations (defaults to Global Base URL if empty)</small>
+                                </div>
+
+                                <div class="form-group">
                                     <label for="config-rosapi-pull-endpoint">PULL Endpoint Template</label>
                                     <input type="text" id="config-rosapi-pull-endpoint" name="rosapi_pull_endpoint" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/sync">
                                     <small>Endpoint path template. Variables: <code>{folder_name}</code>, <code>{operation_id}</code>, <code>{source_path}</code>, <code>{dest_path}</code></small>
@@ -269,9 +302,17 @@
                                 </div>
 
                                 <h4 class="mt-4">Verification (Optional)</h4>
+                                <p class="text-muted small">Optional verification endpoint configuration.</p>
+
                                 <div class="form-group">
-                                    <label for="config-rosapi-verify-url">Verification URL Template</label>
-                                    <input type="text" id="config-rosapi-verify-url" name="rosapi_verify_url" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/verify">
+                                    <label for="config-rosapi-verify-base-url">Verification Base URL (Optional)</label>
+                                    <input type="text" id="config-rosapi-verify-base-url" name="rosapi_verify_base_url" class="form-control" placeholder="https://verify.pim.example.com">
+                                    <small>Base URL for verification service (defaults to Global Base URL if empty)</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-rosapi-verify-endpoint">Verification Endpoint Template</label>
+                                    <input type="text" id="config-rosapi-verify-endpoint" name="rosapi_verify_endpoint" class="form-control" placeholder="/api/v1/products/tg/{folder_name}/verify">
                                     <small>Optional verification endpoint to check operation status. Supports template variables.</small>
                                 </div>
                             </div>

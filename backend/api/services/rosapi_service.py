@@ -40,18 +40,28 @@ async def _get_rosapi_config(db: AsyncSession) -> dict:
     config_keys = [
         'rosapi_enabled',
         'rosapi_base_url',
+        # Authentication
+        'rosapi_auth_base_url',
+        'rosapi_auth_login_endpoint',
+        'rosapi_auth_refresh_endpoint',
         'rosapi_auth_email',
         'rosapi_auth_password',
         'rosapi_timeout',
+        # PUSH
         'rosapi_push_enabled',
+        'rosapi_push_base_url',
         'rosapi_push_endpoint',
         'rosapi_push_method',
         'rosapi_push_payload',
+        # PULL
         'rosapi_pull_enabled',
+        'rosapi_pull_base_url',
         'rosapi_pull_endpoint',
         'rosapi_pull_method',
         'rosapi_pull_payload',
-        'rosapi_verify_url',
+        # Verification
+        'rosapi_verify_base_url',
+        'rosapi_verify_endpoint',
     ]
 
     result = await db.execute(
@@ -63,7 +73,8 @@ async def _get_rosapi_config(db: AsyncSession) -> dict:
 
 
 async def _authenticate(
-    base_url: str,
+    auth_base_url: str,
+    login_endpoint: str,
     email: str,
     password: str,
     timeout: int,
@@ -71,10 +82,14 @@ async def _authenticate(
     """
     Authenticate with ROSAPI and return (access_token, refresh_token).
 
-    POST /api/v1/auth/login with {"email": ..., "password": ...}
+    POST {auth_base_url}{login_endpoint} with {"email": ..., "password": ...}
     Expects response: {"access_token": "...", "refresh_token": "..."}
     """
-    url = f"{base_url.rstrip('/')}/api/v1/auth/login"
+    # Build full URL from base + endpoint
+    base = auth_base_url.rstrip('/')
+    endpoint = login_endpoint if login_endpoint.startswith('/') else f'/{login_endpoint}'
+    url = f"{base}{endpoint}"
+
     payload = {"email": email, "password": password}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -92,17 +107,22 @@ async def _authenticate(
 
 
 async def _refresh_access_token(
-    base_url: str,
+    auth_base_url: str,
+    refresh_endpoint: str,
     refresh_token: str,
     timeout: int,
 ) -> tuple[str, str]:
     """
     Refresh the access token using the refresh token.
 
-    POST /api/v1/auth/refresh with {"refresh_token": "..."}
+    POST {auth_base_url}{refresh_endpoint} with {"refresh_token": "..."}
     Expects response: {"access_token": "...", "refresh_token": "..."}
     """
-    url = f"{base_url.rstrip('/')}/api/v1/auth/refresh"
+    # Build full URL from base + endpoint
+    base = auth_base_url.rstrip('/')
+    endpoint = refresh_endpoint if refresh_endpoint.startswith('/') else f'/{refresh_endpoint}'
+    url = f"{base}{endpoint}"
+
     payload = {"refresh_token": refresh_token}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -120,7 +140,9 @@ async def _refresh_access_token(
 
 
 async def _get_valid_token(
-    base_url: str,
+    auth_base_url: str,
+    login_endpoint: str,
+    refresh_endpoint: str,
     email: str,
     password: str,
     timeout: int,
@@ -145,7 +167,7 @@ async def _get_valid_token(
         try:
             logger.debug("Refreshing ROSAPI access token")
             _access_token, _refresh_token = await _refresh_access_token(
-                base_url, _refresh_token, timeout
+                auth_base_url, refresh_endpoint, _refresh_token, timeout
             )
             _token_expires_at = now + timedelta(minutes=50)
             logger.info("Successfully refreshed ROSAPI access token")
@@ -160,7 +182,7 @@ async def _get_valid_token(
     # Full authentication
     logger.debug("Performing full ROSAPI authentication")
     _access_token, _refresh_token = await _authenticate(
-        base_url, email, password, timeout
+        auth_base_url, login_endpoint, email, password, timeout
     )
     _token_expires_at = now + timedelta(minutes=50)
     logger.info("Successfully authenticated with ROSAPI")
@@ -298,12 +320,29 @@ async def signal_operation_completed_bg(
             logger.debug("ROSAPI is disabled, skipping signal")
             return
 
+        # Get global base URL (fallback for all services)
+        global_base_url = config.get('rosapi_base_url', '').strip()
+
+        # Get authentication config with fallback to global base URL
+        auth_base_url = config.get('rosapi_auth_base_url', '').strip() or global_base_url
+        auth_login_endpoint = config.get('rosapi_auth_login_endpoint', '/api/v1/auth/login').strip()
+        auth_refresh_endpoint = config.get('rosapi_auth_refresh_endpoint', '/api/v1/auth/refresh').strip()
+        email = config.get('rosapi_auth_email', '').strip()
+        password = config.get('rosapi_auth_password', '').strip()
+
+        # Validate authentication config
+        if not auth_base_url or not email or not password:
+            logger.warning("ROSAPI is enabled but missing required auth config (auth_base_url, email, password)")
+            return
+
         # Check if signalling is enabled for this operation type
         op_type_upper = operation_type.upper()
         if op_type_upper == "PUSH":
             if config.get('rosapi_push_enabled', 'false').lower() != 'true':
                 logger.debug("ROSAPI PUSH signalling is disabled")
                 return
+            # Get PUSH-specific base URL with fallback to global base URL
+            operation_base_url = config.get('rosapi_push_base_url', '').strip() or global_base_url
             endpoint = config.get('rosapi_push_endpoint', '')
             method = config.get('rosapi_push_method', 'POST')
             payload = config.get('rosapi_push_payload', '{}')
@@ -311,6 +350,8 @@ async def signal_operation_completed_bg(
             if config.get('rosapi_pull_enabled', 'false').lower() != 'true':
                 logger.debug("ROSAPI PULL signalling is disabled")
                 return
+            # Get PULL-specific base URL with fallback to global base URL
+            operation_base_url = config.get('rosapi_pull_base_url', '').strip() or global_base_url
             endpoint = config.get('rosapi_pull_endpoint', '')
             method = config.get('rosapi_pull_method', 'POST')
             payload = config.get('rosapi_pull_payload', '{}')
@@ -318,13 +359,9 @@ async def signal_operation_completed_bg(
             logger.debug(f"ROSAPI signalling not applicable for operation type: {operation_type}")
             return
 
-        # Validate required config
-        base_url = config.get('rosapi_base_url', '').strip()
-        email = config.get('rosapi_auth_email', '').strip()
-        password = config.get('rosapi_auth_password', '').strip()
-
-        if not base_url or not email or not password:
-            logger.warning("ROSAPI is enabled but missing required config (base_url, email, password)")
+        # Validate operation config
+        if not operation_base_url:
+            logger.warning(f"ROSAPI {op_type_upper} signalling enabled but operation base URL is empty")
             return
 
         if not endpoint:
@@ -341,12 +378,15 @@ async def signal_operation_completed_bg(
         folder_name = _extract_folder_name(operation_type, source_path, dest_path)
 
         # Get valid token
-        token = await _get_valid_token(base_url, email, password, timeout)
+        token = await _get_valid_token(
+            auth_base_url, auth_login_endpoint, auth_refresh_endpoint,
+            email, password, timeout
+        )
 
         # Send signal (with retry on 401)
         try:
             await _send_signal(
-                base_url,
+                operation_base_url,
                 token,
                 method,
                 endpoint,
@@ -365,9 +405,12 @@ async def signal_operation_completed_bg(
                 _refresh_token = None
                 _token_expires_at = None
                 # Retry with fresh auth
-                token = await _get_valid_token(base_url, email, password, timeout)
+                token = await _get_valid_token(
+                    auth_base_url, auth_login_endpoint, auth_refresh_endpoint,
+                    email, password, timeout
+                )
                 await _send_signal(
-                    base_url,
+                    operation_base_url,
                     token,
                     method,
                     endpoint,
