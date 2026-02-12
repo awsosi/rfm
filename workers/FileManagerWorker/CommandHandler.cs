@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using NLog;
 using FileManagerWorker.Models;
 
@@ -73,6 +74,9 @@ namespace FileManagerWorker
                     case "get_status":
                         return await HandleGetStatusAsync(request);
 
+                    case "push_cleanup":
+                        return await HandlePushCleanupAsync(request);
+
                     case "update_config":
                         return await HandleUpdateConfigAsync(request);
 
@@ -105,6 +109,15 @@ namespace FileManagerWorker
             var source = request.SourcePath;
             var destination = request.DestPath;
 
+            // Extract optional PUSH params (flatten, ignore_masks)
+            bool flatten = request.Parameters?.ContainsKey("flatten") == true
+                && Convert.ToBoolean(request.Parameters["flatten"]);
+            List<string> ignoreMasks = null;
+            if (request.Parameters?.ContainsKey("ignore_masks") == true)
+            {
+                ignoreMasks = ParseIgnoreMasks(request.Parameters["ignore_masks"]);
+            }
+
             List<RollbackContext> backups = null;
 
             try
@@ -121,8 +134,8 @@ namespace FileManagerWorker
                     }
                 });
 
-                // Execute copy
-                var result = await _fileOps.CopyAsync(source, destination, progress);
+                // Execute copy (with optional flatten and ignore_masks)
+                var result = await _fileOps.CopyAsync(source, destination, progress, flatten, ignoreMasks);
 
                 // Success - cleanup backups
                 _rollbackManager.CleanupBackups(backups);
@@ -531,6 +544,80 @@ namespace FileManagerWorker
                 Logger.Error(ex, "Update config operation failed");
                 return await Task.FromResult(CommandResponse.Failed(cmdId, ex.Message));
             }
+        }
+
+        /// <summary>
+        /// Handles push_cleanup command (best-effort cleanup of source after PUSH copy)
+        /// </summary>
+        private async Task<CommandResponse> HandlePushCleanupAsync(CommandRequest request)
+        {
+            int cmdId = request.CommandId.Value;
+
+            if (string.IsNullOrEmpty(request.SourcePath))
+            {
+                return CommandResponse.Failed(cmdId, "push_cleanup requires source_path");
+            }
+
+            bool flatten = request.Parameters?.ContainsKey("flatten") == true
+                && Convert.ToBoolean(request.Parameters["flatten"]);
+            List<string> ignoreMasks = null;
+            if (request.Parameters?.ContainsKey("ignore_masks") == true)
+            {
+                ignoreMasks = ParseIgnoreMasks(request.Parameters["ignore_masks"]);
+            }
+
+            try
+            {
+                var result = await _fileOps.PushCleanupAsync(request.SourcePath, flatten, ignoreMasks);
+
+                int failureCount = result.ContainsKey("failure_count") ? Convert.ToInt32(result["failure_count"]) : 0;
+                string message = failureCount > 0
+                    ? $"Cleanup completed with {failureCount} failure(s)"
+                    : "Cleanup completed successfully";
+
+                var response = CommandResponse.Success(cmdId, message);
+                response.ErrorDetails = result;
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Push cleanup failed");
+                // Always return success for cleanup (best-effort)
+                return CommandResponse.Success(cmdId, $"Cleanup failed (non-fatal): {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Parses ignore_masks from a parameter value (supports JSON array or comma-separated string)
+        /// </summary>
+        private List<string> ParseIgnoreMasks(object value)
+        {
+            if (value == null) return null;
+
+            var masks = new List<string>();
+
+            if (value is JArray jArray)
+            {
+                foreach (var item in jArray)
+                {
+                    var mask = item.ToString().Trim();
+                    if (!string.IsNullOrEmpty(mask))
+                        masks.Add(mask);
+                }
+            }
+            else
+            {
+                // Treat as comma-separated string
+                var str = value.ToString();
+                foreach (var mask in str.Split(','))
+                {
+                    var trimmed = mask.Trim();
+                    if (!string.IsNullOrEmpty(trimmed))
+                        masks.Add(trimmed);
+                }
+            }
+
+            return masks.Count > 0 ? masks : null;
         }
 
         /// <summary>

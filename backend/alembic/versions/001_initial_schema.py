@@ -390,6 +390,10 @@ def upgrade() -> None:
         # Maintenance
         ('maintenance_mode', 'false', 'BOOLEAN', 'Enable maintenance mode (API read-only)'),
         ('maintenance_message', 'System is under maintenance', 'STRING', 'Message displayed during maintenance'),
+        # PUSH operation settings
+        ('enable_push_flatten', 'false', 'BOOLEAN', 'Only copy root-level files to PATH_B during PUSH (skip subdirectories)'),
+        ('enable_push_archive', 'false', 'BOOLEAN', 'Archive source to PATH_C after PUSH (when off, source is deleted)'),
+        ('push_ignore_file_masks', 'Thumbs.db', 'STRING', 'Comma-separated file/extension masks to exclude and destroy during PUSH'),
     ]
     for key, value, type_, description in config_rows:
         conn.execute(stmt, {"key": key, "value": value, "type": type_, "description": description})

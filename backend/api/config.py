@@ -167,6 +167,11 @@ class Settings(BaseSettings):
         description="Archive path for PUSH operations (admin-configurable)",
     )
 
+    # PUSH operation behavior
+    enable_push_flatten: bool = False
+    enable_push_archive: bool = False
+    push_ignore_file_masks: str = "Thumbs.db"
+
     @field_validator("database_url", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

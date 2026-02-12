@@ -25,6 +25,7 @@ from api.services.worker_service import (
 )
 from api.services.elasticsearch_service import get_elasticsearch_service
 from models import (
+    Config,
     Operation,
     OperationType,
     OperationStatus,
@@ -722,11 +723,18 @@ class OperationService:
         Raises:
             OperationError: If PATH_B or PATH_C not configured or operation fails
         """
-        # Get worker and validate PATH_B and PATH_C are configured
+        # Get worker and validate PATH_B (and PATH_C if archive enabled)
         # Configuration hierarchy: worker-specific -> global settings
         worker = await get_worker_by_id(worker_id, db)
         if not worker:
             raise OperationError(f"Worker {worker_id} not found")
+
+        # Read push settings from DB (runtime source of truth)
+        push_config_keys = ['enable_push_archive']
+        stmt = select(Config).where(Config.key.in_(push_config_keys))
+        result = await db.execute(stmt)
+        push_config = {c.key: c.value for c in result.scalars()}
+        archive_enabled = push_config.get("enable_push_archive", "false").lower() == "true"
 
         # Use worker-specific path_b_prefix or fall back to global settings
         # Note: settings.path_b is used as fallback for VF redesign PUSH operations
@@ -738,10 +746,11 @@ class OperationService:
             )
 
         # Use worker-specific path_c_prefix or fall back to global settings
+        # Only required when archiving is enabled
         path_c = worker.path_c_prefix or self.settings.path_c
-        if not path_c:
+        if archive_enabled and not path_c:
             raise OperationError(
-                f"PATH_C not configured for worker '{worker.name}'. "
+                f"PATH_C not configured for worker '{worker.name}' but archiving is enabled. "
                 "Configure in Admin Panel -> System -> Worker Configuration or set PATH_C in .env."
             )
 
@@ -752,7 +761,7 @@ class OperationService:
         # Build destination paths using B: and C: prefixes for worker resolution
         # Worker will resolve B: and C: to actual paths via PathBPrefix/PathCPrefix
         dest_path_b = f"B:/{dir_name}"
-        archive_path_c = f"C:/{dir_name}"
+        archive_path_c = f"C:/{dir_name}" if archive_enabled else None
 
         # Create operation record
         operation = Operation(
@@ -898,8 +907,9 @@ class OperationService:
         Execute PUSH operation on worker with transactional rollback on failure.
 
         Steps:
-        1. Copy directory from source to PATH_B
-        2. Move directory from source to PATH_C (archive)
+        1. Copy directory from source to PATH_B (respecting flatten/ignore settings)
+        1.5. Cleanup source: destroy subfolders (if flatten) and ignored files (best-effort)
+        2. Archive to PATH_C or delete source (depending on archive setting)
 
         If Step 2 fails, Step 1 is rolled back (delete from PATH_B).
 
@@ -911,9 +921,21 @@ class OperationService:
         Returns:
             WorkerCommandResponse from worker
         """
+        # Read push settings from DB (runtime source of truth)
+        push_config_keys = ['enable_push_flatten', 'enable_push_archive', 'push_ignore_file_masks']
+        stmt = select(Config).where(Config.key.in_(push_config_keys))
+        result = await db.execute(stmt)
+        push_config = {c.key: c.value for c in result.scalars()}
+
+        flatten = push_config.get("enable_push_flatten", "false").lower() == "true"
+        archive = push_config.get("enable_push_archive", "false").lower() == "true"
+        ignore_masks_str = push_config.get("push_ignore_file_masks", "Thumbs.db")
+        ignore_masks = [m.strip() for m in ignore_masks_str.split(",") if m.strip()]
+
         logger.info(
             f"Executing PUSH operation {operation.id}: "
-            f"{operation.source_path} -> {operation.dest_path} + archive to {operation.archive_path}"
+            f"{operation.source_path} -> {operation.dest_path} "
+            f"(flatten={flatten}, archive={archive}, ignore_masks={ignore_masks})"
         )
 
         # Update worker status
@@ -942,11 +964,21 @@ class OperationService:
 
             logger.info(f"PUSH: Verified source directory {operation.source_path} exists")
 
-            # Step 1: Copy to PATH_B
-            logger.info(f"PUSH Step 1: Copying {operation.source_path} to {operation.dest_path}")
-            copy_response = await self.worker_service.copy_file(
-                worker, operation.source_path, operation.dest_path, db
+            # Step 1: Copy to PATH_B (with optional flatten and ignore_masks)
+            copy_params = {}
+            if flatten:
+                copy_params["flatten"] = True
+            if ignore_masks:
+                copy_params["ignore_masks"] = ignore_masks
+
+            logger.info(f"PUSH Step 1: Copying {operation.source_path} to {operation.dest_path} (params={copy_params})")
+            copy_command = WorkerRequest(
+                command="copy",
+                source_path=operation.source_path,
+                dest_path=operation.dest_path,
+                params=copy_params if copy_params else None,
             )
+            copy_response = await self.worker_service.send_command(worker, copy_command, db)
 
             # Validate copy completed successfully
             if copy_response.status != "success":
@@ -961,53 +993,111 @@ class OperationService:
             copy_completed = True
             logger.info(f"PUSH Step 1 completed: {copy_response.file_count} files, {copy_response.total_size_bytes} bytes")
 
-            # Step 2: Move to PATH_C (archive)
-            logger.info(f"PUSH Step 2: Archiving {operation.source_path} to {operation.archive_path}")
-            try:
-                archive_response = await self.worker_service.move_file(
-                    worker, operation.source_path, operation.archive_path, db
-                )
-
-                # Validate archive completed
-                if archive_response.status != "success":
-                    raise OperationError(f"PUSH Step 2 failed: Move to PATH_C failed: {archive_response.message}")
-
-                if not archive_response.file_count:
-                    logger.warning(
-                        f"PUSH Step 2: Worker did not report file_count "
-                        f"(got {archive_response.file_count}). Proceeding based on success status."
-                    )
-
-            except Exception as step2_exc:
-                # CRITICAL: Step 2 failed, rollback Step 1
-                logger.error(f"PUSH Step 2 failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
-
+            # Step 1.5: Cleanup source (best effort, never abort)
+            if flatten or ignore_masks:
                 try:
-                    rollback_response = await self.worker_service.delete_file(
-                        worker, operation.dest_path, db, recursive=True
+                    cleanup_command = WorkerRequest(
+                        command="push_cleanup",
+                        source_path=operation.source_path,
+                        params={"flatten": flatten, "ignore_masks": ignore_masks},
                     )
-                    if rollback_response.status == "success":
-                        logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
+                    cleanup_response = await self.worker_service.send_command(worker, cleanup_command, db)
+                    if cleanup_response.status != "success":
+                        logger.warning(f"PUSH source cleanup reported issues: {cleanup_response.message}")
                     else:
+                        logger.info(f"PUSH Step 1.5: Source cleanup completed")
+                except Exception as cleanup_exc:
+                    logger.warning(f"PUSH source cleanup failed (non-fatal): {cleanup_exc}")
+
+            # Step 2: Archive to PATH_C or delete source
+            if archive:
+                # Move to PATH_C (archive) - existing behavior
+                logger.info(f"PUSH Step 2: Archiving {operation.source_path} to {operation.archive_path}")
+                try:
+                    archive_response = await self.worker_service.move_file(
+                        worker, operation.source_path, operation.archive_path, db
+                    )
+
+                    # Validate archive completed
+                    if archive_response.status != "success":
+                        raise OperationError(f"PUSH Step 2 failed: Move to PATH_C failed: {archive_response.message}")
+
+                    if not archive_response.file_count:
+                        logger.warning(
+                            f"PUSH Step 2: Worker did not report file_count "
+                            f"(got {archive_response.file_count}). Proceeding based on success status."
+                        )
+
+                except Exception as step2_exc:
+                    # CRITICAL: Step 2 failed, rollback Step 1
+                    logger.error(f"PUSH Step 2 failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
+
+                    try:
+                        rollback_response = await self.worker_service.delete_file(
+                            worker, operation.dest_path, db, recursive=True
+                        )
+                        if rollback_response.status == "success":
+                            logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
+                        else:
+                            logger.error(
+                                f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
+                                f"MANUAL CLEANUP REQUIRED!"
+                            )
+                    except Exception as rollback_exc:
                         logger.error(
-                            f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
+                            f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
+                            f"PATH_B may contain partial data at {operation.dest_path}. "
                             f"MANUAL CLEANUP REQUIRED!"
                         )
-                except Exception as rollback_exc:
-                    logger.error(
-                        f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
-                        f"PATH_B may contain partial data at {operation.dest_path}. "
-                        f"MANUAL CLEANUP REQUIRED!"
+
+                    raise OperationError(
+                        f"PUSH Step 2 (archive to PATH_C) failed: {step2_exc}. "
+                        f"Step 1 (copy to PATH_B) has been rolled back."
                     )
 
-                raise OperationError(
-                    f"PUSH Step 2 (archive to PATH_C) failed: {step2_exc}. "
-                    f"Step 1 (copy to PATH_B) has been rolled back."
-                )
+                # Both steps completed successfully
+                total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
+                total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
+            else:
+                # Delete source (no archive)
+                logger.info(f"PUSH Step 2: Deleting source {operation.source_path} (archiving disabled)")
+                try:
+                    delete_response = await self.worker_service.delete_file(
+                        worker, operation.source_path, db, recursive=True
+                    )
 
-            # Both steps completed successfully
-            total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
-            total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
+                    if delete_response.status != "success":
+                        raise OperationError(f"PUSH Step 2 failed: Delete source failed: {delete_response.message}")
+
+                except Exception as step2_exc:
+                    # CRITICAL: Step 2 failed, rollback Step 1
+                    logger.error(f"PUSH Step 2 (delete source) failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
+
+                    try:
+                        rollback_response = await self.worker_service.delete_file(
+                            worker, operation.dest_path, db, recursive=True
+                        )
+                        if rollback_response.status == "success":
+                            logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
+                        else:
+                            logger.error(
+                                f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
+                                f"MANUAL CLEANUP REQUIRED!"
+                            )
+                    except Exception as rollback_exc:
+                        logger.error(
+                            f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
+                            f"PATH_B may contain partial data at {operation.dest_path}. "
+                            f"MANUAL CLEANUP REQUIRED!"
+                        )
+
+                    raise OperationError(
+                        f"PUSH Step 2 (delete source) failed: {step2_exc}. "
+                        f"Step 1 (copy to PATH_B) has been rolled back."
+                    )
+
+                total_files = copy_response.file_count or 0
+                total_size = copy_response.total_size_bytes or 0
 
             # Update operation metadata
             operation.file_count = total_files
@@ -1018,12 +1108,13 @@ class OperationService:
                 operation, worker, OperationStatus.COMPLETED, db
             )
 
+            step2_desc = f"archived to {operation.archive_path}" if archive else "source deleted"
             logger.info(f"PUSH operation {operation.id} completed: {total_files} files, {total_size} bytes")
 
             # Return combined response
             return WorkerCommandResponse(
                 status="success",
-                message=f"PUSH completed: copied to {operation.dest_path} and archived to {operation.archive_path}",
+                message=f"PUSH completed: copied to {operation.dest_path}, {step2_desc}",
                 file_count=total_files,
                 total_size_bytes=total_size,
             )

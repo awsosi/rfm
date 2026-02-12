@@ -264,7 +264,9 @@ namespace FileManagerWorker
         /// <summary>
         /// Copies file or directory
         /// </summary>
-        public async Task<Dictionary<string, object>> CopyAsync(string source, string destination, IProgress<int> progress = null)
+        public async Task<Dictionary<string, object>> CopyAsync(
+            string source, string destination, IProgress<int> progress = null,
+            bool flatten = false, List<string> ignoreMasks = null)
         {
             var resolvedSource = ResolvePath(source);
             var resolvedDest = ResolvePath(destination);
@@ -272,7 +274,9 @@ namespace FileManagerWorker
             ValidatePath(resolvedSource);
             ValidatePath(resolvedDest);
 
-            Logger.Info("Copying from {0} to {1}", resolvedSource, resolvedDest);
+            Logger.Info("Copying from {0} to {1} (flatten={2}, ignoreMasks={3})",
+                resolvedSource, resolvedDest, flatten,
+                ignoreMasks != null ? string.Join(",", ignoreMasks) : "none");
 
             var result = new Dictionary<string, object>
             {
@@ -286,6 +290,16 @@ namespace FileManagerWorker
                 {
                     if (File.Exists(resolvedSource))
                     {
+                        // Single file: check ignore mask
+                        if (ignoreMasks != null && MatchesIgnoreMask(Path.GetFileName(resolvedSource), ignoreMasks))
+                        {
+                            Logger.Info("File {0} matches ignore mask, skipping copy", resolvedSource);
+                            result["type"] = "file";
+                            result["file_count"] = 0;
+                            result["total_size_bytes"] = 0L;
+                            return result;
+                        }
+
                         // Copy single file
                         Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
                         File.Copy(resolvedSource, resolvedDest, true);
@@ -300,12 +314,15 @@ namespace FileManagerWorker
                     }
                     else if (Directory.Exists(resolvedSource))
                     {
-                        // Copy directory recursively (includes validation)
-                        var filesCopied = CopyDirectorySync(resolvedSource, resolvedDest, progress);
+                        // Copy directory (includes validation, respects flatten and ignoreMasks)
+                        var filesCopied = CopyDirectorySync(resolvedSource, resolvedDest, progress, flatten, ignoreMasks);
 
                         // Calculate total size of all files copied
-                        var destFiles = Directory.GetFiles(resolvedDest, "*", SearchOption.AllDirectories);
                         long totalSize = 0;
+                        var searchOption = flatten ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
+                        var destFiles = Directory.Exists(resolvedDest)
+                            ? Directory.GetFiles(resolvedDest, "*", searchOption)
+                            : new string[0];
                         foreach (var file in destFiles)
                         {
                             totalSize += new FileInfo(file).Length;
@@ -331,56 +348,80 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Copies directory recursively with progress reporting (synchronous for impersonation)
+        /// Copies directory recursively with progress reporting (synchronous for impersonation).
+        /// Supports flatten mode (root-level files only) and ignore masks (skip matching files).
         /// </summary>
-        private int CopyDirectorySync(string sourceDir, string destDir, IProgress<int> progress = null)
+        private int CopyDirectorySync(string sourceDir, string destDir, IProgress<int> progress = null,
+            bool flatten = false, List<string> ignoreMasks = null)
         {
             // Normalize paths to full paths to ensure consistent path calculations
             sourceDir = Path.GetFullPath(sourceDir);
             destDir = Path.GetFullPath(destDir);
 
-            Logger.Info("CopyDirectorySync: Copying '{0}' to '{1}'", sourceDir, destDir);
+            Logger.Info("CopyDirectorySync: Copying '{0}' to '{1}' (flatten={2}, ignoreMasks={3})",
+                sourceDir, destDir, flatten,
+                ignoreMasks != null ? string.Join(",", ignoreMasks) : "none");
 
             try
             {
                 // Create destination root directory
                 Directory.CreateDirectory(destDir);
 
-                // Get ALL subdirectories and files for validation
-                var allSourceDirs = Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories);
-                var allSourceFiles = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+                // Determine search scope based on flatten
+                var searchOption = flatten ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
 
-                Logger.Info("CopyDirectorySync: Found {0} subdirectories and {1} files to copy",
-                    allSourceDirs.Length, allSourceFiles.Length);
+                // Get source files based on flatten mode
+                var allSourceFiles = Directory.GetFiles(sourceDir, "*", searchOption);
 
-                // Create ALL subdirectories first (including empty ones)
-                var createdDirs = new List<string>();
-                foreach (var dir in allSourceDirs)
+                // Filter out ignored files
+                if (ignoreMasks != null && ignoreMasks.Count > 0)
                 {
-                    // Calculate relative path - ensure sourceDir doesn't have trailing separator
-                    var normalizedSourceDir = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    var relativePath = dir.Substring(normalizedSourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    var destDirPath = Path.Combine(destDir, relativePath);
-
-                    Logger.Debug("Creating directory: {0} (from {1})", destDirPath, relativePath);
-                    Directory.CreateDirectory(destDirPath);
-                    createdDirs.Add(destDirPath);
+                    allSourceFiles = allSourceFiles
+                        .Where(f => !MatchesIgnoreMask(Path.GetFileName(f), ignoreMasks))
+                        .ToArray();
+                    Logger.Info("CopyDirectorySync: After ignore mask filtering, {0} files to copy", allSourceFiles.Length);
                 }
 
-                Logger.Info("CopyDirectorySync: Created {0} subdirectories", createdDirs.Count);
-
-                // Validate all directories were created
-                if (createdDirs.Count != allSourceDirs.Length)
+                if (!flatten)
                 {
-                    throw new IOException(
-                        $"Directory creation validation failed: Expected {allSourceDirs.Length} directories, " +
-                        $"but only created {createdDirs.Count}");
+                    // Get ALL subdirectories for full recursive copy
+                    var allSourceDirs = Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories);
+
+                    Logger.Info("CopyDirectorySync: Found {0} subdirectories and {1} files to copy",
+                        allSourceDirs.Length, allSourceFiles.Length);
+
+                    // Create ALL subdirectories first (including empty ones)
+                    var createdDirs = new List<string>();
+                    foreach (var dir in allSourceDirs)
+                    {
+                        var normalizedSourceDir = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        var relativePath = dir.Substring(normalizedSourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        var destDirPath = Path.Combine(destDir, relativePath);
+
+                        Logger.Debug("Creating directory: {0} (from {1})", destDirPath, relativePath);
+                        Directory.CreateDirectory(destDirPath);
+                        createdDirs.Add(destDirPath);
+                    }
+
+                    Logger.Info("CopyDirectorySync: Created {0} subdirectories", createdDirs.Count);
+
+                    // Validate all directories were created
+                    if (createdDirs.Count != allSourceDirs.Length)
+                    {
+                        throw new IOException(
+                            $"Directory creation validation failed: Expected {allSourceDirs.Length} directories, " +
+                            $"but only created {createdDirs.Count}");
+                    }
+                }
+                else
+                {
+                    Logger.Info("CopyDirectorySync: Flatten mode - skipping subdirectory creation, {0} root files to copy",
+                        allSourceFiles.Length);
                 }
 
-                // Copy all files
+                // Copy files
                 var totalFiles = allSourceFiles.Length;
                 var copiedFiles = 0;
-                var copiedFilesList = new List<string>();
 
                 foreach (var file in allSourceFiles)
                 {
@@ -395,13 +436,10 @@ namespace FileManagerWorker
                     var destFileDir = Path.GetDirectoryName(destFile);
                     if (!Directory.Exists(destFileDir))
                     {
-                        throw new IOException(
-                            $"Destination directory does not exist for file: {destFile}. " +
-                            $"This indicates a critical path calculation error.");
+                        Directory.CreateDirectory(destFileDir);
                     }
 
                     File.Copy(file, destFile, true);
-                    copiedFilesList.Add(destFile);
 
                     copiedFiles++;
                     if (totalFiles > 0)
@@ -410,7 +448,7 @@ namespace FileManagerWorker
 
                 Logger.Info("CopyDirectorySync: Copied {0} files", copiedFiles);
 
-                // CRITICAL VALIDATION: Verify all files were copied
+                // CRITICAL VALIDATION: Verify all intended files were copied
                 if (copiedFiles != totalFiles)
                 {
                     throw new IOException(
@@ -418,12 +456,15 @@ namespace FileManagerWorker
                         $"but only copied {copiedFiles}");
                 }
 
-                // Final validation: Check that all source items exist in destination
-                Logger.Info("CopyDirectorySync: Running final validation...");
-                ValidateCopyCompleteness(sourceDir, destDir, allSourceDirs.Length, allSourceFiles.Length);
+                // Final validation (only for full recursive copy without filters)
+                if (!flatten && (ignoreMasks == null || ignoreMasks.Count == 0))
+                {
+                    var allSourceDirs = Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories);
+                    Logger.Info("CopyDirectorySync: Running final validation...");
+                    ValidateCopyCompleteness(sourceDir, destDir, allSourceDirs.Length, totalFiles);
+                }
 
-                Logger.Info("CopyDirectorySync: Successfully copied all {0} directories and {1} files",
-                    allSourceDirs.Length, copiedFiles);
+                Logger.Info("CopyDirectorySync: Successfully copied {0} files", copiedFiles);
 
                 return copiedFiles;
             }
@@ -934,6 +975,125 @@ namespace FileManagerWorker
 
             Logger.Info("Search completed: {0} items found (files and directories)", result["count"]);
             return result;
+        }
+
+        /// <summary>
+        /// Checks if a filename matches any of the ignore masks (case-insensitive).
+        /// Supports exact match (e.g., "Thumbs.db") and wildcard patterns (e.g., "*.tmp").
+        /// </summary>
+        private bool MatchesIgnoreMask(string fileName, List<string> masks)
+        {
+            if (masks == null || masks.Count == 0 || string.IsNullOrEmpty(fileName))
+                return false;
+
+            foreach (var mask in masks)
+            {
+                if (string.IsNullOrEmpty(mask))
+                    continue;
+
+                if (mask.Contains("*") || mask.Contains("?"))
+                {
+                    // Wildcard pattern matching using simple glob-to-regex
+                    // Convert glob pattern to regex: * -> .*, ? -> .
+                    var pattern = "^" + System.Text.RegularExpressions.Regex.Escape(mask)
+                        .Replace("\\*", ".*")
+                        .Replace("\\?", ".") + "$";
+                    if (System.Text.RegularExpressions.Regex.IsMatch(
+                        fileName, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    // Exact match (case-insensitive)
+                    if (string.Equals(fileName, mask, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Best-effort cleanup of source directory after PUSH copy.
+        /// Destroys subfolders (if flatten) and ignored files. Never throws.
+        /// </summary>
+        public async Task<Dictionary<string, object>> PushCleanupAsync(
+            string sourcePath, bool flatten, List<string> ignoreMasks)
+        {
+            var resolvedSource = ResolvePath(sourcePath);
+            ValidatePath(resolvedSource);
+
+            Logger.Info("PushCleanup: source={0}, flatten={1}, ignoreMasks={2}",
+                resolvedSource, flatten,
+                ignoreMasks != null ? string.Join(",", ignoreMasks) : "none");
+
+            return await Task.Run(() =>
+            {
+                return ExecuteWithImpersonation(() =>
+                {
+                    var failures = new List<string>();
+                    int destroyedDirs = 0;
+                    int destroyedFiles = 0;
+
+                    // Delete subfolders if flatten
+                    if (flatten && Directory.Exists(resolvedSource))
+                    {
+                        foreach (var dir in Directory.GetDirectories(resolvedSource))
+                        {
+                            try
+                            {
+                                Directory.Delete(dir, true);
+                                destroyedDirs++;
+                                Logger.Info("PushCleanup: Destroyed subfolder {0}", dir);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warn("PushCleanup: Failed to destroy subfolder {0}: {1}", dir, ex.Message);
+                                failures.Add($"subfolder:{Path.GetFileName(dir)}:{ex.Message}");
+                            }
+                        }
+                    }
+
+                    // Delete ignored files
+                    if (ignoreMasks != null && ignoreMasks.Count > 0 && Directory.Exists(resolvedSource))
+                    {
+                        foreach (var file in Directory.GetFiles(resolvedSource))
+                        {
+                            if (MatchesIgnoreMask(Path.GetFileName(file), ignoreMasks))
+                            {
+                                try
+                                {
+                                    File.Delete(file);
+                                    destroyedFiles++;
+                                    Logger.Info("PushCleanup: Destroyed ignored file {0}", file);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.Warn("PushCleanup: Failed to destroy ignored file {0}: {1}", file, ex.Message);
+                                    failures.Add($"file:{Path.GetFileName(file)}:{ex.Message}");
+                                }
+                            }
+                        }
+                    }
+
+                    var result = new Dictionary<string, object>
+                    {
+                        { "destroyed_dirs", destroyedDirs },
+                        { "destroyed_files", destroyedFiles },
+                        { "failure_count", failures.Count },
+                        { "failures", failures }
+                    };
+
+                    Logger.Info("PushCleanup completed: {0} dirs destroyed, {1} files destroyed, {2} failures",
+                        destroyedDirs, destroyedFiles, failures.Count);
+
+                    return result;
+                });
+            });
         }
 
         /// <summary>

@@ -77,6 +77,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "rosapi_pull_method": settings.rosapi_pull_method or "POST",
         "rosapi_pull_payload": settings.rosapi_pull_payload or "{}",
         "rosapi_verify_url": settings.rosapi_verify_url or "",
+        # PUSH operation settings
+        "enable_push_flatten": str(settings.enable_push_flatten).lower(),
+        "enable_push_archive": str(settings.enable_push_archive).lower(),
+        "push_ignore_file_masks": settings.push_ignore_file_masks or "Thumbs.db",
     }
 
     try:
@@ -1139,6 +1143,23 @@ async def list_users(
     result = await db.execute(stmt)
     users = result.scalars().all()
     return [UserResponse.model_validate(u) for u in users]
+
+
+@app.get("/api/config/push-settings")
+async def get_push_settings(
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get PUSH operation settings for confirmation dialog."""
+    keys = ['enable_push_flatten', 'enable_push_archive', 'push_ignore_file_masks']
+    stmt = select(Config).where(Config.key.in_(keys))
+    result = await db.execute(stmt)
+    configs = {c.key: c.value for c in result.scalars()}
+    return {
+        "flatten": configs.get("enable_push_flatten", "false").lower() == "true",
+        "archive": configs.get("enable_push_archive", "false").lower() == "true",
+        "ignore_masks": configs.get("push_ignore_file_masks", "Thumbs.db"),
+    }
 
 
 @app.get("/api/admin/config", response_model=List[ConfigResponse])

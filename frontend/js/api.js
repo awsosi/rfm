@@ -189,6 +189,14 @@ export async function pushOperation(sourcePath, workerId) {
 }
 
 /**
+ * Get PUSH operation settings for confirmation dialog
+ * @returns {Promise<Object>} { flatten, archive, ignore_masks }
+ */
+export async function getPushSettings() {
+    return await apiRequest('/api/config/push-settings');
+}
+
+/**
  * VF REDESIGN: Pull operation - Revert PUSH by copying from PATH_B to original location
  * @param {number} operationId - ID of the original PUSH operation to revert
  * @param {number} workerId - Worker ID to execute operation

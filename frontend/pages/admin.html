@@ -318,6 +318,30 @@
                                 </div>
                             </div>
 
+                            <!-- PUSH Operation Settings -->
+                            <div class="config-section">
+                                <h3>PUSH Operation Settings</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-push-flatten" name="enable_push_flatten">
+                                        Flatten directories on PUSH (exclude subfolders)
+                                    </label>
+                                    <small>When enabled, only root-level files are copied to PATH_B. Subfolders are destroyed at source.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-push-archive" name="enable_push_archive">
+                                        Archive source to PATH_C after PUSH
+                                    </label>
+                                    <small>When enabled, source is moved to PATH_C archive. When disabled, source is deleted after copy to PATH_B.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-push-ignore-masks">Ignored File Masks (comma-separated)</label>
+                                    <input type="text" id="config-push-ignore-masks" name="push_ignore_file_masks" class="form-control" placeholder="Thumbs.db">
+                                    <small>Files matching these masks are excluded from PUSH and destroyed at source. Examples: Thumbs.db, *.tmp, desktop.ini</small>
+                                </div>
+                            </div>
+
                             <!-- UI Settings -->
                             <div class="config-section">
                                 <h3>User Interface Settings</h3>

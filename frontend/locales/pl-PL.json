@@ -94,7 +94,16 @@
     "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}"
   },
   "operations": {
-    "pushDirectory": "Wysłać katalog „{name}”?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
+    "pushDirectory": "Wysłać katalog „{name}"?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
+    "pushConfirmTitle": "Wysłać katalog \"{name}\"?",
+    "pushConfirmStepsHeader": "Spowoduje to:",
+    "pushStepCopyAll": "Skopiowanie wszystkich plików i podkatalogów do PATH_B",
+    "pushStepCopyFlat": "Skopiowanie tylko plików z katalogu głównego do PATH_B (podkatalogi pominięte)",
+    "pushStepArchive": "Zarchiwizowanie źródła w PATH_C",
+    "pushStepDeleteSource": "Usunięcie katalogu źródłowego",
+    "pushStepDestroySubfolders": "Zniszczenie podkatalogów w źródle",
+    "pushStepDestroyIgnored": "Zniszczenie ignorowanych plików ({masks}) w źródle",
+    "pushWarningNoArchive": "Uwaga: Katalog źródłowy zostanie trwale usunięty (archiwizacja jest wyłączona).",
     "pushingDirectory": "Wysyłanie katalogu...",
     "pushStarted": "Operacja wysyłania rozpoczęta",
     "pushFailed": "Operacja wysyłania nie powiodła się: {error}",

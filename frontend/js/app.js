@@ -21,6 +21,7 @@ import {
     isWebSocketConnected,
     startPolling,
     pushOperation,
+    getPushSettings,
     pullOperation,
     getOperationHistory,
     searchOperations,
@@ -1777,10 +1778,17 @@ async function handlePushOperation() {
         return;
     }
 
-    // Confirm operation
-    const confirmed = await confirmAction(
-        t('operations.pushDirectory', { name: selectedFile.name })
-    );
+    // Fetch push settings for dynamic confirmation dialog
+    let pushSettings;
+    try {
+        pushSettings = await getPushSettings();
+    } catch (e) {
+        pushSettings = { flatten: false, archive: false, ignore_masks: 'Thumbs.db' };
+    }
+
+    // Build dynamic confirmation message
+    const confirmMsg = buildPushConfirmMessage(selectedFile.name, pushSettings);
+    const confirmed = await confirmAction(confirmMsg);
 
     if (!confirmed) {
         return;
@@ -1798,7 +1806,7 @@ async function handlePushOperation() {
         // Refresh operation history
         await loadOperationHistory();
 
-        // Refresh Path A (directory will be archived)
+        // Refresh Path A (directory will be archived/deleted)
         await refreshPane('a');
 
     } catch (error) {
@@ -1807,6 +1815,44 @@ async function handlePushOperation() {
     } finally {
         clearOperationStatus();
     }
+}
+
+/**
+ * Build dynamic PUSH confirmation message based on current settings
+ */
+function buildPushConfirmMessage(name, settings) {
+    const steps = [];
+    let stepNum = 1;
+
+    if (settings.flatten) {
+        steps.push(`${stepNum++}. ${t('operations.pushStepCopyFlat')}`);
+    } else {
+        steps.push(`${stepNum++}. ${t('operations.pushStepCopyAll')}`);
+    }
+
+    if (settings.flatten) {
+        steps.push(`${stepNum++}. ${t('operations.pushStepDestroySubfolders')}`);
+    }
+
+    if (settings.ignore_masks) {
+        steps.push(`${stepNum++}. ${t('operations.pushStepDestroyIgnored', { masks: settings.ignore_masks })}`);
+    }
+
+    if (settings.archive) {
+        steps.push(`${stepNum++}. ${t('operations.pushStepArchive')}`);
+    } else {
+        steps.push(`${stepNum++}. ${t('operations.pushStepDeleteSource')}`);
+    }
+
+    let msg = t('operations.pushConfirmTitle', { name }) + '\n\n';
+    msg += t('operations.pushConfirmStepsHeader') + '\n';
+    msg += steps.join('\n');
+
+    if (!settings.archive) {
+        msg += '\n\n' + t('operations.pushWarningNoArchive');
+    }
+
+    return msg;
 }
 
 /**
