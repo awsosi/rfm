@@ -94,7 +94,7 @@
     "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}"
   },
   "operations": {
-    "pushDirectory": "Wysłać katalog „{name}"?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
+    "pushDirectory": "Wysłać katalog \u201e{name}\u201d?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
     "pushConfirmTitle": "Wysłać katalog \"{name}\"?",
     "pushConfirmStepsHeader": "Spowoduje to:",
     "pushStepCopyAll": "Skopiowanie wszystkich plików i podkatalogów do PATH_B",
