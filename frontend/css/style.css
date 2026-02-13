@@ -919,6 +919,16 @@ select {
     display: block;
 }
 
+.section-highlight {
+    animation: highlight-fade 2s ease-out;
+    border-radius: var(--radius-lg);
+}
+
+@keyframes highlight-fade {
+    0% { background-color: rgba(59, 130, 246, 0.15); }
+    100% { background-color: transparent; }
+}
+
 .panel {
     background-color: var(--bg-primary);
     border: 1px solid var(--border-color);

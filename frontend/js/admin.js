@@ -108,13 +108,45 @@ export function initAdminPanel() {
     setupLogEvents();
     setupSystemEvents();
 
-    // Load initial tab
-    loadTabData('users');
+    // Navigate based on URL hash (defaults to users tab)
+    navigateFromHash();
 }
 
 // =========================================================================
 // Navigation & Tabs
 // =========================================================================
+
+// Maps URL-friendly route names to internal tab data-tab values
+const TAB_ROUTES = {
+    'users': 'users',
+    'workers': 'workers',
+    'configuration': 'config',
+    'system': 'system',
+    'logs': 'logs'
+};
+
+// Reverse map: data-tab value -> URL route name
+const TAB_ROUTE_NAMES = Object.fromEntries(
+    Object.entries(TAB_ROUTES).map(([route, tab]) => [tab, route])
+);
+
+// Maps section IDs to their parent tab (data-tab value)
+const SECTION_TO_TAB = {
+    // Configuration tab sections
+    'session-settings': 'config',
+    'polkasql-authentication': 'config',
+    'rosapi-settings': 'config',
+    'worker-configuration': 'config',
+    'operation-settings': 'config',
+    'push-operation-settings': 'config',
+    'ui-settings': 'config',
+    'security-settings': 'config',
+    'maintenance-mode': 'config',
+    // Logs tab sections
+    'syslog-integration': 'logs',
+    'log-retention': 'logs',
+    'audit-log-viewer': 'logs'
+};
 
 function setupNavigation() {
     document.getElementById('explorer-btn').addEventListener('click', () => {
@@ -127,28 +159,113 @@ function setupNavigation() {
     });
 }
 
-function setupTabSwitching() {
+/**
+ * Switch to a tab by its data-tab name, optionally updating the URL hash.
+ * @param {string} tabName - Internal tab name (e.g. 'users', 'config')
+ * @param {object} options
+ * @param {boolean} options.updateHash - Whether to update window.location.hash (default: true)
+ * @param {string|null} options.sectionId - Section ID to scroll to after tab loads
+ */
+function switchToTab(tabName, { updateHash = true, sectionId = null } = {}) {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
+
+    tabButtons.forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    tabPanes.forEach(pane => pane.classList.remove('active'));
+    const activePane = document.getElementById(`tab-${tabName}`);
+    if (activePane) activePane.classList.add('active');
+
+    // Stop stats auto-refresh when leaving system tab
+    if (currentTab === 'system' && tabName !== 'system') {
+        stopStatsAutoRefresh();
+    }
+
+    currentTab = tabName;
+
+    if (updateHash) {
+        const routeName = TAB_ROUTE_NAMES[tabName] || tabName;
+        const newHash = sectionId ? `#${routeName}/${sectionId}` : `#${routeName}`;
+        // Use replaceState to avoid polluting browser history on every tab switch
+        history.replaceState(null, '', newHash);
+    }
+
+    loadTabData(tabName).then(() => {
+        if (sectionId) {
+            scrollToSection(sectionId);
+        }
+    });
+}
+
+/**
+ * Scroll to a section element by ID with a brief highlight effect.
+ */
+function scrollToSection(sectionId) {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Brief highlight to draw attention
+    el.classList.add('section-highlight');
+    setTimeout(() => el.classList.remove('section-highlight'), 2000);
+}
+
+/**
+ * Parse the current URL hash and navigate to the appropriate tab/section.
+ * Supported formats:
+ *   #users, #workers, #configuration, #system, #logs
+ *   #configuration/operation-settings  (tab + section)
+ *   #logs/audit-log-viewer             (tab + section)
+ *   #operation-settings                (section only - auto-resolves tab)
+ */
+function navigateFromHash() {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) {
+        switchToTab('users', { updateHash: true });
+        return;
+    }
+
+    const parts = hash.split('/');
+    const first = parts[0];
+    const second = parts[1] || null;
+
+    // Case 1: First part is a known tab route
+    if (TAB_ROUTES[first] !== undefined) {
+        const tabName = TAB_ROUTES[first];
+        switchToTab(tabName, { updateHash: true, sectionId: second });
+        return;
+    }
+
+    // Case 2: First part is a known section ID (direct section link)
+    if (SECTION_TO_TAB[first]) {
+        const tabName = SECTION_TO_TAB[first];
+        const routeName = TAB_ROUTE_NAMES[tabName];
+        // Update hash to canonical form: tab/section
+        history.replaceState(null, '', `#${routeName}/${first}`);
+        switchToTab(tabName, { updateHash: false, sectionId: first });
+        return;
+    }
+
+    // Fallback: treat as users tab
+    switchToTab('users', { updateHash: true });
+}
+
+function setupTabSwitching() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
 
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const tabName = btn.dataset.tab;
-
-            tabButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            tabPanes.forEach(pane => pane.classList.remove('active'));
-            document.getElementById(`tab-${tabName}`).classList.add('active');
-
-            // Stop stats auto-refresh when leaving system tab
-            if (currentTab === 'system' && tabName !== 'system') {
-                stopStatsAutoRefresh();
-            }
-
-            currentTab = tabName;
-            loadTabData(tabName);
+            switchToTab(tabName);
         });
+    });
+
+    // Listen for hash changes (browser back/forward, manual URL edit)
+    window.addEventListener('hashchange', () => {
+        navigateFromHash();
     });
 }
 

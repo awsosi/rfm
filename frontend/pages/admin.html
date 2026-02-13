@@ -26,7 +26,7 @@
     <main class="main-content admin-content">
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab-btn active" data-tab="users">Users</button>
+            <button class="tab-btn" data-tab="users">Users</button>
             <button class="tab-btn" data-tab="workers">Workers</button>
             <button class="tab-btn" data-tab="config">Configuration</button>
             <button class="tab-btn" data-tab="system">System</button>
@@ -36,7 +36,7 @@
         <!-- Tab Content -->
         <div class="tab-content">
             <!-- Users Tab -->
-            <div class="tab-pane active" id="tab-users">
+            <div class="tab-pane" id="tab-users">
                 <div class="panel">
                     <div class="panel-header">
                         <h2>User Management</h2>
@@ -124,7 +124,7 @@
                     <div class="panel-body">
                         <form id="config-form">
                             <!-- Session & User Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="session-settings">
                                 <h3>Session & User Management</h3>
                                 <div class="form-group">
                                     <label for="config-max-concurrent-users">Max Concurrent Users</label>
@@ -139,7 +139,7 @@
                             </div>
 
                             <!-- Authentication Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="polkasql-authentication">
                                 <h3>PolkaSQL Authentication (Sybase SQL Anywhere 17)</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -170,7 +170,7 @@
                             </div>
 
                             <!-- ROSAPI Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="rosapi-settings">
                                 <h3>ROSAPI - Remote Operation Signalling</h3>
                                 <p class="text-muted">Signal an external PIM (Product Image Manager) system when PUSH/PULL operations complete. Supports template variables: <code>{folder_name}</code>, <code>{operation_id}</code>, <code>{source_path}</code>, <code>{dest_path}</code></p>
 
@@ -318,7 +318,7 @@
                             </div>
 
                             <!-- Worker Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="worker-configuration">
                                 <h3>Worker Configuration</h3>
                                 <div class="form-group">
                                     <label for="config-worker-heartbeat-interval">Worker Heartbeat Interval (seconds)</label>
@@ -343,7 +343,7 @@
                             </div>
 
                             <!-- Operation Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="operation-settings">
                                 <h3>Operation Settings</h3>
                                 <div class="form-group">
                                     <label for="config-operation-timeout">Operation Timeout (seconds)</label>
@@ -360,7 +360,7 @@
                             </div>
 
                             <!-- PUSH Operation Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="push-operation-settings">
                                 <h3>PUSH Operation Settings</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -384,7 +384,7 @@
                             </div>
 
                             <!-- UI Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="ui-settings">
                                 <h3>User Interface Settings</h3>
                                 <div class="form-group">
                                     <label for="config-max-listing-items">Max File Listing Items</label>
@@ -401,7 +401,7 @@
                             </div>
 
                             <!-- Security Settings -->
-                            <div class="config-section">
+                            <div class="config-section" id="security-settings">
                                 <h3>Security Settings</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -426,7 +426,7 @@
                             </div>
 
                             <!-- Maintenance Mode -->
-                            <div class="config-section">
+                            <div class="config-section" id="maintenance-mode">
                                 <h3>Maintenance Mode</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -469,7 +469,7 @@
                     </div>
                     <div class="panel-body">
                         <form id="log-config-form">
-                            <div class="config-section">
+                            <div class="config-section" id="syslog-integration">
                                 <h3>Syslog Integration</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
@@ -505,7 +505,7 @@
                                     <small>Leave empty to auto-detect from system hostname</small>
                                 </div>
                             </div>
-                            <div class="config-section">
+                            <div class="config-section" id="log-retention">
                                 <h3>Log Retention</h3>
                                 <div class="form-group">
                                     <label for="log-config-retention">Retention Days</label>
@@ -524,7 +524,7 @@
                 </div>
 
                 <!-- Audit Log Viewer Section -->
-                <div class="panel" style="margin-top: 20px;">
+                <div class="panel" id="audit-log-viewer" style="margin-top: 20px;">
                     <div class="panel-header">
                         <h2>Audit Log Viewer</h2>
                         <div class="log-controls">
