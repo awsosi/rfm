@@ -85,6 +85,7 @@ RUN chmod +x /app/server.py
 COPY --chown=filemanager:filemanager frontend/assets/ /app/frontend/assets/
 COPY --chown=filemanager:filemanager frontend/css/ /app/frontend/css/
 COPY --chown=filemanager:filemanager frontend/js/ /app/frontend/js/
+COPY --chown=filemanager:filemanager frontend/locales/ /app/frontend/locales/
 COPY --chown=filemanager:filemanager frontend/pages/ /app/frontend/pages/
 COPY --chown=filemanager:filemanager frontend/index.html /app/frontend/index.html
 COPY --chown=filemanager:filemanager frontend/README.md /app/frontend/README.md

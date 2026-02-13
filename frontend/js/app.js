@@ -4,7 +4,7 @@
  */
 
 import { checkAuth, logout, getCurrentUser, isAdmin, setupAutoRefresh } from './auth.js';
-import { initI18n, translatePage, t, setLocale } from './i18n.js';
+import { initI18n, translatePage, t, setLocale, getCurrentLocale } from './i18n.js';
 import {
     listFiles,
     searchFiles,
@@ -1395,11 +1395,11 @@ async function openSettingsModal() {
                     applyTheme(updatedPreferences.ui_theme);
                 }
 
-                // Apply language immediately if changed
-                if (updatedPreferences.ui_language !== preferences.ui_language) {
-                    const { getLocaleFromPreference } = await import('./i18n.js');
-                    const locale = getLocaleFromPreference(updatedPreferences.ui_language);
-                    await setLocale(locale);
+                // Apply language immediately if the desired locale differs from the active one
+                const { getLocaleFromPreference } = await import('./i18n.js');
+                const desiredLocale = getLocaleFromPreference(updatedPreferences.ui_language);
+                if (desiredLocale !== getCurrentLocale()) {
+                    await setLocale(desiredLocale);
                 }
             } catch (error) {
                 showError(t('settings.settingsFailed', { error: error.message }));

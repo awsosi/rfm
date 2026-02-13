@@ -94,6 +94,11 @@ def stylesheets(filename):
     """Serve CSS files"""
     return send_from_directory('frontend/css', filename)
 
+@app.route('/locales/<path:filename>')
+def locales(filename):
+    """Serve locale/translation files"""
+    return send_from_directory('frontend/locales', filename)
+
 @app.route('/assets/<path:filename>')
 def assets(filename):
     """Serve assets"""
