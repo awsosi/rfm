@@ -689,6 +689,11 @@ function validatePathA(path) {
  * @param {boolean} silent - If true, don't show loading indicator (for background polling)
  */
 async function loadDirectory(paneId, path, silent = false) {
+    // Skip if no worker is available
+    if (state.workerId === null) {
+        return;
+    }
+
     const normalizedPath = normalizePath(path);
 
     // Validate Path A
