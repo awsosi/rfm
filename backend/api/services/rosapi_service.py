@@ -200,19 +200,14 @@ def _resolve_template(
     Resolve template variables in a string.
 
     Supported variables: {folder_name}, {operation_id}, {source_path}, {dest_path}
-    Uses str.format() with try/except for unknown variables.
+    Uses explicit string replacement to avoid conflicts with JSON curly braces.
     """
-    try:
-        return template.format(
-            folder_name=folder_name,
-            operation_id=operation_id,
-            source_path=source_path,
-            dest_path=dest_path,
-        )
-    except KeyError as exc:
-        logger.warning(f"Unknown template variable in ROSAPI template: {exc}")
-        # Return template as-is if unknown variable
-        return template
+    result = template
+    result = result.replace("{folder_name}", str(folder_name))
+    result = result.replace("{operation_id}", str(operation_id))
+    result = result.replace("{source_path}", str(source_path))
+    result = result.replace("{dest_path}", str(dest_path))
+    return result
 
 
 def _extract_folder_name(op_type: str, source_path: str, dest_path: str) -> str:
