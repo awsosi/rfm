@@ -478,6 +478,14 @@ function setupEventListeners() {
 function setupPaneControls(paneId) {
     const pathInput = document.getElementById(`path-input-${paneId}`);
 
+    // Breadcrumb display: click to enter edit mode
+    const breadcrumbDisplay = document.getElementById(`breadcrumb-display-${paneId}`);
+    if (breadcrumbDisplay) {
+        breadcrumbDisplay.addEventListener('click', () => {
+            enterBreadcrumbEditMode(paneId);
+        });
+    }
+
     // Track user typing in path input to prevent refresh race conditions
     pathInput.addEventListener('input', () => {
         state.userInteraction.lastInputTime = Date.now();
@@ -488,8 +496,18 @@ function setupPaneControls(paneId) {
         state.userInteraction.isTyping = true;
     });
 
-    pathInput.addEventListener('blur', () => {
+    pathInput.addEventListener('blur', async () => {
         state.userInteraction.isTyping = false;
+        // Skip if navigation was already triggered by Enter key
+        if (pathInput._navigatingFromEnter) return;
+        // On blur: navigate to typed path and return to breadcrumb display mode
+        const path = pathInput.value.trim();
+        if (path) {
+            await loadDirectory(paneId, path);
+        } else {
+            // Restore breadcrumb display without navigating
+            updateBreadcrumbDisplay(paneId, state.panes[paneId].currentPath);
+        }
     });
 
     // Path go button
@@ -502,7 +520,10 @@ function setupPaneControls(paneId) {
     pathInput.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
             const path = e.target.value;
+            pathInput._navigatingFromEnter = true;
+            pathInput.blur(); // trigger UI switch; blur handler will skip due to flag
             await loadDirectory(paneId, path);
+            pathInput._navigatingFromEnter = false;
         }
     });
 
@@ -745,6 +766,7 @@ async function loadDirectory(paneId, path, silent = false) {
         state.panes[paneId].offset = files.length;
 
         setCurrentPath(paneId, normalizedPath);
+        updateBreadcrumbDisplay(paneId, normalizedPath);
 
         // Sort files using current sort settings
         const pane = state.panes[paneId];
@@ -782,6 +804,67 @@ async function loadDirectory(paneId, path, silent = false) {
         // Always hide loading indicator on completion (even in silent mode, in case it was shown before)
         if (!silent) hideLoading(paneId);
     }
+}
+
+/**
+ * Update breadcrumb display for a pane (Windows Explorer style)
+ * Shows clickable path segments; hides raw input and shows display div.
+ * @param {string} paneId - Pane ID ('a' or 'b')
+ * @param {string} path - Current path (e.g. 'A:/Folder/SubFolder')
+ */
+function updateBreadcrumbDisplay(paneId, path) {
+    const display = document.getElementById(`breadcrumb-display-${paneId}`);
+    const input = document.getElementById(`path-input-${paneId}`);
+    if (!display) return;
+
+    // Build segments: split by '/' or '\', preserving drive letter like 'A:'
+    const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+    display.innerHTML = '';
+
+    let builtPath = '';
+    parts.forEach((segment, index) => {
+        // Build the cumulative path for this segment
+        if (index === 0) {
+            builtPath = segment; // e.g. 'A:'
+        } else {
+            builtPath = builtPath + '/' + segment;
+        }
+
+        if (index > 0) {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb-sep';
+            sep.textContent = '›';
+            display.appendChild(sep);
+        }
+
+        const seg = document.createElement('span');
+        seg.className = 'breadcrumb-seg';
+        seg.textContent = segment;
+        const segPath = builtPath; // capture for closure
+        seg.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateToDirectory(paneId, segPath);
+        });
+        display.appendChild(seg);
+    });
+
+    // Show display, hide input
+    display.classList.remove('hidden');
+    if (input) input.classList.add('hidden');
+}
+
+/**
+ * Switch breadcrumb to edit mode: hide display, show raw input, focus it.
+ * @param {string} paneId - Pane ID
+ */
+function enterBreadcrumbEditMode(paneId) {
+    const display = document.getElementById(`breadcrumb-display-${paneId}`);
+    const input = document.getElementById(`path-input-${paneId}`);
+    if (!display || !input) return;
+    display.classList.add('hidden');
+    input.classList.remove('hidden');
+    input.focus();
+    input.select();
 }
 
 /**

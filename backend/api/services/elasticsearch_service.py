@@ -293,24 +293,16 @@ class ElasticsearchService:
                                         "error_msg",
                                     ],
                                     "type": "best_fields",
-                                    "operator": "or",  # Changed from "and" to "or" for partial matching
+                                    "operator": "or",
                                     "fuzziness": "AUTO",
                                 }
                             },
-                            # Wildcard query for substring matching
-                            {
-                                "multi_match": {
-                                    "query": f"*{query}*",
-                                    "fields": [
-                                        "source_path.keyword^2",
-                                        "dest_path.keyword^2",
-                                        "original_path.keyword",
-                                        "archive_path.keyword",
-                                        "user_name.keyword",
-                                    ],
-                                    "type": "phrase",
-                                }
-                            },
+                            # Wildcard queries on keyword fields for substring matching (case-insensitive)
+                            {"wildcard": {"source_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
+                            {"wildcard": {"dest_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
+                            {"wildcard": {"original_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 1.5}}},
+                            {"wildcard": {"archive_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 1.5}}},
+                            {"wildcard": {"user_name.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
                         ],
                         "minimum_should_match": 1,
                     }
@@ -496,6 +488,7 @@ class ElasticsearchService:
                                 "wildcard": {
                                     "path.keyword": {
                                         "value": f"*{query}*",
+                                        "case_insensitive": True,
                                         "boost": 2.0,
                                     }
                                 }
@@ -505,6 +498,7 @@ class ElasticsearchService:
                                 "wildcard": {
                                     "name.keyword": {
                                         "value": f"*{query}*",
+                                        "case_insensitive": True,
                                         "boost": 3.0,
                                     }
                                 }

@@ -26,7 +26,7 @@ from api.schemas import (
 )
 from auth.utils import hash_password
 from database import get_db
-from models import User, Worker, Config, WorkerStatus, UserRole
+from models import User, Worker, Config, ConfigType, WorkerStatus, UserRole
 from sqlalchemy import func
 
 
@@ -591,7 +591,16 @@ async def bulk_update_config(
             await db.execute(stmt)
             updated_count += 1
         else:
-            errors.append(f"Key '{key}' not found")
+            # UPSERT: key not found, insert new row with sensible defaults
+            inferred_type = ConfigType.BOOLEAN if key.startswith('enable_') else ConfigType.STRING
+            new_config = Config(
+                key=key,
+                value=value,
+                type=inferred_type,
+                description='Auto-created by bulk update',
+            )
+            db.add(new_config)
+            updated_count += 1
 
     await db.commit()
 

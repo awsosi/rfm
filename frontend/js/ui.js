@@ -664,8 +664,10 @@ function createOperationTableRow(operation) {
 
     const directoryCell = document.createElement('td');
     directoryCell.className = 'col-directory';
-    directoryCell.textContent = getOperationDirectory(operation);
-    directoryCell.title = getOperationDirectory(operation);
+    const fullDirPath = getOperationDirectory(operation);
+    const lastSegment = fullDirPath.split(/[\\/]/).filter(Boolean).pop() || fullDirPath;
+    directoryCell.textContent = lastSegment;
+    directoryCell.title = fullDirPath;
     row.appendChild(directoryCell);
 
     const userCell = document.createElement('td');

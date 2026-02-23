@@ -908,10 +908,16 @@ class OperationService:
 
         Steps:
         1. Copy directory from source to PATH_B (respecting flatten/ignore settings)
-        1.5. Cleanup source: destroy subfolders (if flatten) and ignored files (best-effort)
-        2. Archive to PATH_C or delete source (depending on archive setting)
+           → If fails: raise error, PATH_A untouched
+        2a. [archive=True] Move entire PATH_A source to PATH_C
+           → If fails: rollback Step 1 (delete PATH_B copy), raise error, PATH_A untouched
+        2b. [archive=True, after Step 2 success] Cleanup PATH_C: remove subfolders/ignored
+           (best-effort, non-fatal — PATH_A is never touched by cleanup)
+        3.  [archive=False] Delete PATH_A entirely
+           → If fails: rollback Step 1 (delete PATH_B copy), raise error, PATH_A untouched
 
-        If Step 2 fails, Step 1 is rolled back (delete from PATH_B).
+        Critical guarantee: PATH_A is NEVER modified until both Step 1 (copy to B) AND
+        Step 2 (archive/delete A) have both succeeded.
 
         Args:
             operation: PUSH operation to execute
@@ -993,25 +999,9 @@ class OperationService:
             copy_completed = True
             logger.info(f"PUSH Step 1 completed: {copy_response.file_count} files, {copy_response.total_size_bytes} bytes")
 
-            # Step 1.5: Cleanup source (best effort, never abort)
-            if flatten or ignore_masks:
-                try:
-                    cleanup_command = WorkerRequest(
-                        command="push_cleanup",
-                        source_path=operation.source_path,
-                        params={"flatten": flatten, "ignore_masks": ignore_masks},
-                    )
-                    cleanup_response = await self.worker_service.send_command(worker, cleanup_command, db)
-                    if cleanup_response.status != "success":
-                        logger.warning(f"PUSH source cleanup reported issues: {cleanup_response.message}")
-                    else:
-                        logger.info(f"PUSH Step 1.5: Source cleanup completed")
-                except Exception as cleanup_exc:
-                    logger.warning(f"PUSH source cleanup failed (non-fatal): {cleanup_exc}")
-
-            # Step 2: Archive to PATH_C or delete source
+            # Step 2: Archive to PATH_C or delete source (PATH_A is NOT touched before this)
             if archive:
-                # Move to PATH_C (archive) - existing behavior
+                # Step 2: Move entire PATH_A source to PATH_C (archive)
                 logger.info(f"PUSH Step 2: Archiving {operation.source_path} to {operation.archive_path}")
                 try:
                     archive_response = await self.worker_service.move_file(
@@ -1029,7 +1019,8 @@ class OperationService:
                         )
 
                 except Exception as step2_exc:
-                    # CRITICAL: Step 2 failed, rollback Step 1
+                    # CRITICAL: Step 2 failed, rollback Step 1 (delete from PATH_B)
+                    # PATH_A is still intact at this point
                     logger.error(f"PUSH Step 2 failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
 
                     try:
@@ -1052,14 +1043,33 @@ class OperationService:
 
                     raise OperationError(
                         f"PUSH Step 2 (archive to PATH_C) failed: {step2_exc}. "
-                        f"Step 1 (copy to PATH_B) has been rolled back."
+                        f"Step 1 (copy to PATH_B) has been rolled back. PATH_A is untouched."
                     )
+
+                # Step 2 succeeded: PATH_A is now in PATH_C.
+                # Step 2b: Cleanup PATH_C (best-effort, non-fatal).
+                # PATH_A is no longer modified — we clean the archive copy only.
+                if flatten or ignore_masks:
+                    try:
+                        cleanup_command = WorkerRequest(
+                            command="push_cleanup",
+                            source_path=operation.archive_path,
+                            params={"flatten": flatten, "ignore_masks": ignore_masks},
+                        )
+                        cleanup_response = await self.worker_service.send_command(worker, cleanup_command, db)
+                        if cleanup_response.status != "success":
+                            logger.warning(f"PUSH archive cleanup reported issues: {cleanup_response.message}")
+                        else:
+                            logger.info(f"PUSH Step 2b: Archive (PATH_C) cleanup completed")
+                    except Exception as cleanup_exc:
+                        logger.warning(f"PUSH archive cleanup failed (non-fatal): {cleanup_exc}")
 
                 # Both steps completed successfully
                 total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
                 total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
             else:
-                # Delete source (no archive)
+                # Step 2: Delete source (no archive) — Step 1.5 is redundant since
+                # entire source is deleted here anyway
                 logger.info(f"PUSH Step 2: Deleting source {operation.source_path} (archiving disabled)")
                 try:
                     delete_response = await self.worker_service.delete_file(
@@ -1071,6 +1081,7 @@ class OperationService:
 
                 except Exception as step2_exc:
                     # CRITICAL: Step 2 failed, rollback Step 1
+                    # PATH_A is still intact at this point
                     logger.error(f"PUSH Step 2 (delete source) failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
 
                     try:
@@ -1093,7 +1104,7 @@ class OperationService:
 
                     raise OperationError(
                         f"PUSH Step 2 (delete source) failed: {step2_exc}. "
-                        f"Step 1 (copy to PATH_B) has been rolled back."
+                        f"Step 1 (copy to PATH_B) has been rolled back. PATH_A is untouched."
                     )
 
                 total_files = copy_response.file_count or 0

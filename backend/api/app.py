@@ -29,7 +29,7 @@ from api.schemas import *
 from api.services.worker_service import WorkerService, get_worker_by_id, get_active_workers
 from api.services.operation_service import OperationService
 from database import init_database, close_database, get_db, health_check
-from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType
+from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType, OperationStatus
 
 # Import routes
 from api.routes.auth import router as auth_router
@@ -983,15 +983,36 @@ async def search_operations(
             )
 
             # Convert hits to OperationResponse format
+            # Collect PUSH COMPLETED operation IDs to check has_been_pulled from DB
+            push_completed_ids = [
+                hit["operation_id"]
+                for hit in result["hits"]
+                if hit.get("operation_type") == "PUSH" and hit.get("status") == "COMPLETED"
+            ]
+
+            pulled_ids = set()
+            if push_completed_ids:
+                pull_check = select(Operation.rollback_operation_id).where(
+                    Operation.rollback_operation_id.in_(push_completed_ids),
+                    Operation.type == OperationType.PULL,
+                    Operation.status == OperationStatus.COMPLETED,
+                )
+                pull_result = await db.execute(pull_check)
+                pulled_ids = {row[0] for row in pull_result.fetchall()}
+
             operations = []
             for hit in result["hits"]:
+                op_id = hit["operation_id"]
+                has_been_pulled = op_id in pulled_ids
                 operations.append({
-                    "id": hit["operation_id"],
+                    "id": op_id,
                     "user_id": hit["user_id"],
                     "user_name": hit.get("user_name"),
                     "type": hit["operation_type"],
-                    "source_path": hit["source_path"],
+                    "source_path": hit.get("source_path"),
                     "dest_path": hit.get("dest_path"),
+                    "original_path": hit.get("original_path"),
+                    "archive_path": hit.get("archive_path"),
                     "status": hit["status"],
                     "started_at": hit.get("started_at"),
                     "completed_at": hit.get("completed_at"),
@@ -1001,6 +1022,7 @@ async def search_operations(
                     "params_json": None,
                     "created_at": hit["created_at"],
                     "_score": hit.get("_score"),
+                    "has_been_pulled": has_been_pulled,
                 })
 
             return {
@@ -1035,12 +1057,32 @@ async def search_operations(
             result = await db.execute(query)
             rows = result.all()
 
+            # Collect PUSH COMPLETED operation IDs to check has_been_pulled
+            push_completed_ids_db = [
+                operation.id
+                for operation, _ in rows
+                if operation.type == OperationType.PUSH and operation.status == OperationStatus.COMPLETED
+            ]
+            pulled_ids_db = set()
+            if push_completed_ids_db:
+                pull_check_db = select(Operation.rollback_operation_id).where(
+                    Operation.rollback_operation_id.in_(push_completed_ids_db),
+                    Operation.type == OperationType.PULL,
+                    Operation.status == OperationStatus.COMPLETED,
+                )
+                pull_result_db = await db.execute(pull_check_db)
+                pulled_ids_db = {row[0] for row in pull_result_db.fetchall()}
+
             # Build response
             operations = []
             for operation, user in rows:
                 op_response = OperationResponse.model_validate(operation)
+                has_been_pulled_db = operation.id in pulled_ids_db
                 # Use model_copy to update immutable Pydantic model
-                op_response = op_response.model_copy(update={"user_name": user.username})
+                op_response = op_response.model_copy(update={
+                    "user_name": user.username,
+                    "has_been_pulled": has_been_pulled_db,
+                })
                 operations.append(op_response.model_dump())
 
             # Get total count (approximate)

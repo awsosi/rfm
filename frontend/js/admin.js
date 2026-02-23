@@ -20,6 +20,7 @@ let adminSystem = null;
 let statsRefreshInterval = null;
 let currentTab = 'users';
 let cachedUsers = null;
+let workerDataMap = {}; // workerId -> worker object for provision dialog pre-fill
 
 // =========================================================================
 // Theme
@@ -473,6 +474,18 @@ async function confirmDeleteUser(userId) {
 
 function setupWorkerEvents() {
     document.getElementById('refresh-workers-btn').addEventListener('click', loadWorkers);
+
+    // Provision modal buttons
+    document.getElementById('provision-modal-close').addEventListener('click', () => {
+        document.getElementById('provision-modal').classList.add('hidden');
+    });
+    document.getElementById('provision-modal-cancel').addEventListener('click', () => {
+        document.getElementById('provision-modal').classList.add('hidden');
+    });
+    document.getElementById('provision-modal-save').addEventListener('click', async () => {
+        const workerId = parseInt(document.getElementById('provision-modal-save').dataset.workerId);
+        await executeProvision(workerId);
+    });
 }
 
 async function loadWorkers() {
@@ -486,6 +499,10 @@ async function loadWorkers() {
 
     try {
         const workers = await getWorkers();
+
+        // Store worker data for provision dialog pre-fill
+        workerDataMap = {};
+        workers.forEach(w => { workerDataMap[w.id] = w; });
 
         const activeWorkers = workers.filter(w => w.status?.toUpperCase() !== 'PENDING');
         const pendingWorkers = workers.filter(w => w.status?.toUpperCase() === 'PENDING');
@@ -671,15 +688,38 @@ async function sendWorkerCmd(workerId, command) {
     }
 }
 
-async function provisionWorkerDialog(workerId) {
-    const pathA = prompt('Enter new Path A prefix (leave empty to keep current):');
-    const pathB = prompt('Enter new Path B prefix (leave empty to keep current):');
-    const pathC = prompt('Enter new Path C prefix (leave empty to keep current):');
+function provisionWorkerDialog(workerId) {
+    const worker = workerDataMap[workerId] || {};
+
+    // Pre-fill inputs with current worker paths as placeholder text
+    const inputA = document.getElementById('provision-path-a');
+    const inputB = document.getElementById('provision-path-b');
+    const inputC = document.getElementById('provision-path-c');
+
+    inputA.value = '';
+    inputB.value = '';
+    inputC.value = '';
+    inputA.placeholder = worker.path_a_prefix || 'e.g. \\\\server\\shareA';
+    inputB.placeholder = worker.path_b_prefix || 'e.g. \\\\server\\shareB';
+    inputC.placeholder = worker.path_c_prefix || 'e.g. \\\\server\\shareC';
+
+    // Store workerId on the save button
+    document.getElementById('provision-modal-save').dataset.workerId = workerId;
+
+    document.getElementById('provision-modal').classList.remove('hidden');
+}
+
+async function executeProvision(workerId) {
+    const pathA = document.getElementById('provision-path-a').value.trim();
+    const pathB = document.getElementById('provision-path-b').value.trim();
+    const pathC = document.getElementById('provision-path-c').value.trim();
 
     if (!pathA && !pathB && !pathC) {
-        alert('No changes specified');
+        showNotification('No changes specified', 'warning');
         return;
     }
+
+    document.getElementById('provision-modal').classList.add('hidden');
 
     const config = {};
     if (pathA) config.path_a_prefix = pathA;
@@ -698,9 +738,11 @@ async function provisionWorkerDialog(workerId) {
             body: JSON.stringify({ config, restart_required: false })
         });
         if (resultDiv) resultDiv.innerHTML = '<span class="success">Worker provisioned successfully</span>';
+        showNotification('Worker provisioned successfully', 'success');
         await loadWorkers();
     } catch (error) {
         if (resultDiv) resultDiv.innerHTML = `<span class="error">Error: ${escapeHtml(error.message)}</span>`;
+        showNotification('Error provisioning worker: ' + error.message, 'error');
     }
 }
 

@@ -79,7 +79,7 @@
                                     <th>Hostname</th>
                                     <th>Status</th>
                                     <th>Last Heartbeat</th>
-                                    <th>Capabilities</th>
+                                    <th>Paths</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -616,6 +616,37 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
                 <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provision Worker Modal -->
+    <div class="modal hidden" id="provision-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Provision Worker</h3>
+                <button class="modal-close" id="provision-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="provision-path-a">Path A Prefix</label>
+                    <input type="text" id="provision-path-a" class="form-control" placeholder="e.g. \\server\shareA">
+                    <small>Leave empty to keep current value</small>
+                </div>
+                <div class="form-group">
+                    <label for="provision-path-b">Path B Prefix</label>
+                    <input type="text" id="provision-path-b" class="form-control" placeholder="e.g. \\server\shareB">
+                    <small>Leave empty to keep current value</small>
+                </div>
+                <div class="form-group">
+                    <label for="provision-path-c">Path C Prefix</label>
+                    <input type="text" id="provision-path-c" class="form-control" placeholder="e.g. \\server\shareC">
+                    <small>Leave empty to keep current value</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="provision-modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="provision-modal-save">Provision</button>
             </div>
         </div>
     </div>
