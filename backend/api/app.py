@@ -800,6 +800,114 @@ async def push_operation(
             raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/api/operations/push/batch", response_model=FilePushBatchResponse)
+async def push_operation_batch(
+    request_data: FilePushBatchRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Batch PUSH operation: Copy directories to PATH_B and archive to PATH_C.
+
+    Executes individual PUSH operations sequentially for safety and rollback parity.
+    """
+    if not request_data.source_paths:
+        raise HTTPException(status_code=400, detail="source_paths cannot be empty")
+
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    # Deduplicate while preserving order
+    seen = set()
+    source_paths = []
+    for path in request_data.source_paths:
+        if not path:
+            continue
+        if path in seen:
+            continue
+        seen.add(path)
+        source_paths.append(path)
+
+    if not source_paths:
+        raise HTTPException(status_code=400, detail="source_paths cannot be empty")
+
+    results: list[FilePushBatchResult] = []
+
+    for source_path in source_paths:
+        try:
+            validate_path_a(source_path)
+        except HTTPException as exc:
+            results.append(
+                FilePushBatchResult(
+                    source_path=source_path,
+                    success=False,
+                    error=str(exc.detail),
+                )
+            )
+            continue
+
+        # Acquire path lock per directory to prevent concurrent pushes
+        async with operation_service._get_path_lock(source_path):
+            try:
+                operation = await operation_service.create_push_operation(
+                    user=current_user,
+                    source_dir=source_path,
+                    worker_id=request_data.worker_id,
+                    db=db,
+                )
+
+                await AuditLogger.log_operation(
+                    user_id=current_user.id,
+                    operation_id=operation.id,
+                    action="push",
+                    details={
+                        "source_directory": source_path,
+                        "target_directory": operation.dest_path,
+                        "archive_directory": operation.archive_path,
+                    },
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                    username=current_user.username,
+                )
+
+                operation = await operation_service.execute_operation(operation, db)
+                await db.refresh(operation)
+
+                try:
+                    from api.websocket_manager import ws_manager
+                    await ws_manager.broadcast(
+                        {
+                            "type": "operation_update",
+                            "operation_id": operation.id,
+                            "status": operation.status.value,
+                            "user": current_user.username,
+                        },
+                        topic="operations"
+                    )
+                except Exception as ws_exc:
+                    logger.warning(f"Failed to broadcast operation update: {ws_exc}")
+
+                results.append(
+                    FilePushBatchResult(
+                        source_path=source_path,
+                        success=True,
+                        operation_id=operation.id,
+                    )
+                )
+            except Exception as exc:
+                results.append(
+                    FilePushBatchResult(
+                        source_path=source_path,
+                        success=False,
+                        error=str(exc),
+                    )
+                )
+
+    return FilePushBatchResponse(results=results)
+
+
 @app.post("/api/operations/pull", response_model=OperationResponse)
 async def pull_operation(
     request_data: FilePullRequest,

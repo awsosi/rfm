@@ -3,6 +3,7 @@
 #pragma once
 #include "resource.h"       // main symbols
 #include "RFMShellExt_i.h"
+#include <vector>
 
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
@@ -19,9 +20,8 @@ class ATL_NO_VTABLE CRFMContextMenu :
 	public IContextMenu
 {
 private:
-	std::wstring m_selectedPath;
-	bool m_isSingleSelection;
-	bool m_isDirectory;
+	std::vector<std::wstring> m_selectedPaths;
+	bool m_areAllDirectories;
 
 	// Localized menu strings (cached)
 	std::wstring m_prepareText;
@@ -36,13 +36,12 @@ private:
 	HRESULT GetPathFromDataObject(IDataObject* pDataObj);
 	bool IsPathAllowed(const std::wstring& path);
 	std::wstring GetLauncherPath();
-	bool LaunchRFM(const std::wstring& action, const std::wstring& path);
+	bool LaunchRFM(const std::wstring& action, const std::vector<std::wstring>& paths);
 	HBITMAP LoadMenuIcon();
 
 public:
 	CRFMContextMenu()
-		: m_isSingleSelection(false)
-		, m_isDirectory(false)
+		: m_areAllDirectories(false)
 		, m_hMenuBitmap(NULL)
 	{
 	}

@@ -274,6 +274,32 @@ class FilePushRequest(BaseModel):
     worker_id: int = Field(..., description="Worker ID to execute operation")
 
 
+class FilePushBatchRequest(BaseModel):
+    """Batch file push operation request (VF redesign)."""
+
+    source_paths: list[str] = Field(
+        ...,
+        min_items=1,
+        description="Source directory paths from Path A",
+    )
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+
+
+class FilePushBatchResult(BaseModel):
+    """Batch push result for a single source path."""
+
+    source_path: str
+    success: bool
+    operation_id: Optional[int] = None
+    error: Optional[str] = None
+
+
+class FilePushBatchResponse(BaseModel):
+    """Batch push response with per-path results."""
+
+    results: list[FilePushBatchResult]
+
+
 class FilePullRequest(BaseModel):
     """File pull operation request (VF redesign)."""
 

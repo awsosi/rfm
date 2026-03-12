@@ -20,7 +20,7 @@ import {
     onWebSocketEvent,
     isWebSocketConnected,
     startPolling,
-    pushOperation,
+    pushOperationBatch,
     getPushSettings,
     pullOperation,
     getOperationHistory,
@@ -127,7 +127,9 @@ async function init() {
     // Parse URL parameters for deep linking (Windows client integration)
     const urlParams = new URLSearchParams(window.location.search);
     const action = urlParams.get('action');       // 'prepare' or 'push'
-    const path = urlParams.get('path');           // Real Windows path
+    const path = urlParams.get('path');           // Real Windows path (single)
+    const pathsParam = urlParams.get('paths');    // Real Windows paths (pipe-delimited)
+    const pathParams = urlParams.getAll('path');  // Real Windows paths (repeatable)
     const token = urlParams.get('token');         // JWT token
 
     // Token-based auto-login (if token provided and not already logged in)
@@ -299,17 +301,34 @@ async function init() {
     }
 
     // Handle deep link actions (Windows client integration)
-    if (action && path) {
+    const targetPaths = [];
+    if (pathsParam) {
+        pathsParam.split('|').forEach(p => {
+            const trimmed = p.trim();
+            if (trimmed) targetPaths.push(trimmed);
+        });
+    }
+    if (pathParams && pathParams.length > 0) {
+        pathParams.forEach(p => {
+            const trimmed = p.trim();
+            if (trimmed) targetPaths.push(trimmed);
+        });
+    } else if (path) {
+        targetPaths.push(path);
+    }
+
+    if (action && targetPaths.length > 0) {
         if (action === 'prepare') {
-            handlePrepareAction(path);
+            await handlePrepareAction(targetPaths);
         } else if (action === 'push') {
-            await handlePushAction(path);
+            await handlePushAction(targetPaths);
         }
 
         // Clean URL parameters (prevent re-trigger on refresh)
         const url = new URL(window.location);
         url.searchParams.delete('action');
         url.searchParams.delete('path');
+        url.searchParams.delete('paths');
         url.searchParams.delete('token');
         window.history.replaceState({}, '', url);
     }
@@ -1647,7 +1666,7 @@ function setupVFRedesignControls() {
     const fileListA = document.getElementById('file-list-body-a');
     if (fileListA) {
         fileListA.addEventListener('change', (e) => {
-            if (e.target.type === 'radio') {
+            if (e.target.classList && e.target.classList.contains('file-select')) {
                 updateVFButtonStates();
             }
         });
@@ -1853,15 +1872,8 @@ async function handlePushOperation() {
         return;
     }
 
-    if (selectedFiles.length > 1) {
-        showError(t('operations.selectOneDirectory'));
-        return;
-    }
-
-    const selectedFile = selectedFiles[0];
-
     // Ensure it's a directory
-    if (!selectedFile.is_directory) {
+    if (selectedFiles.some(file => !file.is_directory)) {
         showError(t('operations.selectDirectoryNotFile'));
         return;
     }
@@ -1875,7 +1887,8 @@ async function handlePushOperation() {
     }
 
     // Build dynamic confirmation message
-    const confirmMsg = buildPushConfirmMessage(selectedFile.name, pushSettings);
+    const selectedNames = selectedFiles.map(file => file.name);
+    const confirmMsg = buildPushConfirmMessage(selectedNames, pushSettings);
     const confirmed = await confirmAction(confirmMsg);
 
     if (!confirmed) {
@@ -1885,10 +1898,24 @@ async function handlePushOperation() {
     try {
         updateOperationStatus(t('operations.pushingDirectory'), 'info');
 
-        const sourcePath = joinPath(state.panes.a.currentPath, selectedFile.name);
-        const operation = await pushOperation(sourcePath, state.workerId);
+        const sourcePaths = selectedFiles.map(file => joinPath(state.panes.a.currentPath, file.name));
+        const result = await pushOperationBatch(sourcePaths, state.workerId);
 
-        showSuccess(t('operations.pushStarted'));
+        const failures = (result?.results || []).filter(item => !item.success);
+        const successes = (result?.results || []).filter(item => item.success);
+
+        if (successes.length > 0) {
+            showSuccess(t('operations.pushBatchStarted', { count: successes.length }));
+        }
+
+        if (failures.length > 0) {
+            const preview = failures
+                .slice(0, 3)
+                .map(item => `${item.source_path}: ${item.error || 'unknown error'}`)
+                .join('; ');
+            showError(t('operations.pushBatchFailed', { count: failures.length, errors: preview }));
+        }
+
         clearSelection('a');
 
         // Refresh operation history
@@ -1932,9 +1959,26 @@ function buildPushConfirmMessage(name, settings) {
         steps.push(`${stepNum++}. ${t('operations.pushStepDeleteSource')}`);
     }
 
-    let msg = t('operations.pushConfirmTitle', { name }) + '\n\n';
+    const names = Array.isArray(name) ? name : [name];
+    const isMulti = names.length > 1;
+
+    let msg = isMulti
+        ? t('operations.pushConfirmTitleMulti', { count: names.length })
+        : t('operations.pushConfirmTitle', { name: names[0] });
+
+    msg += '\n\n';
     msg += t('operations.pushConfirmStepsHeader') + '\n';
     msg += steps.join('\n');
+
+    if (isMulti) {
+        const limit = 5;
+        const shown = names.slice(0, limit);
+        msg += '\n\n' + t('operations.pushConfirmListHeader') + '\n';
+        msg += shown.map(item => `- ${item}`).join('\n');
+        if (names.length > limit) {
+            msg += '\n' + t('operations.pushConfirmListMore', { count: names.length - limit });
+        }
+    }
 
     if (!settings.archive) {
         msg += '\n\n' + t('operations.pushWarningNoArchive');
@@ -2003,7 +2047,9 @@ async function handlePullOperation() {
 function updateVFButtonStates() {
     // Update Push button
     const selectedFiles = getSelectedFiles('a');
-    const hasDirectorySelection = selectedFiles.length === 1 && selectedFiles[0].is_directory;
+    const hasDirectorySelection =
+        selectedFiles.length > 0 &&
+        selectedFiles.every(file => file.is_directory);
     updatePushButtonState(hasDirectorySelection);
 
     // Update Pull button
@@ -2076,49 +2122,67 @@ function handleFileListChanged(data) {
  *
  * @param {string} targetPath - Real Windows path (e.g., "\\server\share\folder" or "G:\folder")
  */
-async function handlePrepareAction(targetPath) {
-    console.log('Deep link: Preparing to select folder from path:', targetPath);
+async function resolveWindowsPath(targetPath) {
+    const { API_BASE_URL, getToken } = await import('./auth.js');
+    const token = getToken();
+
+    const response = await fetch(`${API_BASE_URL}/api/path/resolve`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            windows_path: targetPath,
+            worker_id: state.workerId
+        })
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to resolve path');
+    }
+
+    return await response.json();
+}
+
+async function handlePrepareAction(targetPaths) {
+    const paths = Array.isArray(targetPaths) ? targetPaths : [targetPaths];
+    console.log('Deep link: Preparing to select folders from paths:', paths);
 
     try {
-        // Call path resolution API to convert Windows path to virtual path
-        const { API_BASE_URL, getToken } = await import('./auth.js');
-        const token = getToken();
-
-        console.log('Deep link: Calling path resolution API...');
-        const response = await fetch(`${API_BASE_URL}/api/path/resolve`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                windows_path: targetPath,
-                worker_id: state.workerId
-            })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            console.error('Deep link: Path resolution failed:', error);
-            throw new Error(error.detail || 'Failed to resolve path');
+        const resolved = [];
+        for (const targetPath of paths) {
+            try {
+                console.log('Deep link: Calling path resolution API for:', targetPath);
+                const pathInfo = await resolveWindowsPath(targetPath);
+                console.log('Deep link: Path resolved:', pathInfo);
+                resolved.push(pathInfo);
+            } catch (error) {
+                console.error('Deep link: Path resolution failed:', error);
+                showError(t('errors.pathNotAllowed') + ': ' + error.message);
+            }
         }
 
-        const pathInfo = await response.json();
-        console.log('Deep link: Path resolved:', pathInfo);
-        console.log('  Virtual path:', pathInfo.virtual_path);
-        console.log('  Parent path:', pathInfo.parent_path);
-        console.log('  Folder name:', pathInfo.folder_name);
+        if (resolved.length === 0) {
+            throw new Error('No paths could be resolved');
+        }
 
-        // Navigate to parent directory first
-        if (pathInfo.parent_path !== state.panes.a.currentPath) {
-            console.log('Deep link: Navigating to parent directory:', pathInfo.parent_path);
-            await loadDirectory('a', pathInfo.parent_path);
+        const parentPath = resolved[0].parent_path;
+        const selectable = resolved.filter(info => info.parent_path === parentPath);
+        const skipped = resolved.filter(info => info.parent_path !== parentPath);
+
+        if (skipped.length > 0) {
+            console.warn('Deep link: Skipping paths with different parent directories');
+        }
+
+        if (parentPath !== state.panes.a.currentPath) {
+            console.log('Deep link: Navigating to parent directory:', parentPath);
+            await loadDirectory('a', parentPath);
         } else {
-            console.log('Deep link: Already at parent directory:', pathInfo.parent_path);
+            console.log('Deep link: Already at parent directory:', parentPath);
         }
 
-        // Wait for directory to load, then select the folder
-        // Return a promise so callers can await completion
         return new Promise((resolve, reject) => {
             setTimeout(() => {
                 const fileListBody = document.getElementById('file-list-body-a');
@@ -2129,41 +2193,50 @@ async function handlePrepareAction(targetPath) {
                     return;
                 }
 
+                clearSelection('a');
+
                 const rows = fileListBody.querySelectorAll('tr');
-                console.log(`Deep link: Searching for folder "${pathInfo.folder_name}" in ${rows.length} rows`);
-                let found = false;
+                const nameSet = new Set(selectable.map(info => info.folder_name));
+                let foundCount = 0;
+                let firstRow = null;
 
                 for (const row of rows) {
-                    const nameCell = row.querySelector('.file-name');
-                    if (nameCell && nameCell.textContent.trim() === pathInfo.folder_name) {
-                        const radio = row.querySelector('input[type="radio"]');
-                        if (radio) {
-                            radio.checked = true;
-                            radio.dispatchEvent(new Event('change', { bubbles: true }));
-                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const rowName = row.dataset.name || row.querySelector('.file-name')?.textContent?.trim();
+                    if (!rowName || !nameSet.has(rowName)) {
+                        continue;
+                    }
 
-                            // Brief highlight
-                            const originalBg = row.style.backgroundColor;
-                            row.style.backgroundColor = 'var(--color-primary-light, #dbeafe)';
-                            setTimeout(() => {
-                                row.style.backgroundColor = originalBg;
-                            }, 2000);
-
-                            found = true;
-                            console.log('Deep link: Successfully selected folder:', pathInfo.folder_name);
-                            showSuccess(`Folder "${pathInfo.folder_name}" selected`);
-                            resolve();
-                            break;
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = true;
+                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (!firstRow) {
+                            firstRow = row;
                         }
+                        foundCount++;
                     }
                 }
 
-                if (!found) {
-                    console.warn('Deep link: Folder not found in directory:', pathInfo.folder_name);
+                if (firstRow) {
+                    firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    const originalBg = firstRow.style.backgroundColor;
+                    firstRow.style.backgroundColor = 'var(--color-primary-light, #dbeafe)';
+                    setTimeout(() => {
+                        firstRow.style.backgroundColor = originalBg;
+                    }, 2000);
+                }
+
+                if (foundCount === 0) {
+                    console.warn('Deep link: No matching folders found in directory');
                     showError(t('errors.pathNotAllowed') + ': Folder not found');
                     reject(new Error('Folder not found'));
+                    return;
                 }
-            }, 1000); // Increased delay to ensure directory has fully loaded
+
+                console.log(`Deep link: Successfully selected ${foundCount} folder(s)`);
+                resolve();
+            }, 1000);
         });
 
     } catch (error) {
@@ -2179,13 +2252,13 @@ async function handlePrepareAction(targetPath) {
  *
  * @param {string} targetPath - Real Windows path
  */
-async function handlePushAction(targetPath) {
-    console.log('Deep link: Auto-triggering push for path:', targetPath);
+async function handlePushAction(targetPaths) {
+    console.log('Deep link: Auto-triggering push for paths:', targetPaths);
 
     try {
         // First, select the item (await completion)
         console.log('Deep link: Step 1 - Selecting folder...');
-        await handlePrepareAction(targetPath);
+        await handlePrepareAction(targetPaths);
 
         console.log('Deep link: Step 2 - Folder selected, preparing to trigger push operation...');
 
@@ -2195,12 +2268,11 @@ async function handlePushAction(targetPath) {
         const selectedFiles = getSelectedFiles('a');
         console.log('Deep link: Selected files:', selectedFiles);
 
-        if (selectedFiles.length === 1 && selectedFiles[0].is_directory) {
-            console.log('Deep link: Triggering push operation for directory:', selectedFiles[0].name);
+        if (selectedFiles.length > 0 && selectedFiles.every(file => file.is_directory)) {
+            console.log('Deep link: Triggering push operation for directories:', selectedFiles.map(f => f.name));
             try {
                 await handlePushOperation();
                 console.log('Deep link: Push operation triggered successfully');
-                showSuccess(`Push operation started for "${selectedFiles[0].name}"`);
             } catch (error) {
                 console.error('Deep link: Push operation failed:', error);
                 showError(t('operations.pushFailed').replace('{error}', error.message));

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Web;
 
 namespace RFMLauncher
@@ -13,10 +15,10 @@ namespace RFMLauncher
         /// </summary>
         /// <param name="frontendBaseUrl">Base URL of RFM frontend/WebUI</param>
         /// <param name="action">Action: "prepare" or "push"</param>
-        /// <param name="path">Real Windows path</param>
+        /// <param name="paths">Real Windows paths</param>
         /// <param name="token">JWT access token</param>
         /// <returns>Complete deep link URL</returns>
-        public static string Build(string frontendBaseUrl, string action, string path, string token)
+        public static string Build(string frontendBaseUrl, string action, IEnumerable<string> paths, string token)
         {
             try
             {
@@ -24,10 +26,18 @@ namespace RFMLauncher
                 var uriBuilder = new UriBuilder(frontendBaseUrl);
                 uriBuilder.Path = "/pages/explorer.html";
 
+                var pathList = paths?
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToList() ?? new List<string>();
+                if (pathList.Count == 0)
+                {
+                    return null;
+                }
+
                 // Build query string
                 var query = HttpUtility.ParseQueryString(string.Empty);
                 query["action"] = action;
-                query["path"] = path;
+                query["paths"] = string.Join("|", pathList);
                 query["token"] = token;
                 uriBuilder.Query = query.ToString();
 

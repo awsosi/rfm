@@ -189,6 +189,22 @@ export async function pushOperation(sourcePath, workerId) {
 }
 
 /**
+ * VF REDESIGN: Batch push operation - Copy directories to PATH_B and archive to PATH_C
+ * @param {Array<string>} sourcePaths - Source directory paths (from Path A)
+ * @param {number} workerId - Worker ID to execute operation
+ * @returns {Promise<Object>}
+ */
+export async function pushOperationBatch(sourcePaths, workerId) {
+    return await apiRequest('/api/operations/push/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+            source_paths: sourcePaths,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
  * Get PUSH operation settings for confirmation dialog
  * @returns {Promise<Object>} { flatten, archive, ignore_masks }
  */

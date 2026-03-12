@@ -32,25 +32,38 @@ namespace RFMLauncher
                 // Parse command-line arguments
                 //   RFMLauncher.exe --prepare "\\server\share\folder"
                 //   RFMLauncher.exe --push "\\server\share\folder"
+                //   RFMLauncher.exe --push "\\server\share\folder1" "\\server\share\folder2"
 
                 if (args.Length < 2)
                 {
                     ShowErrorConsole();
-                    Console.WriteLine("Usage: RFMLauncher.exe --prepare|--push <path>");
+                    Console.WriteLine("Usage: RFMLauncher.exe --prepare|--push <path1> [path2 ...]");
                     Console.WriteLine("Example: RFMLauncher.exe --prepare \"\\\\server\\share\\folder\"");
+                    Console.WriteLine("Example: RFMLauncher.exe --push \"\\\\server\\share\\folder1\" \"\\\\server\\share\\folder2\"");
                     Console.WriteLine("\nPress any key to exit...");
                     Console.ReadKey();
                     return;
                 }
 
                 string action = args[0].TrimStart('-'); // "prepare" or "push"
-                string selectedPath = args[1];
+                var selectedPaths = args.Skip(1)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToList();
 
                 // Validate action
                 if (action != "prepare" && action != "push")
                 {
                     ShowErrorConsole();
                     Console.WriteLine("Invalid action. Use --prepare or --push");
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
+                    return;
+                }
+
+                if (selectedPaths.Count == 0)
+                {
+                    ShowErrorConsole();
+                    Console.WriteLine("No paths provided.");
                     Console.WriteLine("\nPress any key to exit...");
                     Console.ReadKey();
                     return;
@@ -79,10 +92,17 @@ namespace RFMLauncher
                 }
 
                 // Check if path is allowed
-                if (!IsPathAllowed(selectedPath, config))
+                var disallowedPaths = selectedPaths
+                    .Where(path => !IsPathAllowed(path, config))
+                    .ToList();
+                if (disallowedPaths.Count > 0)
                 {
                     ShowErrorConsole();
-                    Console.WriteLine("Path not allowed: " + selectedPath);
+                    Console.WriteLine("Some paths are not allowed:");
+                    foreach (var path in disallowedPaths)
+                    {
+                        Console.WriteLine("  - " + path);
+                    }
                     Console.WriteLine("Allowed paths:");
                     foreach (var allowedPath in config.AllowedPaths)
                     {
@@ -115,7 +135,10 @@ namespace RFMLauncher
 
                 // Normalize path to canonical (first) allowed path prefix
                 // so the backend receives a path matching the worker's path_a_prefix
-                string canonicalPath = NormalizeToCanonicalPath(selectedPath, config);
+                var canonicalPaths = selectedPaths
+                    .Select(path => NormalizeToCanonicalPath(path, config))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
                 // Build deep link URL
                 // Use frontend URL if available, otherwise fall back to API URL
@@ -126,7 +149,7 @@ namespace RFMLauncher
                 var deepLink = DeepLinkBuilder.Build(
                     frontendUrl,
                     action,
-                    canonicalPath,
+                    canonicalPaths,
                     accessToken
                 );
 

@@ -1058,24 +1058,54 @@ namespace FileManagerWorker
                         }
                     }
 
-                    // Delete ignored files
+                    // Delete ignored files (recursive)
                     if (ignoreMasks != null && ignoreMasks.Count > 0 && Directory.Exists(resolvedSource))
                     {
-                        foreach (var file in Directory.GetFiles(resolvedSource))
+                        var dirs = new Stack<string>();
+                        dirs.Push(resolvedSource);
+
+                        while (dirs.Count > 0)
                         {
-                            if (MatchesIgnoreMask(Path.GetFileName(file), ignoreMasks))
+                            var currentDir = dirs.Pop();
+
+                            try
                             {
-                                try
+                                foreach (var dir in Directory.GetDirectories(currentDir))
                                 {
-                                    File.Delete(file);
-                                    destroyedFiles++;
-                                    Logger.Info("PushCleanup: Destroyed ignored file {0}", file);
+                                    dirs.Push(dir);
                                 }
-                                catch (Exception ex)
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warn("PushCleanup: Failed to enumerate subfolders in {0}: {1}", currentDir, ex.Message);
+                                failures.Add($"dir:{currentDir}:{ex.Message}");
+                                continue;
+                            }
+
+                            try
+                            {
+                                foreach (var file in Directory.GetFiles(currentDir))
                                 {
-                                    Logger.Warn("PushCleanup: Failed to destroy ignored file {0}: {1}", file, ex.Message);
-                                    failures.Add($"file:{Path.GetFileName(file)}:{ex.Message}");
+                                    if (MatchesIgnoreMask(Path.GetFileName(file), ignoreMasks))
+                                    {
+                                        try
+                                        {
+                                            File.Delete(file);
+                                            destroyedFiles++;
+                                            Logger.Info("PushCleanup: Destroyed ignored file {0}", file);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Logger.Warn("PushCleanup: Failed to destroy ignored file {0}: {1}", file, ex.Message);
+                                            failures.Add($"file:{Path.GetFileName(file)}:{ex.Message}");
+                                        }
+                                    }
                                 }
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warn("PushCleanup: Failed to enumerate files in {0}: {1}", currentDir, ex.Message);
+                                failures.Add($"filelist:{currentDir}:{ex.Message}");
                             }
                         }
                     }

@@ -26,16 +26,19 @@ STDMETHODIMP CRFMContextMenu::Initialize(
 		return hr;
 	}
 
-	// Only show menu for single directory selection
-	if (!m_isSingleSelection || !m_isDirectory)
+	// Only show menu for directory selection(s)
+	if (m_selectedPaths.empty() || !m_areAllDirectories)
 	{
 		return E_FAIL;
 	}
 
 	// Check if path is allowed
-	if (!IsPathAllowed(m_selectedPath))
+	for (const auto& selectedPath : m_selectedPaths)
 	{
-		return E_FAIL;  // Don't show menu items for non-allowed paths
+		if (!IsPathAllowed(selectedPath))
+		{
+			return E_FAIL;  // Don't show menu items for non-allowed paths
+		}
 	}
 
 	return S_OK;
@@ -116,7 +119,7 @@ STDMETHODIMP CRFMContextMenu::InvokeCommand(CMINVOKECOMMANDINFO* pici)
 	}
 
 	// Launch RFM launcher
-	if (!LaunchRFM(action, m_selectedPath))
+	if (!LaunchRFM(action, m_selectedPaths))
 	{
 		return E_FAIL;
 	}
@@ -164,6 +167,9 @@ STDMETHODIMP CRFMContextMenu::GetCommandString(
 // Helper Methods
 HRESULT CRFMContextMenu::GetPathFromDataObject(IDataObject* pDataObj)
 {
+	m_selectedPaths.clear();
+	m_areAllDirectories = true;
+
 	FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
 	STGMEDIUM stg = { TYMED_HGLOBAL };
 
@@ -183,27 +189,32 @@ HRESULT CRFMContextMenu::GetPathFromDataObject(IDataObject* pDataObj)
 	}
 
 	UINT fileCount = DragQueryFile(hDrop, 0xFFFFFFFF, NULL, 0);
-	m_isSingleSelection = (fileCount == 1);
 
 	if (fileCount > 0)
 	{
-		// Get first selected file path
 		WCHAR szPath[MAX_PATH];
-		if (DragQueryFile(hDrop, 0, szPath, MAX_PATH))
+		for (UINT i = 0; i < fileCount; i++)
 		{
-			m_selectedPath = szPath;
+			if (DragQueryFile(hDrop, i, szPath, MAX_PATH))
+			{
+				m_selectedPaths.push_back(szPath);
 
-			// Check if it's a directory
-			DWORD attrs = GetFileAttributes(szPath);
-			m_isDirectory = (attrs != INVALID_FILE_ATTRIBUTES) &&
-				(attrs & FILE_ATTRIBUTE_DIRECTORY);
+				// Check if it's a directory
+				DWORD attrs = GetFileAttributes(szPath);
+				bool isDirectory = (attrs != INVALID_FILE_ATTRIBUTES) &&
+					(attrs & FILE_ATTRIBUTE_DIRECTORY);
+				if (!isDirectory)
+				{
+					m_areAllDirectories = false;
+				}
+			}
 		}
 	}
 
 	GlobalUnlock(stg.hGlobal);
 	ReleaseStgMedium(&stg);
 
-	return m_selectedPath.empty() ? E_FAIL : S_OK;
+	return m_selectedPaths.empty() ? E_FAIL : S_OK;
 }
 
 bool CRFMContextMenu::IsPathAllowed(const std::wstring& path)
@@ -216,7 +227,7 @@ std::wstring CRFMContextMenu::GetLauncherPath()
 	return Utils::GetLauncherPath();
 }
 
-bool CRFMContextMenu::LaunchRFM(const std::wstring& action, const std::wstring& path)
+bool CRFMContextMenu::LaunchRFM(const std::wstring& action, const std::vector<std::wstring>& paths)
 {
 	std::wstring launcherPath = GetLauncherPath();
 	if (launcherPath.empty())
@@ -224,8 +235,12 @@ bool CRFMContextMenu::LaunchRFM(const std::wstring& action, const std::wstring& 
 		return false;
 	}
 
-	// Build command line: RFMLauncher.exe --action "path"
-	std::wstring cmdLine = L"\"" + launcherPath + L"\" --" + action + L" \"" + path + L"\"";
+	// Build command line: RFMLauncher.exe --action "path1" "path2" ...
+	std::wstring cmdLine = L"\"" + launcherPath + L"\" --" + action;
+	for (const auto& path : paths)
+	{
+		cmdLine += L" \"" + path + L"\"";
+	}
 
 	// Launch process
 	STARTUPINFO si = { sizeof(si) };
