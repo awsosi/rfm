@@ -153,6 +153,66 @@ class Settings(BaseSettings):
     rosapi_verify_base_url: Optional[str] = None  # Defaults to rosapi_base_url if not set
     rosapi_verify_endpoint: Optional[str] = None
 
+    # ------------------------------------------------------------------
+    # PIM - Product Information Manager signalling
+    # ------------------------------------------------------------------
+    # Second, independent signalling target alongside ROSAPI. Authenticates
+    # with a static X-API-TOKEN header rather than a JWT login flow.
+    # Fires on PUSH (created), PULL (updated) and UPDATE (updated).
+    pim_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices('enable_pim', 'pim_enabled'),
+    )
+    pim_base_url: str = "https://pim-api.vitkac.com"
+    pim_endpoint: str = "/api/v1/image_catalog/ftp_event"
+    pim_method: str = "POST"
+    pim_api_token: Optional[str] = None
+    pim_timeout: int = 10
+
+    # Per-operation toggles and the eventType each one reports
+    pim_push_enabled: bool = True
+    pim_push_event_type: str = "created"
+    pim_pull_enabled: bool = True
+    pim_pull_event_type: str = "updated"
+    pim_update_enabled: bool = True
+    pim_update_event_type: str = "updated"
+
+    # Fully customisable payload body. Supported placeholders:
+    #   {files}        -> JSON array of top-level basenames (unquoted, raw JSON)
+    #   {catalog_name} -> catalog/folder name being signalled
+    #   {event_type}   -> resolved eventType for this operation
+    #   {tg_id}        -> optional TG identifier (empty unless configured)
+    #   {operation_id}, {username}, {source_path}, {dest_path}
+    # tgId is intentionally absent from the default body; add it to the
+    # template in the Admin Panel once its meaning is confirmed.
+    pim_payload_template: str = (
+        '{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}'
+    )
+
+    # ------------------------------------------------------------------
+    # Catalog name validation (PolkaSQL RFM_ValidateProductName)
+    # ------------------------------------------------------------------
+    catalog_validation_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices('enable_catalog_validation', 'catalog_validation_enabled'),
+    )
+    catalog_validation_url: Optional[str] = None
+    catalog_validation_api_key: Optional[str] = None
+    catalog_validation_timeout: int = 5
+    catalog_validation_max_suggestions: int = 5
+    # Fail-closed by default: an unreachable PolkaSQL refuses the operation.
+    # Flip to true to let pushes through during a PolkaSQL outage.
+    catalog_validation_fail_open: bool = False
+
+    # ------------------------------------------------------------------
+    # Directory content validation for PUSH / UPDATE
+    # ------------------------------------------------------------------
+    push_validation_enabled: bool = True
+    push_validation_min_files: int = 2
+    push_validation_allowed_extensions: str = "jpg,jpeg,png,gif,bmp,tif,tiff,webp"
+    # Verify real file type from magic bytes, not just the extension
+    push_validation_verify_content: bool = True
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
@@ -185,6 +245,11 @@ class Settings(BaseSettings):
     enable_push_flatten: bool = False
     enable_push_archive: bool = False
     push_ignore_file_masks: str = "Thumbs.db"
+
+    # UPDATE operation behavior
+    # Mirrors in-place changes made in PATH_B into the PATH_C archive.
+    # Defaults off: the downstream archive is not in use yet.
+    enable_update_archive_mirror: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod

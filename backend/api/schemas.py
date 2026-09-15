@@ -274,6 +274,100 @@ class FilePushRequest(BaseModel):
     worker_id: int = Field(..., description="Worker ID to execute operation")
 
 
+class UpdateAction(BaseModel):
+    """A single in-place change inside an already-pushed catalog."""
+
+    action: str = Field(
+        ...,
+        description="One of: move, rename, delete",
+    )
+    source: str = Field(
+        ...,
+        min_length=1,
+        description="Entry to act on, relative to the catalog root",
+    )
+    dest: Optional[str] = Field(
+        None,
+        description="New location relative to the catalog root (move/rename only)",
+    )
+    recursive: bool = Field(
+        True,
+        description="Delete directories recursively (delete only)",
+    )
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        allowed = {"move", "rename", "delete"}
+        normalised = (v or "").strip().lower()
+        if normalised not in allowed:
+            raise ValueError(f"action must be one of: {', '.join(sorted(allowed))}")
+        return normalised
+
+
+class FileUpdateRequest(BaseModel):
+    """
+    UPDATE operation request (VF redesign).
+
+    Rearranges the contents of a catalog that already lives in PATH_B.
+    All action paths are relative to ``catalog_path``.
+    """
+
+    catalog_path: str = Field(
+        ...,
+        min_length=1,
+        description="Path of the already-pushed catalog (Path B)",
+    )
+    worker_id: int = Field(..., description="Worker ID to execute operation")
+    actions: list[UpdateAction] = Field(
+        ...,
+        min_items=1,
+        description="Changes to apply inside the catalog",
+    )
+
+
+class CatalogValidationResponse(BaseModel):
+    """Result of validating a catalog name against PolkaSQL."""
+
+    valid: bool
+    catalog_name: str
+    matched_name: Optional[str] = None
+    product_id: Optional[int] = None
+    suggestions: list[str] = Field(default_factory=list)
+    reason: Optional[str] = Field(
+        None, description="i18n key describing why validation failed"
+    )
+    error_detail: Optional[str] = None
+    skipped: bool = False
+
+
+class ContentValidationResponse(BaseModel):
+    """Result of validating the contents of a catalog directory."""
+
+    valid: bool
+    path: str
+    total_files: int = 0
+    image_count: int = 0
+    files: list[str] = Field(default_factory=list)
+    non_image_files: list[str] = Field(default_factory=list)
+    invalid_files: list[dict[str, Any]] = Field(default_factory=list)
+    min_required: int = 0
+    allowed_extensions: list[str] = Field(default_factory=list)
+    reason: Optional[str] = Field(
+        None, description="i18n key describing why validation failed"
+    )
+    error_detail: Optional[str] = None
+    skipped: bool = False
+
+
+class PushPreflightResponse(BaseModel):
+    """Combined name + content validation result for a candidate catalog."""
+
+    ok: bool
+    catalog: CatalogValidationResponse
+    content: ContentValidationResponse
+
+
 class FilePushBatchRequest(BaseModel):
     """Batch file push operation request (VF redesign)."""
 

@@ -329,7 +329,8 @@ class OperationService:
             # Broadcast file listing changes for affected paths
             await self._broadcast_file_list_changed(operation)
 
-            # Signal ROSAPI for completed PUSH/PULL operations (fire-and-forget)
+            # Signal external systems for completed catalog operations
+            # (fire-and-forget; a signalling outage must never fail the operation)
             if operation.type in (OperationType.PUSH, OperationType.PULL):
                 from api.services.rosapi_service import signal_operation_completed_bg
                 asyncio.create_task(
@@ -338,6 +339,28 @@ class OperationService:
                         operation_type=operation.type.value,
                         source_path=operation.source_path,
                         dest_path=operation.dest_path,
+                    )
+                )
+
+            if operation.type in (
+                OperationType.PUSH,
+                OperationType.PULL,
+                OperationType.UPDATE,
+            ):
+                from api.services.pim_service import signal_pim_event_bg
+
+                # File list and catalog name were captured during validation and
+                # stored on the operation, so PIM needs no extra worker round-trip.
+                params = operation.params_json or {}
+                asyncio.create_task(
+                    signal_pim_event_bg(
+                        operation_id=operation.id,
+                        operation_type=operation.type.value,
+                        source_path=operation.source_path,
+                        dest_path=operation.dest_path,
+                        files=params.get("files") or [],
+                        username=params.get("username") or "",
+                        catalog_name=params.get("catalog_name"),
                     )
                 )
 
@@ -418,6 +441,9 @@ class OperationService:
             elif operation.type == OperationType.PULL:
                 # PULL: Revert from pathB to original location
                 response = await self._execute_pull_operation(operation, worker, db)
+            elif operation.type == OperationType.UPDATE:
+                # UPDATE: in-place move/rename/delete inside a pushed catalog
+                response = await self._execute_update_operation(operation, worker, db)
             else:
                 raise OperationError(f"Unsupported operation type: {operation.type}")
 
@@ -1288,3 +1314,283 @@ class OperationService:
                 operation, worker, OperationStatus.FAILED, db, error_msg
             )
             raise OperationError(f"PULL operation failed: {error_msg}")
+
+    # ------------------------------------------------------------------
+    # UPDATE operation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _join_catalog_path(catalog_path: str, relative: str) -> str:
+        """
+        Join a relative entry onto a catalog root using worker path syntax.
+
+        Relative paths are already confirmed to be catalog-local by
+        ``validate_update_actions``; this only normalises separators.
+        """
+        rel = str(relative).replace('\\', '/').strip('/')
+        return f"{catalog_path.rstrip('/')}/{rel}"
+
+    async def create_update_operation(
+        self,
+        user: User,
+        catalog_path: str,
+        actions: list,
+        worker_id: int,
+        db: AsyncSession,
+        catalog_name: Optional[str] = None,
+        predicted_files: Optional[list] = None,
+    ) -> Operation:
+        """
+        Create an UPDATE operation against an already-pushed catalog.
+
+        UPDATE rearranges the contents of a catalog that already lives in
+        PATH_B: renaming, moving within the catalog, and deleting entries.
+        When ``enable_update_archive_mirror`` is on, the same changes are
+        replayed against the PATH_C archive copy.
+
+        Validation (catalog name + resulting content) is performed by the
+        caller before this point, and its results are carried in params_json
+        so the PIM signal needs no extra worker round-trip.
+        """
+        worker = await get_worker_by_id(worker_id, db)
+        if not worker:
+            raise OperationError(f"Worker {worker_id} not found")
+
+        stmt = select(Config).where(Config.key == 'enable_update_archive_mirror')
+        result = await db.execute(stmt)
+        row = result.scalars().first()
+        mirror_enabled = bool(row) and (row.value or '').lower() == 'true'
+
+        import os
+        resolved_name = catalog_name or os.path.basename(catalog_path.rstrip('/\\'))
+
+        archive_path = None
+        if mirror_enabled:
+            path_c = worker.path_c_prefix or self.settings.path_c
+            if not path_c:
+                raise OperationError(
+                    f"PATH_C not configured for worker '{worker.name}' but UPDATE "
+                    "archive mirroring is enabled. Configure it in Admin Panel -> "
+                    "System -> Worker Configuration or set PATH_C in .env."
+                )
+            archive_path = f"C:/{resolved_name}"
+
+        operation = Operation(
+            user_id=user.id,
+            type=OperationType.UPDATE,
+            source_path=catalog_path,
+            dest_path=catalog_path,  # in-place
+            archive_path=archive_path,
+            status=OperationStatus.PENDING,
+            params_json={
+                "actions": actions,
+                "catalog_name": resolved_name,
+                "files": predicted_files or [],
+                "username": user.username,
+                "archive_mirror": mirror_enabled,
+            },
+        )
+        db.add(operation)
+        await db.flush()
+
+        db.add(OperationWorker(
+            operation_id=operation.id,
+            worker_id=worker_id,
+            worker_status=OperationStatus.PENDING,
+        ))
+
+        await db.commit()
+        await db.refresh(operation)
+
+        logger.info(
+            f"Created UPDATE operation {operation.id} by user '{user.username}' on "
+            f"catalog {resolved_name!r} ({catalog_path}): {len(actions)} action(s), "
+            f"archive_mirror={mirror_enabled}"
+        )
+
+        await self._index_operation_in_elasticsearch(operation, user.username, db)
+        await self._broadcast_operation_update(operation, user.username)
+
+        return operation
+
+    async def _execute_update_operation(
+        self,
+        operation: Operation,
+        worker: Worker,
+        db: AsyncSession,
+    ) -> WorkerCommandResponse:
+        """
+        Execute an UPDATE operation.
+
+        Ordering is deliberate: every reversible action (rename/move) runs
+        first, and irreversible deletes run only once all of them succeeded.
+        A failure during the reversible phase unwinds the moves already
+        applied, in reverse order, leaving the catalog as it was found.
+
+        Archive mirroring, when enabled, replays the same actions against
+        PATH_C after PATH_B succeeded. A mirror failure is logged but does not
+        fail the operation: PATH_B is the live copy and is already correct.
+        """
+        params = operation.params_json or {}
+        actions = params.get("actions") or []
+        username = params.get("username") or "unknown"
+        catalog_path = operation.source_path
+
+        moves = [a for a in actions if a.get("action") in ("move", "rename")]
+        deletes = [a for a in actions if a.get("action") == "delete"]
+
+        logger.info(
+            f"Executing UPDATE operation {operation.id} by user '{username}' on "
+            f"{catalog_path}: {len(moves)} move/rename, {len(deletes)} delete"
+        )
+
+        await self._update_worker_status(
+            operation, worker, OperationStatus.IN_PROGRESS, db
+        )
+
+        applied_moves = []
+        files_touched = 0
+
+        try:
+            # Confirm the catalog is still there before changing anything
+            verify = await self.worker_service.send_command(
+                worker, WorkerRequest(command="list", params={"path": catalog_path}), db
+            )
+            if verify.status != "success":
+                raise OperationError(
+                    f"Catalog {catalog_path} does not exist or is not accessible. "
+                    "It may have been pulled or removed by another operation."
+                )
+
+            # Phase 1 - reversible actions
+            for action in moves:
+                src = self._join_catalog_path(catalog_path, action["source"])
+                dst = self._join_catalog_path(catalog_path, action["dest"])
+                logger.info(f"UPDATE {operation.id}: move {src} -> {dst}")
+                response = await self.worker_service.move_file(worker, src, dst, db)
+                if response.status != "success":
+                    raise OperationError(
+                        f"UPDATE failed moving {action['source']} -> {action['dest']}: "
+                        f"{response.message}"
+                    )
+                applied_moves.append((src, dst))
+                files_touched += 1
+
+            # Phase 2 - irreversible actions, only after phase 1 fully succeeded
+            for action in deletes:
+                target = self._join_catalog_path(catalog_path, action["source"])
+                recursive = bool(action.get("recursive", True))
+                logger.info(f"UPDATE {operation.id}: delete {target}")
+                response = await self.worker_service.delete_file(
+                    worker, target, db, recursive
+                )
+                if response.status != "success":
+                    raise OperationError(
+                        f"UPDATE failed deleting {action['source']}: {response.message}"
+                    )
+                files_touched += 1
+
+            logger.info(
+                f"UPDATE operation {operation.id} applied {files_touched} action(s) "
+                f"to PATH_B by user '{username}'"
+            )
+
+            # Phase 3 - best-effort archive mirror
+            if operation.archive_path:
+                await self._mirror_update_to_archive(
+                    operation, worker, moves, deletes, db
+                )
+
+            return WorkerCommandResponse(
+                status="success",
+                message=(
+                    f"UPDATE completed: {len(moves)} move/rename, "
+                    f"{len(deletes)} delete"
+                ),
+                file_count=files_touched,
+            )
+
+        except Exception as exc:
+            # Unwind whatever reversible work already landed
+            if applied_moves:
+                logger.warning(
+                    f"UPDATE operation {operation.id} failed; reverting "
+                    f"{len(applied_moves)} move(s)"
+                )
+                for src, dst in reversed(applied_moves):
+                    try:
+                        await self.worker_service.move_file(worker, dst, src, db)
+                        logger.info(f"UPDATE {operation.id}: reverted {dst} -> {src}")
+                    except Exception as revert_exc:
+                        logger.error(
+                            f"UPDATE {operation.id}: could not revert {dst} -> {src}: "
+                            f"{revert_exc}"
+                        )
+
+            await self._update_worker_status(
+                operation, worker, OperationStatus.FAILED, db, str(exc)
+            )
+            raise
+
+    async def _mirror_update_to_archive(
+        self,
+        operation: Operation,
+        worker: Worker,
+        moves: list,
+        deletes: list,
+        db: AsyncSession,
+    ) -> None:
+        """
+        Replay UPDATE actions against the PATH_C archive copy.
+
+        Best-effort by design: PATH_B is the live copy and has already been
+        updated successfully by the time this runs, so a stale or missing
+        archive must not fail the user's operation. Every failure is logged.
+        """
+        archive_path = operation.archive_path
+        logger.info(
+            f"UPDATE {operation.id}: mirroring {len(moves) + len(deletes)} "
+            f"action(s) to archive {archive_path}"
+        )
+
+        try:
+            verify = await self.worker_service.send_command(
+                worker, WorkerRequest(command="list", params={"path": archive_path}), db
+            )
+            if verify.status != "success":
+                logger.warning(
+                    f"UPDATE {operation.id}: archive copy {archive_path} not found; "
+                    "skipping mirror"
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                f"UPDATE {operation.id}: could not inspect archive {archive_path}: "
+                f"{exc}; skipping mirror"
+            )
+            return
+
+        for action in moves:
+            src = self._join_catalog_path(archive_path, action["source"])
+            dst = self._join_catalog_path(archive_path, action["dest"])
+            try:
+                await self.worker_service.move_file(worker, src, dst, db)
+            except Exception as exc:
+                logger.error(
+                    f"UPDATE {operation.id}: archive mirror failed to move "
+                    f"{action['source']} -> {action['dest']}: {exc}"
+                )
+
+        for action in deletes:
+            target = self._join_catalog_path(archive_path, action["source"])
+            try:
+                await self.worker_service.delete_file(
+                    worker, target, db, bool(action.get("recursive", True))
+                )
+            except Exception as exc:
+                logger.error(
+                    f"UPDATE {operation.id}: archive mirror failed to delete "
+                    f"{action['source']}: {exc}"
+                )
+
+        logger.info(f"UPDATE {operation.id}: archive mirror pass completed")

@@ -897,6 +897,192 @@ namespace FileManagerWorker
         }
 
         /// <summary>
+        /// Canonical image type detected from a file's magic bytes, or null when the
+        /// content is not a recognised image.
+        /// </summary>
+        private static string DetectImageType(string filePath)
+        {
+            try
+            {
+                var header = new byte[12];
+                int read;
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    read = fs.Read(header, 0, header.Length);
+                }
+
+                if (read >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF)
+                    return "jpeg";
+
+                if (read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47
+                    && header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A)
+                    return "png";
+
+                if (read >= 6 && header[0] == 'G' && header[1] == 'I' && header[2] == 'F'
+                    && header[3] == '8' && (header[4] == '7' || header[4] == '9') && header[5] == 'a')
+                    return "gif";
+
+                if (read >= 2 && header[0] == 'B' && header[1] == 'M')
+                    return "bmp";
+
+                // TIFF: little-endian "II*\0" or big-endian "MM\0*"
+                if (read >= 4 && ((header[0] == 0x49 && header[1] == 0x49 && header[2] == 0x2A && header[3] == 0x00)
+                              || (header[0] == 0x4D && header[1] == 0x4D && header[2] == 0x00 && header[3] == 0x2A)))
+                    return "tiff";
+
+                // WEBP: "RIFF" .... "WEBP"
+                if (read >= 12 && header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                    && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P')
+                    return "webp";
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Could not read magic bytes from {0}: {1}", filePath, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Maps a file extension to the canonical image type its magic bytes should report.
+        /// </summary>
+        private static string ExpectedImageType(string extension)
+        {
+            switch (extension)
+            {
+                case "jpg":
+                case "jpeg":
+                    return "jpeg";
+                case "tif":
+                case "tiff":
+                    return "tiff";
+                case "png":
+                    return "png";
+                case "gif":
+                    return "gif";
+                case "bmp":
+                    return "bmp";
+                case "webp":
+                    return "webp";
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Inspects the top level of a directory for the PUSH/UPDATE content rules.
+        ///
+        /// Returns every top-level basename (images and non-images alike, for the PIM
+        /// payload), the count of genuine image files, and any file whose extension
+        /// claims to be an image while its magic bytes say otherwise.
+        /// </summary>
+        public async Task<Dictionary<string, object>> ValidateDirectoryAsync(
+            string path,
+            List<string> allowedExtensions,
+            bool verifyContent)
+        {
+            var resolvedPath = ResolvePath(path);
+            ValidatePath(resolvedPath);
+
+            var allowed = new HashSet<string>(
+                (allowedExtensions ?? new List<string>()).Select(e => e.TrimStart('.').ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase);
+
+            Logger.Info("Validating directory {0} (extensions: {1}, verifyContent: {2})",
+                resolvedPath, string.Join(",", allowed), verifyContent);
+
+            return await Task.Run(() =>
+            {
+                return ExecuteWithImpersonation(() =>
+                {
+                    if (!Directory.Exists(resolvedPath))
+                    {
+                        throw new DirectoryNotFoundException($"Directory not found: {resolvedPath}");
+                    }
+
+                    var allFiles = new List<string>();
+                    var nonImageFiles = new List<string>();
+                    var invalidFiles = new List<object>();
+                    int imageCount = 0;
+                    long totalSize = 0;
+
+                    foreach (var file in Directory.GetFiles(resolvedPath, "*", SearchOption.TopDirectoryOnly))
+                    {
+                        var name = Path.GetFileName(file);
+                        allFiles.Add(name);
+
+                        try { totalSize += new FileInfo(file).Length; } catch { }
+
+                        var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+
+                        if (!allowed.Contains(ext))
+                        {
+                            // Garbage as far as the minimum-count rule is concerned, but
+                            // still reported and still shipped to PIM.
+                            nonImageFiles.Add(name);
+                            continue;
+                        }
+
+                        if (!verifyContent)
+                        {
+                            imageCount++;
+                            continue;
+                        }
+
+                        var detected = DetectImageType(file);
+                        var expected = ExpectedImageType(ext);
+
+                        if (detected == null)
+                        {
+                            invalidFiles.Add(new Dictionary<string, object>
+                            {
+                                { "name", name },
+                                { "extension", ext },
+                                { "detected", "unknown" },
+                                { "reason", "not_an_image" }
+                            });
+                            continue;
+                        }
+
+                        // An unknown-but-allowed extension has no expected type; accept
+                        // whatever image format the bytes report.
+                        if (expected != null && detected != expected)
+                        {
+                            invalidFiles.Add(new Dictionary<string, object>
+                            {
+                                { "name", name },
+                                { "extension", ext },
+                                { "detected", detected },
+                                { "reason", "extension_mismatch" }
+                            });
+                            continue;
+                        }
+
+                        imageCount++;
+                    }
+
+                    var subdirCount = Directory.GetDirectories(resolvedPath, "*", SearchOption.TopDirectoryOnly).Length;
+
+                    Logger.Info("Validation of {0}: {1} file(s), {2} image(s), {3} non-image, {4} mismatched",
+                        resolvedPath, allFiles.Count, imageCount, nonImageFiles.Count, invalidFiles.Count);
+
+                    return new Dictionary<string, object>
+                    {
+                        { "path", path },
+                        { "files", allFiles },
+                        { "total_files", allFiles.Count },
+                        { "image_count", imageCount },
+                        { "non_image_files", nonImageFiles },
+                        { "invalid_files", invalidFiles },
+                        { "subdirectory_count", subdirCount },
+                        { "total_size_bytes", totalSize }
+                    };
+                });
+            });
+        }
+
+        /// <summary>
         /// Searches for files and directories matching pattern
         /// </summary>
         public async Task<Dictionary<string, object>> SearchAsync(string path, string pattern, bool recursive = true)

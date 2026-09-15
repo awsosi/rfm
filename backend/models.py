@@ -54,6 +54,7 @@ class OperationType(str, PyEnum):
     MKDIR = "MKDIR"
     PUSH = "PUSH"  # Copy to pathB + archive to pathC
     PULL = "PULL"  # Revert from pathB to original location
+    UPDATE = "UPDATE"  # In-place move/rename/delete inside an already-pushed catalog
 
 
 class OperationStatus(str, PyEnum):

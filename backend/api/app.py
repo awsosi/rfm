@@ -93,6 +93,67 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "push_ignore_file_masks": settings.push_ignore_file_masks or "Thumbs.db",
     }
 
+    # Keys below are synced ONLY when their environment variable is actually
+    # present. The block above overwrites the DB on every boot, which silently
+    # reverts Admin Panel edits; for PIM, catalog validation and content
+    # validation the panel must stay authoritative once an operator has set a
+    # value, while .env can still seed or force one.
+    import os as _os
+
+    optional_env_configs = {
+        # PIM signalling
+        "pim_enabled": (("ENABLE_PIM", "PIM_ENABLED"), str(settings.pim_enabled).lower()),
+        "pim_base_url": (("PIM_BASE_URL",), settings.pim_base_url or ""),
+        "pim_endpoint": (("PIM_ENDPOINT",), settings.pim_endpoint or ""),
+        "pim_method": (("PIM_METHOD",), settings.pim_method or "POST"),
+        "pim_api_token": (("PIM_API_TOKEN",), settings.pim_api_token or ""),
+        "pim_timeout": (("PIM_TIMEOUT",), str(settings.pim_timeout)),
+        "pim_push_enabled": (("PIM_PUSH_ENABLED",), str(settings.pim_push_enabled).lower()),
+        "pim_push_event_type": (("PIM_PUSH_EVENT_TYPE",), settings.pim_push_event_type or "created"),
+        "pim_pull_enabled": (("PIM_PULL_ENABLED",), str(settings.pim_pull_enabled).lower()),
+        "pim_pull_event_type": (("PIM_PULL_EVENT_TYPE",), settings.pim_pull_event_type or "updated"),
+        "pim_update_enabled": (("PIM_UPDATE_ENABLED",), str(settings.pim_update_enabled).lower()),
+        "pim_update_event_type": (("PIM_UPDATE_EVENT_TYPE",), settings.pim_update_event_type or "updated"),
+        "pim_payload_template": (("PIM_PAYLOAD_TEMPLATE",), settings.pim_payload_template or ""),
+        "pim_tg_id": (("PIM_TG_ID",), ""),
+        # PolkaSQL catalog name validation
+        "catalog_validation_enabled": (
+            ("ENABLE_CATALOG_VALIDATION", "CATALOG_VALIDATION_ENABLED"),
+            str(settings.catalog_validation_enabled).lower(),
+        ),
+        "catalog_validation_url": (("CATALOG_VALIDATION_URL",), settings.catalog_validation_url or ""),
+        "catalog_validation_api_key": (("CATALOG_VALIDATION_API_KEY",), settings.catalog_validation_api_key or ""),
+        "catalog_validation_timeout": (("CATALOG_VALIDATION_TIMEOUT",), str(settings.catalog_validation_timeout)),
+        "catalog_validation_max_suggestions": (
+            ("CATALOG_VALIDATION_MAX_SUGGESTIONS",),
+            str(settings.catalog_validation_max_suggestions),
+        ),
+        "catalog_validation_fail_open": (
+            ("CATALOG_VALIDATION_FAIL_OPEN",),
+            str(settings.catalog_validation_fail_open).lower(),
+        ),
+        # PUSH/UPDATE content validation
+        "push_validation_enabled": (("PUSH_VALIDATION_ENABLED",), str(settings.push_validation_enabled).lower()),
+        "push_validation_min_files": (("PUSH_VALIDATION_MIN_FILES",), str(settings.push_validation_min_files)),
+        "push_validation_allowed_extensions": (
+            ("PUSH_VALIDATION_ALLOWED_EXTENSIONS",),
+            settings.push_validation_allowed_extensions or "",
+        ),
+        "push_validation_verify_content": (
+            ("PUSH_VALIDATION_VERIFY_CONTENT",),
+            str(settings.push_validation_verify_content).lower(),
+        ),
+        # UPDATE behaviour
+        "enable_update_archive_mirror": (
+            ("ENABLE_UPDATE_ARCHIVE_MIRROR",),
+            str(settings.enable_update_archive_mirror).lower(),
+        ),
+    }
+
+    for _key, (_env_names, _value) in optional_env_configs.items():
+        if any(name in _os.environ for name in _env_names):
+            env_configs[_key] = _value
+
     try:
         async with DatabaseManager.session() as session:
             for key, value in env_configs.items():
@@ -335,6 +396,125 @@ def validate_path_a(path: str) -> None:
                 status_code=400,
                 detail=f"Invalid path: Drive letter '{letter}:' not allowed in Path A. Use relative paths only."
             )
+
+
+def validate_path_b(path: str) -> None:
+    """
+    Validate that path is a valid Path B path.
+
+    UPDATE operates on catalogs that already live in PATH_B, so it uses the
+    same shape of guard as validate_path_a but anchored on 'B:'.
+
+    Raises HTTPException if validation fails.
+    """
+    if not path:
+        raise HTTPException(status_code=400, detail="Path cannot be empty")
+
+    path_upper = path.upper()
+
+    if not path_upper.startswith('B:'):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "UPDATE operations must use paths starting with 'B:'. "
+                "Other drive letters (A:, C:) are not allowed."
+            ),
+        )
+
+    path_after_b = path[2:]
+    for letter in 'ACDEFGHIJKLMNOPQRSTUVWXYZ':
+        if f'{letter}:' in path_after_b.upper():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid path: Drive letter '{letter}:' not allowed in Path B. "
+                    "Use relative paths only."
+                ),
+            )
+
+
+async def run_catalog_preflight(
+    path: str,
+    worker_id: int,
+    db: AsyncSession,
+    settings: Settings,
+    update_actions: Optional[list] = None,
+) -> tuple:
+    """
+    Run both gates that guard PUSH and UPDATE.
+
+    1. The catalog name must match a real product in PolkaSQL.
+    2. The directory must hold at least the configured number of genuine
+       image files.
+
+    Returns ``(catalog_result, content_result)``. Both gates are evaluated even
+    when the first fails, so the user sees every problem at once instead of
+    fixing them one round-trip at a time.
+
+    ``update_actions``, when given, makes the content gate judge the state the
+    catalog will be in *after* those actions apply rather than its current
+    state — so an UPDATE can never leave a catalog below the minimum, and an
+    UPDATE that repairs an already-short catalog is not blocked by it.
+    """
+    import os as _os
+    from api.services.catalog_validation_service import validate_catalog_name
+    from api.services.content_validation_service import (
+        validate_directory_content,
+        count_image_files,
+        predict_files_after_actions,
+    )
+
+    catalog_name = _os.path.basename(path.rstrip('/\\'))
+
+    catalog_result = await validate_catalog_name(catalog_name, db)
+
+    worker_service = WorkerService(settings)
+    worker = await get_worker_by_id(worker_id, db)
+    if not worker:
+        raise HTTPException(status_code=404, detail=f"Worker {worker_id} not found")
+
+    content_result = await validate_directory_content(
+        worker, path, worker_service, db
+    )
+
+    # For UPDATE, re-evaluate the minimum against the post-action file list so
+    # an update can never leave a catalog below the threshold.
+    if update_actions is not None and not content_result.skipped:
+        predicted_files = predict_files_after_actions(
+            content_result.files, update_actions
+        )
+        mismatched = [f.get("name") for f in content_result.invalid_files]
+        predicted_images = count_image_files(
+            predicted_files, content_result.allowed_extensions, excluded=mismatched
+        )
+        content_result.files = predicted_files
+        content_result.image_count = predicted_images
+        content_result.total_files = len(predicted_files)
+        if predicted_images < content_result.min_required:
+            content_result.valid = False
+            content_result.reason = "contentValidation.tooFewImagesAfterUpdate"
+        elif content_result.reason == "contentValidation.tooFewImages":
+            # The current state was short but the resulting state is fine
+            content_result.valid = not content_result.invalid_files
+            content_result.reason = (
+                "contentValidation.typeMismatch" if content_result.invalid_files else None
+            )
+
+    return catalog_result, content_result
+
+
+def preflight_failure_detail(catalog_result, content_result) -> dict:
+    """
+    Build the machine-readable body returned when a preflight gate rejects.
+
+    The frontend renders ``reason`` through i18n and offers ``suggestions``
+    as replacements, so no user-facing English is produced here.
+    """
+    return {
+        "error": "validation_failed",
+        "catalog": catalog_result.to_dict(),
+        "content": content_result.to_dict(),
+    }
 
 
 @app.get("/api/files/list", response_model=DirectoryListResponse)
@@ -748,6 +928,24 @@ async def push_operation(
     # where two users try to push the same directory concurrently
     async with operation_service._get_path_lock(request_data.source_path):
         try:
+            # Gate 1+2: catalog name must match a PolkaSQL product, and the
+            # directory must hold enough genuine image files. Hard block.
+            catalog_result, content_result = await run_catalog_preflight(
+                request_data.source_path, request_data.worker_id, db, settings
+            )
+            if not (catalog_result.valid and content_result.valid):
+                logger.warning(
+                    f"PUSH refused for {request_data.source_path!r} "
+                    f"(user={current_user.username}): "
+                    f"catalog_valid={catalog_result.valid} "
+                    f"content_valid={content_result.valid} "
+                    f"reason={catalog_result.reason or content_result.reason}"
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=preflight_failure_detail(catalog_result, content_result),
+                )
+
             # Create and execute PUSH operation
             operation = await operation_service.create_push_operation(
                 user=current_user,
@@ -755,6 +953,16 @@ async def push_operation(
                 worker_id=request_data.worker_id,
                 db=db,
             )
+
+            # Carry the validated listing onto the operation so PIM signalling
+            # needs no second worker round-trip.
+            operation.params_json = {
+                **(operation.params_json or {}),
+                "files": content_result.files,
+                "catalog_name": catalog_result.matched_name or catalog_result.catalog_name,
+                "username": current_user.username,
+            }
+            await db.commit()
 
             # Log operation
             await AuditLogger.log_operation(
@@ -796,6 +1004,9 @@ async def push_operation(
             op_response = OperationResponse.model_validate(operation)
             return op_response.model_copy(update={"user_name": current_user.username})
 
+        except HTTPException:
+            # Preflight rejections carry their own status and body
+            raise
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
 
@@ -987,6 +1198,153 @@ async def pull_operation(
             return op_response.model_copy(update={"user_name": current_user.username})
 
         except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/operations/preflight", response_model=PushPreflightResponse)
+async def preflight_catalog(
+    request_data: FilePushRequest,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Dry-run both PUSH gates without performing any operation.
+
+    Lets the WebUI show name suggestions and content problems before the user
+    commits to a push. Returns 200 with ``ok: false`` on a rejection rather
+    than an error status, because a failed preflight is a normal answer here.
+    """
+    validate_path_a(request_data.source_path)
+
+    catalog_result, content_result = await run_catalog_preflight(
+        request_data.source_path, request_data.worker_id, db, settings
+    )
+
+    logger.info(
+        f"Preflight for {request_data.source_path!r} by user "
+        f"'{current_user.username}': catalog_valid={catalog_result.valid}, "
+        f"content_valid={content_result.valid}, "
+        f"images={content_result.image_count}/{content_result.min_required}"
+    )
+
+    return PushPreflightResponse(
+        ok=catalog_result.valid and content_result.valid,
+        catalog=CatalogValidationResponse(**catalog_result.to_dict()),
+        content=ContentValidationResponse(**content_result.to_dict()),
+    )
+
+
+@app.post("/api/operations/update", response_model=OperationResponse)
+async def update_operation(
+    request_data: FileUpdateRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    UPDATE operation: move, rename or delete entries inside a pushed catalog.
+
+    Operates in place on the PATH_B copy and, when
+    ``enable_update_archive_mirror`` is on, replays the same changes against
+    the PATH_C archive. Subject to the same two gates as PUSH, with the
+    content gate judging the post-update state.
+    """
+    from api.services.content_validation_service import (
+        validate_update_actions,
+        UpdateActionError,
+    )
+
+    validate_path_b(request_data.catalog_path)
+
+    try:
+        actions = validate_update_actions(
+            [a.model_dump() for a in request_data.actions]
+        )
+    except UpdateActionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    worker_service = WorkerService(settings)
+    operation_service = OperationService(settings, worker_service)
+
+    async with operation_service._get_path_lock(request_data.catalog_path):
+        try:
+            catalog_result, content_result = await run_catalog_preflight(
+                request_data.catalog_path,
+                request_data.worker_id,
+                db,
+                settings,
+                update_actions=actions,
+            )
+            if not (catalog_result.valid and content_result.valid):
+                logger.warning(
+                    f"UPDATE refused for {request_data.catalog_path!r} "
+                    f"(user={current_user.username}): "
+                    f"catalog_valid={catalog_result.valid} "
+                    f"content_valid={content_result.valid} "
+                    f"reason={catalog_result.reason or content_result.reason}"
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=preflight_failure_detail(catalog_result, content_result),
+                )
+
+            operation = await operation_service.create_update_operation(
+                user=current_user,
+                catalog_path=request_data.catalog_path,
+                actions=actions,
+                worker_id=request_data.worker_id,
+                db=db,
+                catalog_name=catalog_result.matched_name or catalog_result.catalog_name,
+                predicted_files=content_result.files,
+            )
+
+            await AuditLogger.log_operation(
+                user_id=current_user.id,
+                operation_id=operation.id,
+                action="update",
+                details={
+                    "catalog_path": request_data.catalog_path,
+                    "catalog_name": operation.params_json.get("catalog_name"),
+                    "actions": actions,
+                    "action_count": len(actions),
+                    "archive_mirror": bool(operation.archive_path),
+                    "resulting_files": content_result.files,
+                },
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+                username=current_user.username,
+            )
+
+            operation = await operation_service.execute_operation(operation, db)
+            await db.refresh(operation)
+
+            try:
+                from api.websocket_manager import ws_manager
+                await ws_manager.broadcast(
+                    {
+                        "type": "operation_update",
+                        "operation_id": operation.id,
+                        "status": operation.status.value,
+                        "user": current_user.username,
+                    },
+                    topic="operations",
+                )
+            except Exception as ws_exc:
+                logger.warning(f"Failed to broadcast operation update: {ws_exc}")
+
+            op_response = OperationResponse.model_validate(operation)
+            return op_response.model_copy(update={"user_name": current_user.username})
+
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error(
+                f"UPDATE operation failed for {request_data.catalog_path!r} "
+                f"(user={current_user.username}): {exc}",
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(exc))
 
 

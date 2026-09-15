@@ -62,6 +62,9 @@ namespace FileManagerWorker
                     case "list":
                         return await HandleListAsync(request);
 
+                    case "validate_dir":
+                        return await HandleValidateDirAsync(request);
+
                     case "search":
                         return await HandleSearchAsync(request);
 
@@ -353,6 +356,89 @@ namespace FileManagerWorker
             catch (Exception ex)
             {
                 Logger.Error(ex, "List operation failed");
+                return CommandResponse.Failed(cmdId, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Handles validate_dir command (read-only): inspects the top level of a
+        /// directory for the PUSH/UPDATE content rules and returns both the verdict
+        /// and the full basename list used for PIM signalling.
+        /// </summary>
+        private async Task<CommandResponse> HandleValidateDirAsync(CommandRequest request)
+        {
+            int cmdId = request.CommandId.Value;
+
+            // Accept the path from source_path, falling back to a "path" parameter
+            // so the command matches both the list and copy call conventions.
+            var path = request.SourcePath;
+            if (string.IsNullOrEmpty(path) && request.Parameters != null
+                && request.Parameters.ContainsKey("path"))
+            {
+                path = request.Parameters["path"]?.ToString();
+            }
+
+            if (string.IsNullOrEmpty(path))
+            {
+                return CommandResponse.Failed(cmdId, "validate_dir requires source_path or a 'path' parameter");
+            }
+
+            var allowedExtensions = new List<string>();
+            if (request.Parameters != null && request.Parameters.ContainsKey("allowed_extensions"))
+            {
+                var raw = request.Parameters["allowed_extensions"];
+                if (raw is Newtonsoft.Json.Linq.JArray jArray)
+                {
+                    foreach (var token in jArray)
+                    {
+                        var v = token?.ToString();
+                        if (!string.IsNullOrWhiteSpace(v)) allowedExtensions.Add(v);
+                    }
+                }
+                else if (raw is System.Collections.IEnumerable enumerable && !(raw is string))
+                {
+                    foreach (var item in enumerable)
+                    {
+                        var v = item?.ToString();
+                        if (!string.IsNullOrWhiteSpace(v)) allowedExtensions.Add(v);
+                    }
+                }
+                else if (raw != null)
+                {
+                    foreach (var v in raw.ToString().Split(','))
+                    {
+                        if (!string.IsNullOrWhiteSpace(v)) allowedExtensions.Add(v.Trim());
+                    }
+                }
+            }
+
+            bool verifyContent = true;
+            if (request.Parameters != null && request.Parameters.ContainsKey("verify_content"))
+            {
+                bool parsed;
+                if (bool.TryParse(request.Parameters["verify_content"]?.ToString(), out parsed))
+                {
+                    verifyContent = parsed;
+                }
+            }
+
+            try
+            {
+                var result = await _fileOps.ValidateDirectoryAsync(path, allowedExtensions, verifyContent);
+
+                var response = CommandResponse.Success(
+                    cmdId,
+                    "Directory validation completed",
+                    result.ContainsKey("total_files") ? Convert.ToInt32(result["total_files"]) : (int?)null,
+                    result.ContainsKey("total_size_bytes") ? Convert.ToInt64(result["total_size_bytes"]) : (long?)null
+                );
+                // Full result travels in ErrorDetails, matching HandleListAsync.
+                response.ErrorDetails = result;
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Directory validation failed");
                 return CommandResponse.Failed(cmdId, ex.Message);
             }
         }
