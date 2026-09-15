@@ -1,0 +1,300 @@
+# ==============================================================================
+# Modular File Manager - Dev Compose (full isolated stack)
+# Runs its own PostgreSQL, Redis and Elasticsearch on a dedicated dev network
+# (file-manager-dev-network, 172.29.0.0/16) with its own *-dev volumes.
+# Shares nothing with the production stack.
+# ==============================================================================
+
+networks:
+  file-manager-dev-internal:
+    driver: bridge
+    name: file-manager-dev-network
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+volumes:
+  dev-postgres-data:
+    driver: local
+    name: file-manager-postgres-data-dev
+
+  dev-redis-data:
+    driver: local
+    name: file-manager-redis-data-dev
+
+  dev-elasticsearch-data:
+    driver: local
+    name: file-manager-elasticsearch-data-dev
+
+  dev-logs:
+    driver: local
+    name: file-manager-logs-dev
+
+  dev-config:
+    driver: local
+    name: file-manager-config-dev
+
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: file-manager-postgres-dev
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-filemanager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-filemanager}
+      PGDATA: /var/lib/postgresql/data/pgdata
+
+    volumes:
+      - dev-postgres-data:/var/lib/postgresql/data
+
+    networks:
+      file-manager-dev-internal:
+        ipv4_address: 172.29.0.10
+        aliases:
+          - postgres
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-filemanager} -d ${POSTGRES_DB:-filemanager}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    ports:
+      - "127.0.0.1:55432:5432"
+
+  redis-dev:
+    image: redis:7-alpine
+    container_name: file-manager-redis-dev
+    restart: unless-stopped
+
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-changeme}
+
+    volumes:
+      - dev-redis-data:/data
+
+    networks:
+      file-manager-dev-internal:
+        ipv4_address: 172.29.0.11
+        aliases:
+          - redis
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+    ports:
+      - "127.0.0.1:56379:6379"
+
+  elasticsearch-dev:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: file-manager-elasticsearch-dev
+    restart: unless-stopped
+
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      cluster.name: file-manager-cluster-dev
+      node.name: file-manager-node-dev-1
+      bootstrap.memory_lock: "true"
+
+    volumes:
+      - dev-elasticsearch-data:/usr/share/elasticsearch/data
+
+    networks:
+      file-manager-dev-internal:
+        ipv4_address: 172.29.0.12
+        aliases:
+          - elasticsearch
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  api-dev:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        PYTHON_VERSION: 3.11
+        BUILDKIT_INLINE_CACHE: 1
+
+    container_name: file-manager-api-dev
+    restart: unless-stopped
+
+    environment:
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-3600}
+      DB_ECHO: ${DB_ECHO:-false}
+
+      # Redis
+      REDIS_URL: ${REDIS_URL}
+      REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-50}
+
+      # Elasticsearch
+      ELASTICSEARCH_ENABLED: ${ELASTICSEARCH_ENABLED:-true}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+      ELASTICSEARCH_INDEX_OPERATIONS: ${ELASTICSEARCH_INDEX_OPERATIONS:-rfm-operations}
+      ELASTICSEARCH_INDEX_FILES: ${ELASTICSEARCH_INDEX_FILES:-rfm-files}
+      ELASTICSEARCH_MAX_RETRIES: ${ELASTICSEARCH_MAX_RETRIES:-3}
+      ELASTICSEARCH_TIMEOUT: ${ELASTICSEARCH_TIMEOUT:-30}
+
+      # API Server
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_WORKERS: ${API_WORKERS:-4}
+      API_RELOAD: ${API_RELOAD:-false}
+      API_URL_PUBLIC: ${API_URL_PUBLIC:-http://localhost:8000}
+      FRONTEND_URL_PUBLIC: ${FRONTEND_URL_PUBLIC:-http://localhost:3000}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-CHANGE_ME_TO_RANDOM_64_BYTE_STRING}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_DAYS: ${ACCESS_TOKEN_EXPIRE_DAYS:-30}
+
+      # TLS/SSL (self-signed certificate in container)
+      TLS_ENABLED: ${TLS_ENABLED:-true}
+      TLS_CERT_PATH: /etc/ssl/certs/filemanager.crt
+      TLS_KEY_PATH: /etc/ssl/private/filemanager.key
+      TLS_MIN_VERSION: ${TLS_MIN_VERSION:-1.3}
+
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://webui:3000}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      ENABLE_JSON_LOGS: ${ENABLE_JSON_LOGS:-true}
+      LOG_FILE_PATH: /var/log/file-manager/api.log
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-14}
+
+      # Worker settings
+      WORKER_HEARTBEAT_INTERVAL: ${WORKER_HEARTBEAT_INTERVAL:-30}
+      WORKER_HEARTBEAT_TIMEOUT: ${WORKER_HEARTBEAT_TIMEOUT:-90}
+      WORKER_TIMEOUT: ${WORKER_TIMEOUT:-300}
+      WORKER_RETRY_ATTEMPTS: ${WORKER_RETRY_ATTEMPTS:-3}
+
+      # External integrations - PolkaSQL Authentication
+      POLKA_AUTH_ENABLED: ${ENABLE_POLKA_AUTH:-${POLKA_AUTH_ENABLED:-false}}
+      POLKA_AUTH_URL: ${POLKA_AUTH_URL:-}
+      POLKA_AUTH_API_KEY: ${POLKA_AUTH_API_KEY:-}
+      POLKA_AUTH_TIMEOUT: ${POLKA_AUTH_TIMEOUT:-5}
+
+      # External integrations - Syslog
+      ENABLE_SYSLOG: ${ENABLE_SYSLOG:-false}
+      SYSLOG_HOST: ${SYSLOG_HOST:-}
+      SYSLOG_PORT: ${SYSLOG_PORT:-514}
+      SYSLOG_PROTOCOL: ${SYSLOG_PROTOCOL:-UDP}
+
+      # External integrations - Remote Audit API
+      ENABLE_REMOTE_AUDIT_API: ${ENABLE_REMOTE_AUDIT_API:-false}
+      REMOTE_AUDIT_API_URL: ${REMOTE_AUDIT_API_URL:-}
+      REMOTE_AUDIT_API_TOKEN: ${REMOTE_AUDIT_API_TOKEN:-}
+      REMOTE_AUDIT_API_TIMEOUT: ${REMOTE_AUDIT_API_TIMEOUT:-5}
+
+      # Application settings
+      MAX_CONCURRENT_USERS: ${MAX_CONCURRENT_USERS:-30}
+      OPERATION_TIMEOUT: ${OPERATION_TIMEOUT:-3600}
+      ENABLE_AUTO_ROLLBACK: ${ENABLE_AUTO_ROLLBACK:-true}
+      MAX_FILE_LISTING_ITEMS: ${MAX_FILE_LISTING_ITEMS:-1000}
+
+      # VF Redesign: Global default paths (can be overridden per worker)
+      PATH_B: ${PATH_B:-}
+      PATH_C: ${PATH_C:-}
+
+      # Development
+      DEBUG: ${DEBUG:-false}
+      SQL_ECHO: ${SQL_ECHO:-false}
+
+    volumes:
+      - dev-logs:/var/log/file-manager
+      - dev-config:/etc/file-manager
+      - ./ssl:/etc/ssl/file-manager:ro
+
+    networks:
+      file-manager-dev-internal:
+        ipv4_address: 172.29.0.20
+
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
+      elasticsearch-dev:
+        condition: service_healthy
+
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+      - "${API_HOST_PORT_HTTPS:-8443}:8443"
+
+  webui-dev:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        PYTHON_VERSION: 3.11
+
+    container_name: file-manager-webui-dev
+    restart: unless-stopped
+
+    environment:
+      # API Backend URL (internal network)
+      API_URL: ${API_URL:-http://api-dev:8000}
+      API_URL_PUBLIC: ${API_URL_PUBLIC:-http://localhost:8000}
+
+      # WebUI server
+      WEBUI_HOST: 0.0.0.0
+      WEBUI_PORT: 3000
+
+      # Flask settings
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-false}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE_PATH: /var/log/file-manager/webui.log
+
+    volumes:
+      - dev-logs:/var/log/file-manager
+      - ./frontend:/app/frontend:ro
+
+    networks:
+      file-manager-dev-internal:
+        ipv4_address: 172.29.0.30
+
+    depends_on:
+      api-dev:
+        condition: service_healthy
+
+    ports:
+      - "${WEBUI_HOST_PORT:-3000}:3000"
