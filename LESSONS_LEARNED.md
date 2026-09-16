@@ -6,6 +6,74 @@
 
 ---
 
+## Generic Data Channels: Unwrap Once, In One Place
+
+**Problem:** A catalog holding 4 valid images was rejected with "0 of 2 required image files - 0 files in total". The worker log for the very same directory read `7 file(s), 4 image(s), 1 non-image, 2 mismatched`. Nothing errored anywhere; the command round trip reported `success`.
+
+**Root Cause:** The worker's result payload rides on `CommandResponse.error_details` - a field whose name says "errors" but which doubles as the generic data channel for every read-only command (`list`, `search`, `get_status`, `validate_dir`). It gets wrapped twice on the way in:
+
+```
+worker                     CommandResponse.error_details = payload
+api/routes/worker.py       response_dict["error_details"] = payload      # nested
+api/services/worker_service.py
+                           WorkerCommandResponse.error_details = response_dict
+```
+
+So consumers receive `{"file_count": .., "total_size_bytes": .., "error_details": {...the real payload...}}`. `api/app.py` already unwrapped this in two places, with a comment naming the trap. The newer `validate_directory_content` did not - it read `data.get("files")` off the wrapper, got `None`, and computed `0`.
+
+**Why it was invisible:** `0` is a legal value. Every layer succeeded, the worker was healthy, the command returned `success`, and the UI rendered a confident, specific, *wrong* number. A dropped payload and a genuinely empty directory are indistinguishable downstream - the failure mode is a plausible lie, not an exception.
+
+**Rules:**
+1. A field that carries real data must not be named `error_details`. If a channel is generic, name it generically (`data`, `result`) - the misleading name is why each new consumer re-learns the shape the hard way.
+2. Unwrap at the seam, once. Every consumer that re-implements the unwrap is a future consumer that will forget it.
+3. When a decoded payload yields a falsy count, distinguish "absent" from "zero". `data.get("image_count", 0)` silently turns a structural mismatch into a business verdict.
+4. When adding a consumer to an existing channel, grep for how current consumers read it before assuming the obvious shape - in this codebase the existing unwrap was already documented in a comment.
+5. Cross-check against the producer's own logs. The worker said 7 files and the server said 0; that contradiction is the fastest possible diagnosis and it was sitting in the log the whole time.
+
+---
+
+## Polling Loops: Never Let the Server Be Your Only Pacing
+
+**Problem:** A single worker awaiting admin approval generated ~6 registrations + polls per second against the API. Nothing errored, nothing was logged as a failure, and the worker reported itself healthy the whole time.
+
+**Root Cause:** `WorkerService.PollingLoop` delayed only in its `catch` block. On the success path it looped straight back into the next poll. That was survivable *only* because `/commands/poll?timeout=30` is a long poll — the server's 30s hold was the loop's sole rate limit.
+
+Two cases break that assumption, and both answer instantly:
+- Worker is `PENDING` approval → immediate `403`. `ApiClient` sets `_isRegistered = false` on 403, so each spin **also** re-registered.
+- Worker is approved but no command is queued → immediate `204 No Content`.
+
+`PollingIntervalSeconds` existed in config, was parsed, and was logged at startup — but was never referenced by the loop. It looked configured while doing nothing.
+
+**Why it was invisible:** Every individual request *succeeded*. There was no exception, no error log, and no failing operation — just a correct-looking worker quietly saturating the API. It only surfaced because a log file grew 175 KB in 15 seconds.
+
+**Correct Pattern:**
+```csharp
+var command = await _apiClient.PollForCommandAsync(cancellationToken);
+
+if (command != null)
+{
+    // ... handle it ...
+    continue;               // drain a backlog without an artificial wait
+}
+
+// Nothing waiting: pace the loop ourselves. Never assume the server's
+// long poll is holding the connection - it does not when it rejects us
+// (403 while PENDING) or when it has nothing to send (204).
+await Task.Delay(
+    _apiClient.IsRegistered
+        ? TimeSpan.FromSeconds(_config.PollingIntervalSeconds)
+        : TimeSpan.FromSeconds(UnauthorizedRetrySeconds),
+    cancellationToken);
+```
+
+**Rules:**
+1. A polling loop owns its own pacing. Server-side long-poll timeouts are an optimization, not a rate limit.
+2. If a config value names an interval, the loop must actually use it — otherwise delete it rather than log it.
+3. Treat "auth rejected" as a distinct, slower backoff. Retrying an authorization decision at full speed can never help; only an admin action changes it.
+4. Watch log growth rate, not just log contents. An all-`INFO` log growing at 10 KB/s is an incident.
+
+---
+
 ## Windows Client Integration: Credential Storage and Path Mapping
 
 **Problem:** Windows client required authentication every time despite implementing OAuth device flow. Additionally, deep links only worked for root-level folders, not nested directory structures.

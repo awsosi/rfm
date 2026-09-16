@@ -670,18 +670,8 @@ async def search_files(
             )
 
             results = []
-            # Check if response has results
-            # The response structure has error_details nested inside error_details
-            # because worker.py wraps the worker's error_details in a response_dict
-            data = None
-
-            if response.error_details:
-                # Check if error_details is nested (new structure after recent changes)
-                if "error_details" in response.error_details:
-                    data = response.error_details["error_details"]
-                # Or if data is directly in error_details (old structure)
-                else:
-                    data = response.error_details
+            # Worker payload is nested inside error_details by the worker route
+            data = unwrap_worker_data(response)
 
             if data:
                 # Handle both 'files', 'results', and 'items' keys

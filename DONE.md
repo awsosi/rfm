@@ -6,6 +6,40 @@
 
 ---
 
+## 2026-09-16 - Fix: validate_dir result was dropped, rejecting valid catalogs
+
+A catalog with 4 genuine images was refused with "0 of 2 required image files - 0 files in total", while the worker had correctly logged `7 file(s), 4 image(s), 1 non-image, 2 mismatched` for the same directory.
+
+- **Not a worker bug.** The worker returned the right payload on `CommandResponse.error_details`.
+- `api/routes/worker.py` stores the worker's `error_details` *nested* inside the command's `response_data`, and `worker_service.send_command` then hands that whole wrapper back as `WorkerCommandResponse.error_details`.
+- So the service received `{file_count, total_size_bytes, error_details: {...real payload...}}`. `validate_directory_content` read `files`/`image_count` straight off the wrapper, got `None`, and fell through to `0` images and `0` files - which trips the minimum-image gate and blocks PUSH/UPDATE.
+- The `list`/`search` consumers in `api/app.py` already unwrap this (with a comment describing the exact trap); the newer validation service did not.
+
+**Fix:** `validate_directory_content` unwraps one level when it sees a nested `error_details`, tolerating both shapes so it keeps working if that seam is ever flattened. Single call site, so this covers PUSH, UPDATE and the PIM `files` array.
+
+**Tests:** `backend/tests/test_content_validation.py` (6 tests) pins the nested and flat shapes, that a genuinely empty directory still fails, that mismatched files still reject, and the `validate_dir` command contract. Verified to fail without the fix - 3 tests red, logging the exact production message `0 image file(s), 2 required (total files: 0...)`.
+
+**Still open:** the double-wrap itself at the `worker.py` / `worker_service.py` seam. `admin_system.py` reads `response.error_details.get("config")` for `get_status`, which the wrapper also defeats. Fixing the seam once and dropping the per-consumer unwraps is the better end state, but it touches ~6 consumers and was not attempted here.
+
+---
+
+## 2026-09-16 - Fix: worker polling loop hammered the API instead of backing off
+
+Found while building `dev-vf` and pairing a worker with the dev stack.
+
+- `WorkerService.PollingLoop` had no delay on its normal path — only inside its `catch`. Pacing relied entirely on the API holding the long poll (`?timeout=30`).
+- Whenever the API answered immediately the loop spun flat out: **94 registrations in 15s (~6/s)** from a single worker awaiting approval. A `PENDING` worker gets an instant 403, and `ApiClient` resets `_isRegistered` on 403, so every spin also re-registered.
+- The same spin hit **approved** workers, which get an immediate `204 No Content` when no command is queued.
+- `PollingIntervalSeconds` was parsed and logged but never actually used to pace anything.
+
+**Fix:** `PollingLoop` now waits when no command came back — `PollingIntervalSeconds` normally, `UnauthorizedRetrySeconds` (30s) while the API is rejecting the worker, via the new `ApiClient.IsRegistered`. After processing a command it `continue`s, so a queued backlog still drains without waiting.
+
+**Verified (approved worker, 90s sample against the dev stack):** 1 registration, 0 spins, 20 commands executed (`list`/`ping`/`get_status`); log 17.6 KB vs 174.6 KB in 15s before the fix. Idle polls settle to a steady ~5.1s, matching `PollingIntervalSeconds`, and a queued backlog still drains back-to-back (0.1s between two commands), confirming the `continue`.
+
+**Not separately re-measured:** the `UnauthorizedRetrySeconds` branch. The worker was approved on the dev stack before the fixed build existed, so the post-fix `PENDING` path could not be observed without suspending it. The 94-registrations-in-15s figure is the *pre-fix* `PENDING` measurement. Both branches are the same `Task.Delay`, differing only in the constant.
+
+---
+
 ## 2026-09-16 - Feature: UPDATE operation, PIM signalling, catalog & content validation
 
 Implemented on `dev-vf` and verified against the dev stack.

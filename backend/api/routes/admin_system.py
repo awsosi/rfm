@@ -40,7 +40,7 @@ from api.schemas_admin import (
     LogConfigUpdate,
     LogConfigResponse,
 )
-from api.services.worker_service import WorkerService, get_worker_by_id
+from api.services.worker_service import WorkerService, get_worker_by_id, unwrap_worker_data
 from database import get_db
 from models import User, Worker, Operation, AuditLog, WorkerStatus, OperationStatus
 from models_admin import SambaPath, SystemMetrics
@@ -257,10 +257,13 @@ async def get_worker_status(
         response = await worker_service.send_command(worker, status_cmd, db)
 
         if response.status == "success" and response.error_details:
-            current_config = response.error_details.get("config")
-            uptime_seconds = response.error_details.get("uptime_seconds")
-            operations_processed = response.error_details.get("operations_processed")
-            operations_in_queue = response.error_details.get("operations_in_queue")
+            # The worker route nests the worker's payload inside error_details;
+            # reading it directly returned None for every field below.
+            status_data = unwrap_worker_data(response)
+            current_config = status_data.get("config")
+            uptime_seconds = status_data.get("uptime_seconds")
+            operations_processed = status_data.get("operations_processed")
+            operations_in_queue = status_data.get("operations_in_queue")
             is_healthy = True
     except Exception as exc:
         health_issues.append(f"Failed to communicate with worker: {str(exc)}")
@@ -1174,11 +1177,12 @@ async def index_worker_files(
                     worker, path, db, offset=0, limit=1000
                 )
                 
-                if response.error_details and "items" in response.error_details:
+                listing = unwrap_worker_data(response)
+                if "items" in listing:
                     files_to_index = []
                     subdirs = []
-                    
-                    for item in response.error_details["items"]:
+
+                    for item in listing["items"]:
                         # Prepare file data for Elasticsearch
                         file_data = {
                             "path": item.get("path", ""),

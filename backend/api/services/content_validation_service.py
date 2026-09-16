@@ -162,6 +162,11 @@ async def validate_directory_content(
             error_detail=response.message,
         )
 
+    # ``worker.py`` stores the worker's own ``error_details`` nested inside the
+    # command's ``response_data``, and ``worker_service.send_command`` hands that
+    # whole wrapper back as ``error_details``. ``unwrap_worker_data`` takes one
+    # level off when it sees it and tolerates the flat shape, so this keeps
+    # working if that seam is ever flattened.
     data = unwrap_worker_data(response)
 
     files = [str(f) for f in (data.get("files") or [])]

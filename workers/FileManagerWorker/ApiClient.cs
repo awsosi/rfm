@@ -25,7 +25,16 @@ namespace FileManagerWorker
         private readonly CertificateManager _certManager;
         private readonly ServiceConfiguration _config;
         private X509Certificate2 _clientCertificate;
-        private bool _isRegistered = false;private static bool IsNetworkFailure(HttpRequestException ex) =>
+        private bool _isRegistered = false;
+
+        /// <summary>
+        /// False while the API is rejecting this worker - most commonly because it has
+        /// registered but is still PENDING admin approval. The polling loop uses this to
+        /// back off instead of retrying at full speed.
+        /// </summary>
+        public bool IsRegistered => _isRegistered;
+
+        private static bool IsNetworkFailure(HttpRequestException ex) =>
         	ex.InnerException is SocketException sock &&
 	        (sock.SocketErrorCode == SocketError.ConnectionRefused ||
 	         sock.SocketErrorCode == SocketError.TimedOut ||
