@@ -185,9 +185,19 @@ async function init() {
     document.getElementById('user-name').textContent = user.username;
     document.getElementById('user-role').textContent = user.role;
 
+    // Avatar initials: first letters of a dotted/underscored username, else
+    // the first two characters. Purely decorative - the name is still shown.
+    const initials = String(user.username || '')
+        .split(/[._\s-]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part[0])
+        .join('') || String(user.username || '?').slice(0, 2);
+    document.getElementById('user-avatar').textContent = initials;
+
     // Show/hide admin button
     if (isAdmin()) {
-        document.getElementById('admin-btn').style.display = 'block';
+        document.getElementById('admin-btn').hidden = false;
     }
 
     // Fetch active workers and set worker ID

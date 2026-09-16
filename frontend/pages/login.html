@@ -6,34 +6,85 @@
     <title data-i18n="login.pageTitle">Login - File Manager</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/responsive.css">
+    <script>
+        // Applied before first paint to avoid a light flash. There is no user
+        // preference to read yet at sign-in, so follow the OS setting; the
+        // stored preference takes over once the session is established.
+        (function () {
+            try {
+                var mq = window.matchMedia('(prefers-color-scheme: dark)');
+                var apply = function (dark) {
+                    document.documentElement.dataset.bootTheme = dark ? 'dark' : 'light';
+                };
+                apply(mq.matches);
+                mq.addEventListener('change', function (e) {
+                    apply(e.matches);
+                    if (document.body) {
+                        document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+                    }
+                });
+                document.addEventListener('DOMContentLoaded', function () {
+                    document.body.setAttribute(
+                        'data-theme',
+                        document.documentElement.dataset.bootTheme
+                    );
+                });
+            } catch (e) {
+                /* Theme detection unavailable - the light default still renders */
+            }
+        })();
+    </script>
 </head>
 <body class="login-page">
-    <div class="login-container">
+    <main class="login-container">
         <div class="login-box">
-            <h1 data-i18n="app.title">File Manager</h1>
-            <h2 data-i18n="login.signIn">Sign In</h2>
+            <div class="login-brand">
+                <span class="login-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7A1.5 1.5 0 0 1 19 9.7"/>
+                        <path d="M3 8.8h16.6a1.4 1.4 0 0 1 1.38 1.66l-1.3 7A1.6 1.6 0 0 1 18.1 18.8H5.2a1.6 1.6 0 0 1-1.57-1.3l-1.3-7"/>
+                    </svg>
+                </span>
+                <h1 data-i18n="app.title">File Manager</h1>
+                <p class="login-subtitle" data-i18n="login.subtitle">Sign in to manage photo catalogs</p>
+            </div>
 
-            <div id="error-message" class="error-message hidden"></div>
+            <div id="error-message" class="error-message hidden" role="alert" aria-live="assertive"></div>
 
-            <form id="login-form">
+            <form id="login-form" novalidate>
                 <div class="form-group">
                     <label for="username" data-i18n="login.username">Username</label>
-                    <input type="text" id="username" name="username" class="form-control" required autocomplete="username">
+                    <input type="text" id="username" name="username" class="form-control"
+                           required autocomplete="username" autocapitalize="none"
+                           spellcheck="false" autofocus>
                 </div>
 
                 <div class="form-group">
                     <label for="password" data-i18n="login.password">Password</label>
-                    <input type="password" id="password" name="password" class="form-control" required autocomplete="current-password">
+                    <div class="input-with-affix">
+                        <input type="password" id="password" name="password" class="form-control"
+                               required autocomplete="current-password">
+                        <button type="button" class="input-affix-btn" id="toggle-password"
+                                data-i18n-title="login.showPassword" title="Show password"
+                                data-i18n-aria-label="login.showPassword" aria-label="Show password">
+                            <svg id="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2.2 12S5.8 5.5 12 5.5 21.8 12 21.8 12 18.2 18.5 12 18.5 2.2 12 2.2 12Z"/>
+                                <circle cx="12" cy="12" r="2.9"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="form-group">
+                <div class="login-options">
                     <label class="checkbox-label">
                         <input type="checkbox" id="remember-me" name="remember">
                         <span data-i18n="login.rememberMe">Remember me</span>
                     </label>
                 </div>
 
-                <div class="form-group" id="auth-method-group" style="display: none;">
+                <div class="form-group hidden" id="auth-method-group">
                     <label for="auth-method" data-i18n="login.authMethod">Authentication Method</label>
                     <select id="auth-method" name="auth-method" class="form-control">
                         <option value="polka" data-i18n="login.authPolka">PolkaSQL</option>
@@ -41,31 +92,33 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary" id="login-btn" data-i18n="login.signIn">
-                    Sign In
+                <button type="submit" class="btn btn-primary btn-submit" id="login-btn">
+                    <span data-i18n="login.signIn">Sign In</span>
                 </button>
             </form>
-        </div>
-    </div>
 
-    <script type="module" src="../js/auth.js"></script>
-    <script type="module" src="../js/i18n.js"></script>
+            <div class="login-footer">
+                <span data-i18n="login.languageLabel">Language</span>
+                <div class="lang-switch" id="lang-switch" role="group"
+                     data-i18n-aria-label="login.languageLabel" aria-label="Language">
+                    <button type="button" data-locale="en-US" aria-pressed="false">EN</button>
+                    <button type="button" data-locale="pl-PL" aria-pressed="false">PL</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
     <script type="module">
         import { login, checkAuth } from '../js/auth.js';
-        import { initI18n, translatePage, t } from '../js/i18n.js';
+        import { initI18n, translatePage, t, setLocale, getCurrentLocale } from '../js/i18n.js';
 
-        // Initialize i18n and translate page
         await initI18n();
         translatePage();
-
-        // Update page title
         document.title = t('login.pageTitle');
 
-        // Get return URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const returnUrl = urlParams.get('return');
 
-        // Redirect if already logged in
         if (checkAuth()) {
             window.location.href = returnUrl || 'explorer.html';
         }
@@ -75,67 +128,106 @@
         const loginBtn = document.getElementById('login-btn');
         const authMethodGroup = document.getElementById('auth-method-group');
         const authMethodSelect = document.getElementById('auth-method');
+        const passwordInput = document.getElementById('password');
+        const togglePassword = document.getElementById('toggle-password');
+        const langSwitch = document.getElementById('lang-switch');
 
-        // Check auth status and show/hide auth method selector
+        // --- Language switcher -------------------------------------------------
+        // Available before sign-in, where there is no stored user preference yet.
+        function syncLangSwitch() {
+            const current = getCurrentLocale();
+            langSwitch.querySelectorAll('button').forEach(btn => {
+                btn.setAttribute('aria-pressed', String(btn.dataset.locale === current));
+            });
+            document.documentElement.lang = current;
+        }
+
+        langSwitch.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-locale]');
+            if (!btn) return;
+            await setLocale(btn.dataset.locale);
+            translatePage();
+            document.title = t('login.pageTitle');
+            syncLangSwitch();
+            syncPasswordToggleLabel();
+        });
+        syncLangSwitch();
+
+        // --- Password reveal ---------------------------------------------------
+        function syncPasswordToggleLabel() {
+            const shown = passwordInput.type === 'text';
+            const label = t(shown ? 'login.hidePassword' : 'login.showPassword');
+            togglePassword.setAttribute('title', label);
+            togglePassword.setAttribute('aria-label', label);
+        }
+
+        togglePassword.addEventListener('click', () => {
+            passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+            syncPasswordToggleLabel();
+            passwordInput.focus();
+        });
+        syncPasswordToggleLabel();
+
+        // --- Auth method -------------------------------------------------------
         async function checkAuthStatus() {
             try {
                 const response = await fetch('/api/auth/status');
                 const data = await response.json();
 
                 if (data.polka_auth_enabled) {
-                    // Show auth method selector
-                    authMethodGroup.style.display = 'block';
-                    // Default to PolkaSQL
+                    authMethodGroup.classList.remove('hidden');
                     authMethodSelect.value = 'polka';
                 } else {
-                    // Hide auth method selector and set to local
-                    authMethodGroup.style.display = 'none';
+                    authMethodGroup.classList.add('hidden');
                     authMethodSelect.value = 'local';
                 }
             } catch (error) {
                 console.error('Failed to check auth status:', error);
-                // Hide selector on error (safe default)
-                authMethodGroup.style.display = 'none';
+                authMethodGroup.classList.add('hidden');
                 authMethodSelect.value = 'local';
             }
         }
-
-        // Check auth status on page load
         checkAuthStatus();
+
+        // --- Submit ------------------------------------------------------------
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const username = document.getElementById('username').value.trim();
+            const password = passwordInput.value;
             const authMethod = authMethodSelect.value || 'local';
 
-            // Clear previous errors
             errorMessage.classList.add('hidden');
             errorMessage.textContent = '';
 
-            // Disable button during login
+            if (!username || !password) {
+                showError(t('login.missingCredentials'));
+                (username ? passwordInput : document.getElementById('username')).focus();
+                return;
+            }
+
             loginBtn.disabled = true;
-            loginBtn.textContent = t('login.signingIn');
+            loginBtn.classList.add('is-busy');
 
             try {
-                // Pass auth_method to login function
                 const result = await login(username, password, authMethod);
 
                 if (result.success) {
-                    // Redirect to return URL or explorer
                     window.location.href = returnUrl || 'explorer.html';
-                } else {
-                    // Show error
-                    errorMessage.textContent = result.error || t('login.loginFailed');
-                    errorMessage.classList.remove('hidden');
+                    return;
                 }
+                showError(result.error || t('login.loginFailed'));
+                passwordInput.select();
             } catch (error) {
-                errorMessage.textContent = t('login.connectionError');
-                errorMessage.classList.remove('hidden');
+                showError(t('login.connectionError'));
             } finally {
                 loginBtn.disabled = false;
-                loginBtn.textContent = t('login.signIn');
+                loginBtn.classList.remove('is-busy');
             }
         });
     </script>

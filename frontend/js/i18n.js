@@ -13,6 +13,21 @@ let availableLocales = [];
  * Auto-detects browser language or loads from user preferences
  * @returns {Promise<void>}
  */
+const LOCALE_STORAGE_KEY = 'rfm.locale';
+
+/**
+ * Read an explicitly chosen locale from local storage.
+ * @returns {string|null} Locale code, or null if unset/unavailable/unknown
+ */
+function getStoredLocale() {
+    try {
+        const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+        return stored && availableLocales.includes(stored) ? stored : null;
+    } catch (error) {
+        return null;
+    }
+}
+
 export async function initI18n() {
     // Load available locales
     try {
@@ -34,12 +49,13 @@ export async function initI18n() {
         if (preferences.ui_language && preferences.ui_language !== 'auto') {
             localeToLoad = preferences.ui_language;
         } else {
-            // Auto-detect from browser
-            localeToLoad = detectBrowserLocale();
+            // "auto": an explicit local choice still wins over browser detection
+            localeToLoad = getStoredLocale() || detectBrowserLocale();
         }
     } catch (error) {
-        // User not logged in or preferences not available, use browser detection
-        localeToLoad = detectBrowserLocale();
+        // Not logged in, or preferences unavailable: prefer an explicit local
+        // choice (made on the login page) over browser detection.
+        localeToLoad = getStoredLocale() || detectBrowserLocale();
     }
 
     // Load the determined locale
@@ -204,6 +220,15 @@ export function getAvailableLocales() {
 export async function setLocale(locale) {
     await loadLocale(locale);
 
+    // Remember an explicit choice locally. This is what lets the language
+    // switcher on the login page survive a reload, where there is no user
+    // session to read a stored preference from.
+    try {
+        localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch (error) {
+        // Private mode or blocked storage - the choice simply will not persist
+    }
+
     // Trigger custom event for components to re-render
     document.dispatchEvent(new CustomEvent('localechange', {
         detail: { locale: currentLocale }
@@ -239,6 +264,18 @@ export function translatePage() {
         const key = element.getAttribute('data-i18n-title');
         element.title = t(key);
     });
+
+    // Translate aria-labels, so icon-only controls are announced in the
+    // active language rather than staying English for screen readers.
+    const ariaElements = document.querySelectorAll('[data-i18n-aria-label]');
+    ariaElements.forEach(element => {
+        const key = element.getAttribute('data-i18n-aria-label');
+        element.setAttribute('aria-label', t(key));
+    });
+
+    // Keep the document language in sync for correct hyphenation and
+    // screen-reader pronunciation.
+    document.documentElement.lang = currentLocale;
 }
 
 /**

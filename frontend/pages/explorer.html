@@ -11,16 +11,27 @@
     <!-- Header -->
     <header class="app-header">
         <div class="header-left">
+            <span class="header-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7A1.5 1.5 0 0 1 19 9.7"/>
+                    <path d="M3 8.8h16.6a1.4 1.4 0 0 1 1.38 1.66l-1.3 7A1.6 1.6 0 0 1 18.1 18.8H5.2a1.6 1.6 0 0 1-1.57-1.3l-1.3-7"/>
+                </svg>
+            </span>
             <h1 data-i18n="app.title">File Manager</h1>
         </div>
         <div class="header-right">
             <span class="user-info" id="user-info">
-                <span class="user-name" id="user-name"></span>
-                <span class="user-role" id="user-role"></span>
+                <span class="user-avatar" id="user-avatar" aria-hidden="true"></span>
+                <span class="user-meta">
+                    <span class="user-name" id="user-name"></span>
+                    <span class="user-role" id="user-role"></span>
+                </span>
             </span>
-            <button class="btn btn-secondary" id="admin-btn" style="display: none;" data-i18n="explorer.adminPanel">Admin Panel</button>
+            <span class="header-divider" aria-hidden="true"></span>
+            <button class="btn btn-secondary" id="admin-btn" hidden data-i18n="explorer.adminPanel">Admin Panel</button>
             <button class="btn btn-secondary" id="settings-btn" data-i18n="explorer.settings">Settings</button>
-            <button class="btn btn-secondary" id="logout-btn" data-i18n="explorer.logout">Logout</button>
+            <button class="btn btn-ghost" id="logout-btn" data-i18n="explorer.logout">Logout</button>
         </div>
     </header>
 
@@ -30,23 +41,35 @@
             <!-- Path A Pane (Single Pane) -->
             <div class="pane pane-single" id="pane-a">
                 <div class="pane-header">
-                    <h2 data-i18n="explorer.pathA">Path A</h2>
+                    <div class="pane-title">
+                        <h2 data-i18n="explorer.pathA">Path A</h2>
+                        <span class="pane-subtitle" data-i18n="explorer.pathASubtitle">Catalogs ready to push</span>
+                    </div>
                     <div class="pane-controls">
-                        <button class="btn-icon" id="refresh-a" data-i18n-title="explorer.refresh" title="Refresh">&#x21bb;</button>
+                        <div class="search-container">
+                            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                            </svg>
+                            <input type="text" class="search-input" id="search-a"
+                                   data-i18n-placeholder="explorer.searchPlaceholder"
+                                   placeholder="Search directories..."
+                                   data-i18n-aria-label="explorer.searchPlaceholder"
+                                   aria-label="Search directories">
+                        </div>
+                        <button class="btn-icon" id="refresh-a" data-i18n-title="explorer.refresh"
+                                title="Refresh" data-i18n-aria-label="explorer.refresh" aria-label="Refresh">&#x21bb;</button>
                     </div>
                 </div>
 
                 <div class="breadcrumb-container">
                     <div class="breadcrumb-wrapper">
-                        <div class="breadcrumb-display" id="breadcrumb-display-a" title="Click to edit path"></div>
-                        <input type="text" class="breadcrumb-input hidden" id="path-input-a" data-i18n-placeholder="explorer.pathPlaceholder" placeholder="A:/path/to/directory">
+                        <div class="breadcrumb-display" id="breadcrumb-display-a"
+                             data-i18n-title="explorer.editPathTitle" title="Click to edit path"></div>
+                        <input type="text" class="breadcrumb-input hidden" id="path-input-a"
+                               data-i18n-placeholder="explorer.pathPlaceholder" placeholder="A:/path/to/directory">
                     </div>
-                    <button class="btn btn-sm" id="path-go-a" data-i18n="explorer.go">Go</button>
-                </div>
-
-                <div class="search-container">
-                    <input type="text" class="search-input" id="search-a" data-i18n-placeholder="explorer.searchPlaceholder" placeholder="Search directories...">
-                    <button class="btn btn-sm" id="search-btn-a" data-i18n="explorer.search">Search</button>
+                    <button class="btn btn-secondary btn-sm" id="path-go-a" data-i18n="explorer.go">Go</button>
                 </div>
 
                 <div class="file-list-container">
@@ -77,39 +100,67 @@
 
             <!-- Action Buttons (Between Panes) -->
             <div class="action-buttons-container">
-                <button class="btn btn-primary btn-push" id="push-btn" data-i18n-title="explorer.pushButtonTitle" title="Copy to PATH_B and archive to PATH_C" disabled>
-                    <span data-i18n="explorer.pushButton">Push</span> <span class="arrow-horizontal">&gt;</span><span class="arrow-vertical">&#x2193;</span>
+                <button class="btn btn-primary btn-push" id="push-btn"
+                        data-i18n-title="explorer.pushButtonTitle"
+                        title="Copy to PATH_B and archive to PATH_C" disabled>
+                    <span data-i18n="explorer.pushButton">Push</span>
+                    <span class="btn-arrow" aria-hidden="true">&#x2192;</span>
                 </button>
-                <button class="btn btn-secondary btn-pull" id="pull-btn" data-i18n-title="explorer.pullButtonTitle" title="Revert selected operation from Operation Queue" disabled>
-                    <span class="arrow-horizontal">&lt;</span><span class="arrow-vertical">&#x2191;</span> <span data-i18n="explorer.pullButton">Pull</span>
+                <button class="btn btn-secondary btn-pull" id="pull-btn"
+                        data-i18n-title="explorer.pullButtonTitle"
+                        title="Revert selected operation from Operation History" disabled>
+                    <span class="btn-arrow" aria-hidden="true">&#x2190;</span>
+                    <span data-i18n="explorer.pullButton">Pull</span>
                 </button>
-                <button class="btn btn-secondary btn-update" id="update-btn" data-i18n-title="update.description" title="Rename, move or delete entries inside a pushed catalog" disabled>
+                <button class="btn btn-secondary btn-update" id="update-btn"
+                        data-i18n-title="update.description"
+                        title="Rename, move or delete entries inside a pushed catalog" disabled>
                     <span data-i18n="update.title">Update catalog</span>
                 </button>
+                <p class="action-hint" id="action-hint" data-i18n="explorer.actionHint">
+                    Select a directory to push, or an operation to pull or update.
+                </p>
             </div>
 
             <!-- Operation History (Right Side) -->
             <div class="operation-queue-panel" id="operation-queue-panel">
                 <div class="queue-header">
-                    <h2 data-i18n="explorer.operationHistory">Operation History</h2>
-                    <div class="queue-search">
-                        <input type="text" id="queue-search-input" class="search-input" data-i18n-placeholder="explorer.searchOperations" placeholder="Search operations..." />
-                        <button class="btn btn-sm" id="queue-search-btn" data-i18n="explorer.search">Search</button>
-                        <button class="btn btn-sm" id="queue-clear-search-btn" data-i18n="explorer.clear">Clear</button>
+                    <div class="queue-header-top">
+                        <h2 data-i18n="explorer.operationHistory">Operation History</h2>
+                        <button class="btn-icon" id="refresh-queue" data-i18n-title="explorer.refresh"
+                                title="Refresh Queue" data-i18n-aria-label="explorer.refresh"
+                                aria-label="Refresh queue">&#x21bb;</button>
                     </div>
-                    <div class="queue-controls">
-                        <button class="btn-icon" id="refresh-queue" data-i18n-title="explorer.refresh" title="Refresh Queue">&#x21bb;</button>
-                        <select id="queue-filter-status" class="filter-select" data-i18n-title="explorer.filterByStatus" title="Filter by status">
+                    <div class="queue-toolbar">
+                        <div class="search-container queue-search">
+                            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                            </svg>
+                            <input type="text" id="queue-search-input" class="search-input"
+                                   data-i18n-placeholder="explorer.searchOperations"
+                                   placeholder="Search operations..."
+                                   data-i18n-aria-label="explorer.searchOperations"
+                                   aria-label="Search operations">
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="queue-search-btn" data-i18n="explorer.search">Search</button>
+                        <button class="btn btn-ghost btn-sm" id="queue-clear-search-btn" data-i18n="explorer.clear">Clear</button>
+                        <select id="queue-filter-status" class="filter-select"
+                                data-i18n-title="explorer.filterByStatus" title="Filter by status"
+                                data-i18n-aria-label="explorer.filterByStatus" aria-label="Filter by status">
                             <option value="" data-i18n="explorer.allStatuses">All Statuses</option>
                             <option value="PENDING" data-i18n="explorer.pending">Pending</option>
                             <option value="IN_PROGRESS" data-i18n="explorer.inProgress">In Progress</option>
                             <option value="COMPLETED" data-i18n="explorer.completed">Completed</option>
                             <option value="FAILED" data-i18n="explorer.failed">Failed</option>
                         </select>
-                        <select id="queue-filter-type" class="filter-select" data-i18n-title="explorer.filterByType" title="Filter by type">
+                        <select id="queue-filter-type" class="filter-select"
+                                data-i18n-title="explorer.filterByType" title="Filter by type"
+                                data-i18n-aria-label="explorer.filterByType" aria-label="Filter by type">
                             <option value="" data-i18n="explorer.allTypes">All Types</option>
                             <option value="PUSH" data-i18n="explorer.push">Push</option>
                             <option value="PULL" data-i18n="explorer.pull">Pull</option>
+                            <option value="UPDATE" data-i18n="explorer.update">Update</option>
                         </select>
                     </div>
                 </div>
@@ -204,54 +255,67 @@
     </div>
 
     <!-- Settings Modal -->
-    <div class="modal hidden" id="settings-modal">
+    <div class="modal hidden" id="settings-modal" role="dialog" aria-modal="true"
+         aria-labelledby="settings-modal-title">
         <div class="modal-content modal-wide">
             <div class="modal-header">
                 <h3 id="settings-modal-title" data-i18n="settings.title">User Settings</h3>
-                <button class="modal-close" id="settings-modal-close">&times;</button>
+                <button class="modal-close" id="settings-modal-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body" id="settings-modal-body">
                 <form id="settings-form">
-                    <div class="settings-section">
+                    <section class="settings-section">
                         <h4 data-i18n="settings.displayPreferences">Display Preferences</h4>
+                        <p class="settings-section-help" data-i18n="settings.displayPreferencesHelp">
+                            How the application looks and which language it uses.
+                        </p>
 
-                        <div class="form-group">
-                            <label for="ui-theme" data-i18n="settings.theme">Theme:</label>
-                            <select id="ui-theme" name="ui_theme" class="form-control">
-                                <option value="system" data-i18n="settings.themeSystem">System (Auto)</option>
-                                <option value="light" data-i18n="settings.themeLight">Light</option>
-                                <option value="dark" data-i18n="settings.themeDark">Dark</option>
-                            </select>
-                            <small class="form-text" data-i18n="settings.themeHelp">System theme follows your browser/OS preference</small>
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="ui-theme" data-i18n="settings.theme">Theme</label>
+                                <select id="ui-theme" name="ui_theme" class="form-control">
+                                    <option value="system" data-i18n="settings.themeSystem">System (Auto)</option>
+                                    <option value="light" data-i18n="settings.themeLight">Light</option>
+                                    <option value="dark" data-i18n="settings.themeDark">Dark</option>
+                                </select>
+                                <small class="form-text" data-i18n="settings.themeHelp">System theme follows your browser/OS preference</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="ui-language" data-i18n="settings.language">Language</label>
+                                <select id="ui-language" name="ui_language" class="form-control">
+                                    <option value="auto" data-i18n="settings.languageSystem">System (Auto)</option>
+                                    <option value="en-US" data-i18n="settings.languageEnglish">English</option>
+                                    <option value="pl-PL" data-i18n="settings.languagePolish">Polish</option>
+                                </select>
+                                <small class="form-text" data-i18n="settings.languageHelp">System setting follows your browser/OS preference</small>
+                            </div>
                         </div>
+                    </section>
 
-                        <div class="form-group">
-                            <label for="ui-language" data-i18n="settings.language">Language:</label>
-                            <select id="ui-language" name="ui_language" class="form-control">
-                                <option value="auto" data-i18n="settings.languageSystem">System (Auto)</option>
-                                <option value="en-US" data-i18n="settings.languageEnglish">English</option>
-                                <option value="pl-PL" data-i18n="settings.languagePolish">Polish</option>
-                            </select>
-                            <small class="form-text" data-i18n="settings.languageHelp">System setting follows your browser/OS preference</small>
-                        </div>
-
-                    </div>
-
-                    <div class="settings-section">
+                    <section class="settings-section">
                         <h4 data-i18n="settings.sessionPreferences">Session Preferences</h4>
+                        <p class="settings-section-help" data-i18n="settings.sessionPreferencesHelp">
+                            What the application remembers between sign-ins.
+                        </p>
 
-                        <div class="form-group">
-                            <label for="remember-last-paths">
+                        <div class="toggle-field">
+                            <span class="toggle-copy">
+                                <label class="toggle-title" for="remember-last-paths"
+                                       data-i18n="settings.rememberLastPaths">Remember last visited Path A subdirectory</label>
+                                <span class="toggle-help" data-i18n="settings.rememberLastPathsHelp">When enabled, your last visited directory will be restored on login. If the path no longer exists, you'll be taken to the root.</span>
+                            </span>
+                            <span class="toggle">
                                 <input type="checkbox" id="remember-last-paths" name="remember_last_paths" checked>
-                                <span data-i18n="settings.rememberLastPaths">Remember last visited Path A subdirectory</span>
-                            </label>
-                            <small class="form-text" data-i18n="settings.rememberLastPathsHelp">When enabled, your last visited directory will be restored on login. If the path no longer exists, you'll be taken to the root.</small>
+                                <span class="toggle-track" aria-hidden="true"></span>
+                            </span>
                         </div>
-                    </div>
+                    </section>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="settings-reset" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
+                <button class="btn btn-ghost" id="settings-reset" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
                 <button class="btn btn-secondary" id="settings-cancel" data-i18n="modal.cancel">Cancel</button>
                 <button class="btn btn-primary" id="settings-save" data-i18n="settings.save">Save</button>
             </div>

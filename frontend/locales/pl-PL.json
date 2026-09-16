@@ -13,7 +13,12 @@
     "authLocal": "Lokalna",
     "signingIn": "Logowanie...",
     "loginFailed": "Logowanie nie powiodło się. Sprawdź swoje dane.",
-    "connectionError": "Błąd połączenia. Spróbuj ponownie."
+    "connectionError": "Błąd połączenia. Spróbuj ponownie.",
+    "subtitle": "Zaloguj się, aby zarządzać katalogami zdjęć",
+    "showPassword": "Pokaż hasło",
+    "hidePassword": "Ukryj hasło",
+    "languageLabel": "Język",
+    "missingCredentials": "Podaj nazwę użytkownika i hasło."
   },
   "explorer": {
     "pageTitle": "Eksplorator – Menedżer plików",
@@ -57,7 +62,11 @@
     "userColumn": "Użytkownik",
     "timestampColumn": "Znacznik czasu",
     "loadingOperations": "Ładowanie operacji...",
-    "noOperations": "Brak operacji w historii"
+    "noOperations": "Brak operacji w historii",
+    "pathASubtitle": "Katalogi gotowe do wypchnięcia",
+    "editPathTitle": "Kliknij, aby edytować ścieżkę",
+    "actionHint": "Wybierz katalog, aby go wypchnąć, albo operację, aby cofnąć lub zaktualizować.",
+    "update": "Aktualizacja"
   },
   "contextMenu": {
     "open": "Otwórz",
@@ -66,17 +75,18 @@
   "modal": {
     "confirmAction": "Potwierdź akcję",
     "cancel": "Anuluj",
-    "confirm": "Potwierdź"
+    "confirm": "Potwierdź",
+    "close": "Zamknij"
   },
   "settings": {
     "title": "Ustawienia użytkownika",
     "displayPreferences": "Preferencje wyświetlania",
-    "theme": "Motyw:",
+    "theme": "Motyw",
     "themeSystem": "Systemowy (automatyczny)",
     "themeLight": "Jasny",
     "themeDark": "Ciemny",
     "themeHelp": "Motyw systemowy jest zgodny z ustawieniami przeglądarki/systemu",
-    "language": "Język:",
+    "language": "Język",
     "languageSystem": "Systemowy (automatyczny)",
     "languageEnglish": "Angielski",
     "languagePolish": "Polski",
@@ -91,7 +101,9 @@
     "settingsResetConfirm": "Przywrócić wszystkie ustawienia do domyślnych?",
     "settingsReset": "Ustawienia przywrócone do domyślnych",
     "settingsResetFailed": "Nie udało się przywrócić ustawień: {error}",
-    "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}"
+    "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}",
+    "displayPreferencesHelp": "Wygląd aplikacji i używany język.",
+    "sessionPreferencesHelp": "Co aplikacja zapamiętuje między logowaniami."
   },
   "operations": {
     "pushDirectory": "Wysłać katalog „{name}”?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",

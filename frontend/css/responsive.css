@@ -31,31 +31,24 @@
 
 /* Mobile devices (max-width: 768px) */
 @media (max-width: 768px) {
-    /* Header adjustments */
+    /* Header stays one sticky row; the user chip collapses to its avatar so
+       the action buttons keep their place instead of stacking vertically. */
     .app-header {
-        flex-direction: column;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md);
-    }
-
-    .header-left,
-    .header-right {
-        width: 100%;
-    }
-
-    .header-right {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .header-right .btn {
-        width: 100%;
+        padding: 0 var(--spacing-md);
+        gap: var(--spacing-sm);
     }
 
     .user-info {
-        align-items: flex-start;
-        margin-bottom: var(--spacing-sm);
-        margin-right: 0;
+        max-width: none;
+        padding: var(--spacing-xs);
+    }
+
+    .user-meta {
+        display: none;
+    }
+
+    .header-divider {
+        display: none;
     }
 
     /* Main content padding */
@@ -85,17 +78,24 @@
         width: 100%;
     }
 
-    /* Search container */
-    .search-container {
-        flex-direction: column;
-    }
-
-    .search-input {
+    /* Search is an input wrapper with an absolutely positioned icon; it must
+       stay a row, and must not gain padding or the icon detaches. */
+    .search-input,
+    .search-input:focus {
         width: 100%;
     }
 
-    .search-container .btn {
-        width: 100%;
+    .pane-header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .pane-controls {
+        flex: 1 1 100%;
+    }
+
+    .pane-controls .search-container {
+        flex: 1;
     }
 
     /* File list table */
@@ -213,11 +213,16 @@
 
     /* Header */
     .app-header {
-        padding: var(--spacing-sm);
+        padding: 0 var(--spacing-sm);
     }
 
     .header-left h1 {
-        font-size: 18px;
+        font-size: var(--text-base);
+    }
+
+    .header-mark {
+        width: 26px;
+        height: 26px;
     }
 
     /* Main content */
@@ -234,8 +239,7 @@
         padding: var(--spacing-sm);
     }
 
-    .breadcrumb-container,
-    .search-container {
+    .breadcrumb-container {
         padding: var(--spacing-sm);
     }
 

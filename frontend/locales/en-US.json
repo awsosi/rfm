@@ -13,7 +13,12 @@
     "authLocal": "Local",
     "signingIn": "Signing in...",
     "loginFailed": "Login failed. Please check your credentials.",
-    "connectionError": "Connection error. Please try again."
+    "connectionError": "Connection error. Please try again.",
+    "subtitle": "Sign in to manage photo catalogs",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "languageLabel": "Language",
+    "missingCredentials": "Enter your username and password."
   },
   "explorer": {
     "pageTitle": "Explorer - File Manager",
@@ -57,7 +62,11 @@
     "userColumn": "User",
     "timestampColumn": "Timestamp",
     "loadingOperations": "Loading operations...",
-    "noOperations": "No operations in history"
+    "noOperations": "No operations in history",
+    "pathASubtitle": "Catalogs ready to push",
+    "editPathTitle": "Click to edit the path",
+    "actionHint": "Select a directory to push, or an operation to pull or update.",
+    "update": "Update"
   },
   "contextMenu": {
     "open": "Open",
@@ -66,17 +75,18 @@
   "modal": {
     "confirmAction": "Confirm Action",
     "cancel": "Cancel",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "close": "Close"
   },
   "settings": {
     "title": "User Settings",
     "displayPreferences": "Display Preferences",
-    "theme": "Theme:",
+    "theme": "Theme",
     "themeSystem": "System (Auto)",
     "themeLight": "Light",
     "themeDark": "Dark",
     "themeHelp": "System theme follows your browser/OS preference",
-    "language": "Language:",
+    "language": "Language",
     "languageSystem": "System (Auto)",
     "languageEnglish": "English",
     "languagePolish": "Polish",
@@ -91,7 +101,9 @@
     "settingsResetConfirm": "Reset all settings to defaults?",
     "settingsReset": "Settings reset to defaults",
     "settingsResetFailed": "Failed to reset settings: {error}",
-    "settingsLoadFailed": "Failed to load settings: {error}"
+    "settingsLoadFailed": "Failed to load settings: {error}",
+    "displayPreferencesHelp": "How the application looks and which language it uses.",
+    "sessionPreferencesHelp": "What the application remembers between sign-ins."
   },
   "operations": {
     "pushDirectory": "Push directory \"{name}\"?\n\nThis will:\n1. Copy to PATH_B\n2. Archive to PATH_C\n\nOriginal directory will be moved to archive.",
