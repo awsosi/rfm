@@ -27,7 +27,6 @@ namespace FileManagerWorker
         private CertificateManager _certManager;
         private ApiClient _apiClient;
         private FileOperations _fileOps;
-        private RollbackManager _rollbackManager;
         private CommandHandler _commandHandler;
         private ServiceConfiguration _config;
 
@@ -41,7 +40,6 @@ namespace FileManagerWorker
         private CancellationTokenSource _cancellationTokenSource;
         private Task _pollingTask;
         private Task _heartbeatTask;
-        private Task _cleanupTask;
 
         private readonly object _commandLock = new object();
 
@@ -97,8 +95,7 @@ namespace FileManagerWorker
                     config.ServiceUser,      // Samba username for file operations
                     config.ServicePassword   // Samba password for file operations
                 );
-                _rollbackManager = new RollbackManager();
-                _commandHandler = new CommandHandler(_fileOps, _rollbackManager, _apiClient);
+                _commandHandler = new CommandHandler(_fileOps, _apiClient);
 
                 // Register with Central API
                 var registrationTask = _apiClient.RegisterWorkerAsync();
@@ -115,7 +112,6 @@ namespace FileManagerWorker
 
                 _pollingTask = Task.Run(() => PollingLoop(_cancellationTokenSource.Token));
                 _heartbeatTask = Task.Run(() => HeartbeatLoop(_cancellationTokenSource.Token));
-                _cleanupTask = Task.Run(() => CleanupLoop(_cancellationTokenSource.Token));
 
                 Lifecycle.Info("FileManagerWorker started (worker {0}, API {1})", Environment.MachineName, config.ApiUrl);
                 return true;
@@ -139,7 +135,7 @@ namespace FileManagerWorker
                 _cancellationTokenSource?.Cancel();
 
                 // Wait for tasks to complete
-                Task.WaitAll(new[] { _pollingTask, _heartbeatTask, _cleanupTask }, TimeSpan.FromSeconds(10));
+                Task.WaitAll(new[] { _pollingTask, _heartbeatTask }, TimeSpan.FromSeconds(10));
 
                 // Dispose resources
                 _apiClient?.Dispose();
@@ -233,33 +229,6 @@ namespace FileManagerWorker
             }
 
             Logger.Info("Heartbeat loop stopped");
-        }
-
-        /// <summary>
-        /// Cleanup loop for old backups
-        /// </summary>
-        private async Task CleanupLoop(CancellationToken cancellationToken)
-        {
-            Logger.Info("Cleanup loop started");
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromHours(6), cancellationToken);
-                    _rollbackManager.CleanupOldBackups();
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Error in cleanup loop");
-                }
-            }
-
-            Logger.Info("Cleanup loop stopped");
         }
 
         /// <summary>

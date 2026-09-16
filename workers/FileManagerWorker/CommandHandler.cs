@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using NLog;
@@ -8,19 +12,18 @@ using FileManagerWorker.Models;
 namespace FileManagerWorker
 {
     /// <summary>
-    /// Handles command parsing and execution with rollback support
+    /// Handles command parsing and execution.
+    /// Failed commands are undone by the Central API (see operation_service.py), not here.
     /// </summary>
     public class CommandHandler
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private readonly FileOperations _fileOps;
-        private readonly RollbackManager _rollbackManager;
         private readonly ApiClient _apiClient;
 
-        public CommandHandler(FileOperations fileOps, RollbackManager rollbackManager, ApiClient apiClient)
+        public CommandHandler(FileOperations fileOps, ApiClient apiClient)
         {
             _fileOps = fileOps;
-            _rollbackManager = rollbackManager;
             _apiClient = apiClient;
         }
 
@@ -65,6 +68,9 @@ namespace FileManagerWorker
                     case "validate_dir":
                         return await HandleValidateDirAsync(request);
 
+                    case "fetch_file":
+                        return await HandleFetchFileAsync(request);
+
                     case "search":
                         return await HandleSearchAsync(request);
 
@@ -98,7 +104,7 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Handles copy command with rollback support
+        /// Handles copy command
         /// </summary>
         private async Task<CommandResponse> HandleCopyAsync(CommandRequest request)
         {
@@ -121,13 +127,8 @@ namespace FileManagerWorker
                 ignoreMasks = ParseIgnoreMasks(request.Parameters["ignore_masks"]);
             }
 
-            List<RollbackContext> backups = null;
-
             try
             {
-                // Create backup of destination if it exists
-                backups = _rollbackManager.CreateBackups(destination);
-
                 // Progress reporter
                 var progress = new Progress<int>(async percent =>
                 {
@@ -140,9 +141,6 @@ namespace FileManagerWorker
                 // Execute copy (with optional flatten and ignore_masks)
                 var result = await _fileOps.CopyAsync(source, destination, progress, flatten, ignoreMasks);
 
-                // Success - cleanup backups
-                _rollbackManager.CleanupBackups(backups);
-
                 // Extract file count and size from result
                 int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
                 long? totalSize = result?.ContainsKey("total_size_bytes") == true ? Convert.ToInt64(result["total_size_bytes"]) : null;
@@ -152,22 +150,12 @@ namespace FileManagerWorker
             catch (Exception ex)
             {
                 Logger.Error(ex, "Copy operation failed");
-
-                // Attempt rollback
-                var rollbackSuccess = _rollbackManager.RestoreAll(backups);
-
-                var errorDetails = new Dictionary<string, object>
-                {
-                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
-                    { "error_type", ex.GetType().Name }
-                };
-
-                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
+                return CommandResponse.Failed(cmdId, ex.Message, ErrorDetails(ex));
             }
         }
 
         /// <summary>
-        /// Handles move command with rollback support
+        /// Handles move command
         /// </summary>
         private async Task<CommandResponse> HandleMoveAsync(CommandRequest request)
         {
@@ -178,21 +166,9 @@ namespace FileManagerWorker
                 return CommandResponse.Failed(cmdId, "Move requires source_path and dest_path");
             }
 
-            var source = request.SourcePath;
-            var destination = request.DestPath;
-
-            List<RollbackContext> backups = null;
-
             try
             {
-                // Create backups of both source and destination
-                backups = _rollbackManager.CreateBackups(source, destination);
-
-                // Execute move
-                var result = await _fileOps.MoveAsync(source, destination);
-
-                // Success - cleanup backups
-                _rollbackManager.CleanupBackups(backups);
+                var result = await _fileOps.MoveAsync(request.SourcePath, request.DestPath);
 
                 // Extract file count and size from result
                 int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
@@ -203,22 +179,12 @@ namespace FileManagerWorker
             catch (Exception ex)
             {
                 Logger.Error(ex, "Move operation failed");
-
-                // Attempt rollback
-                var rollbackSuccess = _rollbackManager.RestoreAll(backups);
-
-                var errorDetails = new Dictionary<string, object>
-                {
-                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
-                    { "error_type", ex.GetType().Name }
-                };
-
-                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
+                return CommandResponse.Failed(cmdId, ex.Message, ErrorDetails(ex));
             }
         }
 
         /// <summary>
-        /// Handles delete command with rollback support
+        /// Handles delete command
         /// </summary>
         private async Task<CommandResponse> HandleDeleteAsync(CommandRequest request)
         {
@@ -229,20 +195,10 @@ namespace FileManagerWorker
                 return CommandResponse.Failed(cmdId, "Delete requires source_path");
             }
 
-            var path = request.SourcePath;
-
-            RollbackContext backup = null;
-
             try
             {
-                // Create backup before deletion
-                backup = _rollbackManager.CreateBackup(path);
-
                 // Execute delete (always recursive for directories)
-                var result = await _fileOps.DeleteAsync(path);
-
-                // Success - cleanup backup
-                _rollbackManager.CleanupBackup(backup);
+                var result = await _fileOps.DeleteAsync(request.SourcePath);
 
                 int? fileCount = result?.ContainsKey("file_count") == true ? Convert.ToInt32(result["file_count"]) : null;
 
@@ -251,22 +207,12 @@ namespace FileManagerWorker
             catch (Exception ex)
             {
                 Logger.Error(ex, "Delete operation failed");
-
-                // Attempt rollback
-                var rollbackSuccess = _rollbackManager.Restore(backup);
-
-                var errorDetails = new Dictionary<string, object>
-                {
-                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
-                    { "error_type", ex.GetType().Name }
-                };
-
-                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
+                return CommandResponse.Failed(cmdId, ex.Message, ErrorDetails(ex));
             }
         }
 
         /// <summary>
-        /// Handles mkdir command with rollback support
+        /// Handles mkdir command
         /// </summary>
         private async Task<CommandResponse> HandleMkdirAsync(CommandRequest request)
         {
@@ -277,44 +223,25 @@ namespace FileManagerWorker
                 return CommandResponse.Failed(cmdId, "Mkdir requires source_path");
             }
 
-            var path = request.SourcePath;
-            bool parents = request.Parameters?.ContainsKey("parents") != true ||
-                          Convert.ToBoolean(request.Parameters["parents"]); // Default true
-
-            RollbackContext backup = null;
-
             try
             {
-                // Create backup (will note if directory didn't exist)
-                backup = _rollbackManager.CreateBackup(path);
-
-                // Execute mkdir
-                var result = await _fileOps.MkdirAsync(path);
-
-                // Success - cleanup backup
-                _rollbackManager.CleanupBackup(backup);
-
+                await _fileOps.MkdirAsync(request.SourcePath);
                 return CommandResponse.Success(cmdId, "Directory created successfully");
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Mkdir operation failed");
-
-                // Attempt rollback
-                var rollbackSuccess = _rollbackManager.Restore(backup);
-
-                var errorDetails = new Dictionary<string, object>
-                {
-                    { "rollback_status", rollbackSuccess ? "success" : "failed" },
-                    { "error_type", ex.GetType().Name }
-                };
-
-                return CommandResponse.Failed(cmdId, ex.Message, errorDetails);
+                return CommandResponse.Failed(cmdId, ex.Message, ErrorDetails(ex));
             }
         }
 
+        private static Dictionary<string, object> ErrorDetails(Exception ex)
+        {
+            return new Dictionary<string, object> { { "error_type", ex.GetType().Name } };
+        }
+
         /// <summary>
-        /// Handles list command (read-only, no rollback needed)
+        /// Handles list command (read-only)
         /// </summary>
         private async Task<CommandResponse> HandleListAsync(CommandRequest request)
         {
@@ -444,7 +371,109 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Handles search command (read-only, no rollback needed)
+        /// Handles fetch_file command: downloads a file uploaded through the WebUI from the
+        /// Central API and places it at dest_path, which must not exist yet. The download
+        /// is verified before the share is touched.
+        /// </summary>
+        private async Task<CommandResponse> HandleFetchFileAsync(CommandRequest request)
+        {
+            int cmdId = request.CommandId.Value;
+
+            var parameters = request.Parameters ?? new Dictionary<string, object>();
+            var destination = request.DestPath;
+            var url = parameters.ContainsKey("url") ? parameters["url"]?.ToString() : null;
+            var expectedSha256 = parameters.ContainsKey("sha256") ? parameters["sha256"]?.ToString() : null;
+            var sizeValue = parameters.ContainsKey("size_bytes") ? parameters["size_bytes"] : null;
+
+            if (string.IsNullOrEmpty(destination) || string.IsNullOrEmpty(url)
+                || string.IsNullOrEmpty(expectedSha256) || sizeValue == null)
+            {
+                return CommandResponse.Failed(cmdId, "fetch_file requires dest_path and 'url', 'sha256', 'size_bytes' parameters");
+            }
+
+            // Only paths on the configured API: an absolute URL in a command could point the
+            // worker (and its client certificate) at another host.
+            if (!url.StartsWith("/api/", StringComparison.Ordinal))
+            {
+                return CommandResponse.Failed(cmdId, "fetch_file 'url' must be a relative path starting with /api/");
+            }
+
+            if (!Regex.IsMatch(expectedSha256, "^[0-9a-fA-F]{64}$"))
+            {
+                return CommandResponse.Failed(cmdId, "fetch_file 'sha256' must be 64 hex characters");
+            }
+
+            long expectedSize;
+            try
+            {
+                expectedSize = Convert.ToInt64(sizeValue);
+            }
+            catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+            {
+                return CommandResponse.Failed(cmdId, "fetch_file 'size_bytes' must be an integer");
+            }
+
+            if (expectedSize < 0)
+            {
+                return CommandResponse.Failed(cmdId, "fetch_file 'size_bytes' must not be negative");
+            }
+
+            // The query string carries the signed token, a credential: log the path only.
+            var urlPath = url.Split('?')[0];
+            var tempFile = Path.Combine(Path.GetTempPath(), "FileManagerWorker_Downloads", Guid.NewGuid().ToString("N") + ".tmp");
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                _fileOps.EnsureAllowedPath(destination);
+
+                // Downloaded as the service account: share credentials are for the shares only.
+                Directory.CreateDirectory(Path.GetDirectoryName(tempFile));
+                var download = await _apiClient.DownloadToFileAsync(url, tempFile, CancellationToken.None);
+
+                if (download.Bytes != expectedSize
+                    || !string.Equals(download.Sha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Error("fetch_file {0} for {1} failed verification: expected {2} bytes / {3}, got {4} bytes / {5}",
+                        urlPath, destination, expectedSize, expectedSha256, download.Bytes, download.Sha256);
+
+                    return CommandResponse.Failed(cmdId,
+                        $"Downloaded file failed size/SHA-256 verification: expected {expectedSize} bytes / {expectedSha256}, " +
+                        $"got {download.Bytes} bytes / {download.Sha256}",
+                        new Dictionary<string, object> { { "error_type", "VerificationFailed" } });
+                }
+
+                await _fileOps.ReceiveFileAsync(destination, tempFile);
+
+                Logger.Info("fetch_file {0} -> {1}: {2} bytes, SHA-256 {3}, {4} ms",
+                    urlPath, destination, download.Bytes, download.Sha256, stopwatch.ElapsedMilliseconds);
+
+                return CommandResponse.Success(cmdId, "File fetched", fileCount: 1, totalSizeBytes: download.Bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "fetch_file {0} -> {1} failed after {2} ms", urlPath, destination, stopwatch.ElapsedMilliseconds);
+
+                return CommandResponse.Failed(cmdId, ex.Message, ErrorDetails(ex));
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempFile))
+                    {
+                        File.Delete(tempFile);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("Could not remove downloaded temp file {0}: {1}", tempFile, ex.Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles search command (read-only)
         /// </summary>
         private async Task<CommandResponse> HandleSearchAsync(CommandRequest request)
         {
@@ -480,7 +509,7 @@ namespace FileManagerWorker
         }
 
         /// <summary>
-        /// Handles info command (read-only, no rollback needed)
+        /// Handles info command (read-only)
         /// </summary>
         private async Task<CommandResponse> HandleInfoAsync(CommandRequest request)
         {

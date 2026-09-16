@@ -24,6 +24,7 @@ namespace FileManagerWorker
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private readonly string _apiUrl;
         private readonly HttpClient _httpClient;
+        private readonly HttpClient _downloadClient;
         private readonly CertificateManager _certManager;
         private readonly ServiceConfiguration _config;
         private X509Certificate2 _clientCertificate;
@@ -33,6 +34,9 @@ namespace FileManagerWorker
         // so an idle poll ends with the server's empty answer rather than a client-side
         // timeout that is indistinguishable from the API hanging.
         private const int LongPollSeconds = 25;
+
+        // Upper bound for a single file download (see DownloadToFileAsync).
+        private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(30);
 
         // Connection state as last observed. Each is only logged when it changes, so a
         // worker left waiting for hours produces one warning and one recovery entry,
@@ -67,7 +71,29 @@ namespace FileManagerWorker
                 throw new InvalidOperationException("mTLS certificate not found. Run /config as Administrator first.");
             }
 
-            // Create HttpClientHandler with mTLS support
+            _httpClient = new HttpClient(CreateHandler())
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            // Downloads get their own client: a large file over a slow link outlasts the
+            // 30s timeout above, so DownloadToFileAsync enforces its own limit instead.
+            // Redirects are not followed, so the client certificate only ever goes to _apiUrl.
+            var downloadHandler = CreateHandler();
+            downloadHandler.AllowAutoRedirect = false;
+            _downloadClient = new HttpClient(downloadHandler)
+            {
+                Timeout = System.Threading.Timeout.InfiniteTimeSpan
+            };
+        }
+
+        /// <summary>
+        /// HTTP handler with the mTLS client certificate and TLS settings shared by all requests
+        /// </summary>
+        private WebRequestHandler CreateHandler()
+        {
             var handler = new WebRequestHandler();
             handler.ClientCertificates.Add(_clientCertificate);
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
@@ -75,12 +101,7 @@ namespace FileManagerWorker
             // Accept self-signed certificates (for testing - remove in production)
             handler.ServerCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
-            _httpClient = new HttpClient(handler)
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-
-            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return handler;
         }
 
         /// <summary>
@@ -429,9 +450,85 @@ namespace FileManagerWorker
             }
         }
 
+        /// <summary>
+        /// Streams a file served by the Central API to a new local file, hashing it on the way.
+        /// relativeUrl must be a path on the API ("/api/..."); it may carry a signed query
+        /// string, which is a credential and is never logged. Returns the byte count and the
+        /// lowercase hex SHA-256 of what was written.
+        /// </summary>
+        public async Task<(long Bytes, string Sha256)> DownloadToFileAsync(
+            string relativeUrl, string localPath, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(relativeUrl) || !relativeUrl.StartsWith("/api/", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Download URL must be a relative path starting with /api/");
+            }
+
+            var uri = new Uri(_apiUrl + relativeUrl);
+            if (!string.Equals(uri.Authority, new Uri(_apiUrl).Authority, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Download URL must stay on the configured API host");
+            }
+
+            var urlPath = uri.AbsolutePath;
+
+            using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                cts.CancelAfter(DownloadTimeout);
+                try
+                {
+                    using (var response = await _downloadClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cts.Token))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var body = await response.Content.ReadAsStringAsync();
+                            if (body.Length > 300)
+                            {
+                                body = body.Substring(0, 300) + "...";
+                            }
+
+                            string hint = "";
+                            if (response.StatusCode == HttpStatusCode.Forbidden)
+                                hint = " (link invalid or expired, or worker not ACTIVE)";
+                            else if (response.StatusCode == HttpStatusCode.NotFound)
+                                hint = " (upload no longer exists)";
+
+                            throw new HttpRequestException(
+                                $"Download of {urlPath} failed: HTTP {(int)response.StatusCode} {response.StatusCode}{hint}: {body}");
+                        }
+
+                        long bytes = 0;
+                        using (var sha = System.Security.Cryptography.SHA256.Create())
+                        using (var source = await response.Content.ReadAsStreamAsync())
+                        using (var target = new System.IO.FileStream(localPath, System.IO.FileMode.CreateNew,
+                            System.IO.FileAccess.Write, System.IO.FileShare.None, 81920, useAsync: true))
+                        {
+                            var buffer = new byte[81920];
+                            int read;
+                            while ((read = await source.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+                            {
+                                await target.WriteAsync(buffer, 0, read, cts.Token);
+                                sha.TransformBlock(buffer, 0, read, null, 0);
+                                bytes += read;
+                            }
+
+                            sha.TransformFinalBlock(buffer, 0, 0);
+                            var hash = BitConverter.ToString(sha.Hash).Replace("-", "").ToLowerInvariant();
+                            return (bytes, hash);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"Download of {urlPath} did not finish within {DownloadTimeout.TotalMinutes} minutes");
+                }
+            }
+        }
+
         public void Dispose()
         {
             _httpClient?.Dispose();
+            _downloadClient?.Dispose();
         }
     }
 }

@@ -6,6 +6,28 @@
 
 ---
 
+## 2026-09-16 - Worker: `fetch_file` for uploaded UPDATE files; worker-side backups removed
+
+**`fetch_file`** (`CommandHandler.HandleFetchFileAsync`) downloads a WebUI upload from the API and places it at `dest_path`:
+- Checks `dest_path`, `url` (must start with `/api/`; `ApiClient` also requires the configured host and does not follow redirects), `sha256` (64 hex) and `size_bytes >= 0`, then `FileOperations.EnsureAllowedPath`, before any I/O.
+- `ApiClient.DownloadToFileAsync` uses the same client certificate on a separate `HttpClient` with a 30-minute limit, streams to the service's temp folder, and hashes and counts while writing. An error response fails the command with the status code plus at most 300 characters of the body.
+- A size or hash mismatch fails with `size/SHA-256 verification`, before the share is touched.
+- `FileOperations.ReceiveFileAsync` opens the temp file before switching to the share account, then as that account creates the parent folder, refuses an existing destination, writes `<dest>.partial` and renames it. The temp file and `.partial` are removed in `finally`.
+- Logs destination, size, SHA-256 and duration. The URL query string (signed token) is never logged.
+
+**Removed `RollbackManager`** and the 6-hourly cleanup loop. `copy`/`move`/`delete`/`mkdir` backed up the *virtual* path (`B:/cat/a.jpg`), outside impersonation and before path validation:
+- For `A:`/`B:` nothing existed locally, so nothing was ever backed up or restored.
+- For `C:` it read the worker host's own system drive, and on failure deleted and rewrote that path, outside the system-directory check.
+- Using resolved paths instead would have copied whole catalogs to local temp before every PUSH/delete.
+
+Undo is the server's job (`operation_service.py`: PUSH/PULL and UPDATE have their own undo, others use `_rollback_operation`). Nothing on the server read `rollback_status`. Failed commands still report `error_type`.
+
+**Confirmed for the UPDATE flow (no change):** single-file `copy` creates the missing parent. `move` onto an existing file fails when both paths share a root (a cross-root move is copy with overwrite plus delete). `delete` of a missing path fails with `Path not found: ...`, which is also what an access-denied path looks like, because `File/Directory.Exists` return false.
+
+**Verified:** Release build succeeds, and the build runs as `DELA-5420-AW` against dev (ACTIVE). A bad signed link on api-dev -> 403 `Invalid or expired download link`. **Not yet verified:** an end-to-end UPDATE through the WebUI (upload replace/add, and the non-image 422). On this host the worker uses local `C:\RFM-Dev` paths without share credentials, so the impersonated write path was not exercised.
+
+---
+
 ## 2026-09-16 - Fix: UPDATE button returned 400 before the modal opened
 
 Selecting a pushed catalog and clicking **Update** showed a 400 in the WebUI. `openUpdateModal` lists the catalog (`operation.dest_path`, e.g. `B:/subfolder`) through `GET /api/files/list`, which called `validate_path_a` and rejected every non-`A:` path. The endpoint was written for the Path A explorer; the UPDATE UI (2f5c7d8) was the first caller to list Path B.

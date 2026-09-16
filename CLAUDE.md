@@ -212,7 +212,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 **Command Queue**: Commands are queued in Redis, workers poll via WebSocket or HTTP long-polling.
 
-**Rollback**: `RollbackManager.cs` tracks file operations for automatic rollback on failure (if `ENABLE_AUTO_ROLLBACK=true`).
+**Rollback**: Undo is done by the server (`backend/api/services/operation_service.py`): PUSH/PULL and UPDATE have their own undo, other operations use `_rollback_operation` (if `ENABLE_AUTO_ROLLBACK=true`). The worker keeps no backups; a failed command just reports the error.
 
 ### Frontend Architecture
 

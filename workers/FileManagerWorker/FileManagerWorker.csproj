@@ -93,7 +93,6 @@
     <Compile Include="CertificateManager.cs" />
     <Compile Include="ApiClient.cs" />
     <Compile Include="CommandHandler.cs" />
-    <Compile Include="RollbackManager.cs" />
     <Compile Include="Models\CommandRequest.cs" />
     <Compile Include="Models\CommandResponse.cs" />
     <Compile Include="Models\ServiceConfiguration.cs" />

@@ -491,6 +491,89 @@ namespace FileManagerWorker
         }
 
         /// <summary>
+        /// Throws when a virtual path does not resolve inside the allowed boundaries.
+        /// Lets a command reject a bad destination before doing expensive work for it.
+        /// </summary>
+        public void EnsureAllowedPath(string path)
+        {
+            ValidatePath(ResolvePath(path));
+        }
+
+        /// <summary>
+        /// Places a local file (e.g. downloaded from the API) at a destination that must not
+        /// exist yet. The content is written to "&lt;destination&gt;.partial" and renamed, so a
+        /// half-written file never carries the final name.
+        /// </summary>
+        public async Task<Dictionary<string, object>> ReceiveFileAsync(string destination, string localFile)
+        {
+            var resolvedDest = ResolvePath(destination);
+            ValidatePath(resolvedDest);
+
+            if (string.IsNullOrEmpty(Path.GetFileName(resolvedDest)))
+            {
+                throw new ArgumentException($"Destination must be a file path: {destination}");
+            }
+
+            var partialPath = resolvedDest + ".partial";
+
+            Logger.Info("Receiving file into {0}", resolvedDest);
+
+            return await Task.Run(() =>
+            {
+                // The local file sits in the service account's temp folder, which the share
+                // credentials may not be allowed to read, so open it before impersonating.
+                using (var source = new FileStream(localFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    return ExecuteWithImpersonation(() =>
+                    {
+                        try
+                        {
+                            if (File.Exists(resolvedDest) || Directory.Exists(resolvedDest))
+                            {
+                                throw new IOException($"Destination already exists: {resolvedDest}");
+                            }
+
+                            Directory.CreateDirectory(Path.GetDirectoryName(resolvedDest));
+
+                            using (var target = new FileStream(partialPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                            {
+                                source.CopyTo(target, 81920);
+                            }
+
+                            // Fails if the destination appeared meanwhile: never overwrite.
+                            File.Move(partialPath, resolvedDest);
+
+                            var fileSize = new FileInfo(resolvedDest).Length;
+                            Logger.Info("File received: {0} ({1} bytes)", resolvedDest, fileSize);
+
+                            return new Dictionary<string, object>
+                            {
+                                { "destination", destination },
+                                { "type", "file" },
+                                { "file_count", 1 },
+                                { "total_size_bytes", fileSize }
+                            };
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                if (File.Exists(partialPath))
+                                {
+                                    File.Delete(partialPath);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warn("Could not remove partial file {0}: {1}", partialPath, ex.Message);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        /// <summary>
         /// Moves file or directory
         /// </summary>
         public async Task<Dictionary<string, object>> MoveAsync(string source, string destination)

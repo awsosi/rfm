@@ -124,7 +124,6 @@ rfm/
 │   │   ├── CommandHandler.cs         # Command processing
 │   │   ├── ApiClient.cs              # API communication
 │   │   ├── CertificateManager.cs     # mTLS certificates
-│   │   ├── RollbackManager.cs        # Transaction rollback
 │   │   └── Models/                   # Data models
 │   └── Installer/                    # Windows Service Installer
 │       ├── Installer.cs              # Self-installing .exe
