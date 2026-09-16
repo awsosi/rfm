@@ -25,6 +25,9 @@
 - `update_fakes.FakeWorkerService` now honours `ignore_masks` on copy and reports non-images by extension, like the worker.
 - Mutation-checked: removing the mask filter fails 6 tests; removing the UPDATE re-judgement fails the UPDATE test.
 - WebUI message rendering checked with Node against both locale files.
+
+---
+
 ## 2026-09-16 - Worker docs: README-INSTALLER.md matches the real deployment
 
 `workers/README-INSTALLER.md` described the unused `workers/Installer/` project (`/install /url /user /pass`, `worker.config`, `C:\Program Files\FileManager\Worker`). Rewritten from `Program.cs`, `WorkerService.cs`, `CertificateManager.cs` and `/api/workers/register`: `/config` then `install`, `config.dat` (DPAPI) plus a `LocalMachine\My` certificate, Network Service, and step-by-step fresh install, update, reconfigure, reinstall and removal. Also documents hostname-based identity, worker statuses (OFFLINE returns to ACTIVE on its own, SUSPENDED doesn't), the Samba impersonation model, and that `/debug` looks in `CurrentUser\My`, which `/config` doesn't populate.
