@@ -386,6 +386,10 @@ class FilePushBatchResult(BaseModel):
     success: bool
     operation_id: Optional[int] = None
     error: Optional[str] = None
+    # Structured preflight rejection (catalog name / content), so the WebUI can
+    # render i18n reasons and name suggestions per directory rather than a
+    # flattened English string.
+    validation: Optional[dict[str, Any]] = None
 
 
 class FilePushBatchResponse(BaseModel):

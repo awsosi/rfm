@@ -152,5 +152,60 @@
     "minutesAgo": "{count}m ago",
     "hoursAgo": "{count}h ago",
     "daysAgo": "{count}d ago"
+  },
+  "validation": {
+    "title": "Cannot proceed",
+    "catalogTitle": "Catalog name not recognised",
+    "contentTitle": "Folder contents rejected",
+    "suggestionsHeader": "Did you mean one of these?",
+    "noSuggestions": "No similar product names were found.",
+    "useSuggestion": "Use this name",
+    "checking": "Checking catalog…",
+    "passed": "Catalog checks passed",
+    "summary": "{images} of {required} required image files • {total} files in total",
+    "garbageNote": "{count} non-image file(s) will still be sent to PIM: {names}",
+    "catalogValidation": {
+      "noMatch": "“{name}” does not match any product in PolkaSQL. Rename the folder to an existing product name.",
+      "emptyName": "The catalog folder name is empty.",
+      "notConfigured": "Catalog name validation is enabled but not configured. Contact an administrator.",
+      "serviceUnavailable": "PolkaSQL could not be reached, so the catalog name cannot be verified. Try again shortly or contact an administrator.",
+      "serviceError": "PolkaSQL rejected the validation request. Contact an administrator.",
+      "timeout": "PolkaSQL did not respond in time. Try again shortly."
+    },
+    "contentValidation": {
+      "tooFewImages": "This folder holds {images} image file(s); at least {required} are required.",
+      "tooFewImagesAfterUpdate": "After these changes the folder would hold {images} image file(s); at least {required} are required.",
+      "typeMismatch": "Some files are not really images despite their extension: {names}. Remove or replace them.",
+      "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
+      "listFailed": "The folder contents could not be read."
+    }
+  },
+  "update": {
+    "title": "Update catalog",
+    "openUpdate": "Update catalog…",
+    "description": "Rename, move or delete entries inside a catalog that has already been pushed.",
+    "catalogLabel": "Catalog",
+    "entriesHeader": "Contents",
+    "actionRename": "Rename",
+    "actionMove": "Move",
+    "actionDelete": "Delete",
+    "actionNone": "No change",
+    "newNameLabel": "New name",
+    "newNamePlaceholder": "e.g. 01.png",
+    "pendingHeader": "Pending changes",
+    "noPending": "No changes selected yet.",
+    "removeAction": "Remove this change",
+    "apply": "Apply changes",
+    "applying": "Applying changes…",
+    "started": "Update started for “{name}”",
+    "succeeded": "Catalog “{name}” updated",
+    "failed": "Update failed: {error}",
+    "confirmTitle": "Apply {count} change(s) to “{name}”?",
+    "confirmArchiveMirror": "The PATH_C archive copy will be updated to match.",
+    "confirmNoArchiveMirror": "The PATH_C archive copy will NOT be changed.",
+    "confirmIrreversible": "{count} deletion(s) cannot be undone.",
+    "selectCatalog": "Select a completed PUSH operation in the history first.",
+    "duplicateTarget": "“{name}” already has a pending change.",
+    "emptyActions": "Add at least one change first."
   }
 }

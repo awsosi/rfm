@@ -56,11 +56,23 @@ export async function apiRequest(endpoint, options = {}) {
                     const field = err.loc ? err.loc.slice(-1)[0] : 'unknown';
                     return `${field}: ${err.msg}`;
                 }).join(', ');
+            } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+                // Structured failures (e.g. PUSH/UPDATE validation) carry an
+                // object, not a string. Stringifying it here would produce
+                // "[object Object]" and lose the suggestions, so attach the
+                // payload to the Error for the caller to render via i18n.
+                errorMessage = errorData.detail.error || 'validation_failed';
             } else {
                 errorMessage = errorData.detail;
             }
         }
-        throw new Error(errorMessage);
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        if (errorData.detail && typeof errorData.detail === 'object'
+            && !Array.isArray(errorData.detail)) {
+            error.detail = errorData.detail;
+        }
+        throw error;
     }
 
     // Return JSON response
@@ -224,6 +236,42 @@ export async function pullOperation(operationId, workerId) {
         body: JSON.stringify({
             operation_id: operationId,
             worker_id: workerId
+        })
+    });
+}
+
+/**
+ * Dry-run the PUSH validation gates without performing an operation.
+ * Returns 200 with ok:false on rejection, so this never throws for a
+ * validation failure - only for transport problems.
+ * @param {string} sourcePath - Candidate directory (Path A)
+ * @param {number} workerId - Worker ID
+ * @returns {Promise<Object>} { ok, catalog, content }
+ */
+export async function preflightCatalog(sourcePath, workerId) {
+    return await apiRequest('/api/operations/preflight', {
+        method: 'POST',
+        body: JSON.stringify({
+            source_path: sourcePath,
+            worker_id: workerId
+        })
+    });
+}
+
+/**
+ * UPDATE operation - move, rename or delete entries inside a pushed catalog.
+ * @param {string} catalogPath - Catalog path in Path B (e.g. "B:/NAME")
+ * @param {number} workerId - Worker ID
+ * @param {Array<Object>} actions - [{action:'rename'|'move'|'delete', source, dest}]
+ * @returns {Promise<Object>}
+ */
+export async function updateOperation(catalogPath, workerId, actions) {
+    return await apiRequest('/api/operations/update', {
+        method: 'POST',
+        body: JSON.stringify({
+            catalog_path: catalogPath,
+            worker_id: workerId,
+            actions: actions
         })
     });
 }

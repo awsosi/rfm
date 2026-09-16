@@ -317,6 +317,200 @@
                                 </div>
                             </div>
 
+                            <!-- PIM Settings -->
+                            <div class="config-section" id="pim-settings">
+                                <h3>PIM - Product Information Manager Signalling</h3>
+                                <p class="text-muted">Second, independent signalling target alongside ROSAPI. Authenticates with a static <code>X-API-TOKEN</code> header. Fires on PUSH, PULL and UPDATE.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-pim-enabled" name="pim_enabled">
+                                        <label class="custom-control-label" for="config-pim-enabled">Enable PIM Signalling</label>
+                                    </div>
+                                    <small>Master switch for all PIM notifications</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-base-url">Base URL</label>
+                                    <input type="text" id="config-pim-base-url" name="pim_base_url" class="form-control" placeholder="https://pim-api.vitkac.com">
+                                    <small>PIM API base URL</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-endpoint">Endpoint Path</label>
+                                    <input type="text" id="config-pim-endpoint" name="pim_endpoint" class="form-control" placeholder="/api/v1/image_catalog/ftp_event">
+                                    <small>Path appended to the base URL</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-method">HTTP Method</label>
+                                    <select id="config-pim-method" name="pim_method" class="form-control">
+                                        <option value="POST">POST</option>
+                                        <option value="PUT">PUT</option>
+                                        <option value="PATCH">PATCH</option>
+                                    </select>
+                                    <small>HTTP method for PIM signal requests</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-api-token">API Token (X-API-TOKEN)</label>
+                                    <input type="password" id="config-pim-api-token" name="pim_api_token" class="form-control">
+                                    <small>Sent as the <code>X-API-TOKEN</code> request header</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-timeout">Request Timeout (seconds)</label>
+                                    <input type="number" id="config-pim-timeout" name="pim_timeout" class="form-control" min="1" max="60" value="10">
+                                    <small>HTTP request timeout for PIM calls</small>
+                                </div>
+
+                                <h4 class="mt-4">Event Types</h4>
+                                <p class="text-muted small">Each operation can be toggled separately and reports its own <code>eventType</code>.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-pim-push-enabled" name="pim_push_enabled">
+                                        <label class="custom-control-label" for="config-pim-push-enabled">Signal on PUSH</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-pim-push-event-type">PUSH eventType</label>
+                                    <input type="text" id="config-pim-push-event-type" name="pim_push_event_type" class="form-control" placeholder="created">
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-pim-pull-enabled" name="pim_pull_enabled">
+                                        <label class="custom-control-label" for="config-pim-pull-enabled">Signal on PULL</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-pim-pull-event-type">PULL eventType</label>
+                                    <input type="text" id="config-pim-pull-event-type" name="pim_pull_event_type" class="form-control" placeholder="updated">
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-pim-update-enabled" name="pim_update_enabled">
+                                        <label class="custom-control-label" for="config-pim-update-enabled">Signal on UPDATE</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-pim-update-event-type">UPDATE eventType</label>
+                                    <input type="text" id="config-pim-update-event-type" name="pim_update_event_type" class="form-control" placeholder="updated">
+                                </div>
+
+                                <h4 class="mt-4">Payload Template</h4>
+                                <p class="text-muted small">
+                                    Request body sent to PIM. Placeholders:
+                                    <code>{files}</code> (raw JSON array of top-level filenames),
+                                    <code>{catalog_name}</code>, <code>{event_type}</code>, <code>{tg_id}</code>,
+                                    <code>{operation_id}</code>, <code>{username}</code>,
+                                    <code>{source_path}</code>, <code>{dest_path}</code>.
+                                    Every placeholder except <code>{files}</code> and <code>{operation_id}</code> is JSON-escaped.
+                                </p>
+
+                                <div class="form-group">
+                                    <label for="config-pim-payload-template">JSON Payload Template</label>
+                                    <textarea id="config-pim-payload-template" name="pim_payload_template" class="form-control" rows="6" placeholder='{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}'></textarea>
+                                    <small><code>tgId</code> is omitted by default. To send it, add <code>"tgId": "{tg_id}"</code> to the template and set the TG Identifier below.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-tg-id">TG Identifier (optional)</label>
+                                    <input type="text" id="config-pim-tg-id" name="pim_tg_id" class="form-control" placeholder="">
+                                    <small>Value substituted for <code>{tg_id}</code>. Leave empty unless the template uses it.</small>
+                                </div>
+                            </div>
+
+                            <!-- Validation Settings -->
+                            <div class="config-section" id="validation-settings">
+                                <h3>Catalog &amp; Content Validation</h3>
+                                <p class="text-muted">Gates applied before every PUSH and UPDATE. Both are hard blocks: a failing catalog cannot be pushed.</p>
+
+                                <h4 class="mt-4">Catalog Name Validation (PolkaSQL)</h4>
+                                <p class="text-muted small">Checks the folder name against <code>Polka27.elementy.grup_nazwe_kolor</code> via the <code>RFM_ValidateProductName</code> web service, and offers the closest matches on a miss.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-catalog-validation-enabled" name="catalog_validation_enabled">
+                                        <label class="custom-control-label" for="config-catalog-validation-enabled">Enable Catalog Name Validation</label>
+                                    </div>
+                                    <small>Refuse PUSH/UPDATE when the catalog name matches no product</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-catalog-validation-url">RFM_ValidateProductName URL</label>
+                                    <input type="text" id="config-catalog-validation-url" name="catalog_validation_url" class="form-control" placeholder="http://polkasql-host:8080/RFM_ValidateProductName">
+                                    <small>Full URL of the PolkaSQL Raw web service</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-catalog-validation-api-key">API Key</label>
+                                    <input type="password" id="config-catalog-validation-api-key" name="catalog_validation_api_key" class="form-control">
+                                    <small>Passed as the <code>ApiKey</code> query parameter</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-catalog-validation-timeout">Timeout (seconds)</label>
+                                    <input type="number" id="config-catalog-validation-timeout" name="catalog_validation_timeout" class="form-control" min="1" max="30" value="5">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-catalog-validation-max-suggestions">Maximum Suggestions</label>
+                                    <input type="number" id="config-catalog-validation-max-suggestions" name="catalog_validation_max_suggestions" class="form-control" min="1" max="25" value="5">
+                                    <small>How many alternative names to offer when the name does not match</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-catalog-validation-fail-open" name="catalog_validation_fail_open">
+                                        <label class="custom-control-label" for="config-catalog-validation-fail-open">Allow operations when PolkaSQL is unreachable</label>
+                                    </div>
+                                    <small><strong>Off by default (fail closed).</strong> While off, a PolkaSQL outage blocks every PUSH and UPDATE. Turn on only for the duration of an outage.</small>
+                                </div>
+
+                                <h4 class="mt-4">Directory Content Validation</h4>
+                                <p class="text-muted small">Requires a minimum number of genuine image files. Non-image files do not count toward the minimum but are still sent to PIM.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-push-validation-enabled" name="push_validation_enabled">
+                                        <label class="custom-control-label" for="config-push-validation-enabled">Enable Content Validation</label>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-push-validation-min-files">Minimum Image Files</label>
+                                    <input type="number" id="config-push-validation-min-files" name="push_validation_min_files" class="form-control" min="1" max="1000" value="2">
+                                    <small>A catalog with fewer images than this cannot be pushed or updated</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-push-validation-allowed-extensions">Allowed Image Extensions</label>
+                                    <input type="text" id="config-push-validation-allowed-extensions" name="push_validation_allowed_extensions" class="form-control" placeholder="jpg,jpeg,png,gif,bmp,tif,tiff,webp">
+                                    <small>Comma-separated list, without dots</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-push-validation-verify-content" name="push_validation_verify_content">
+                                        <label class="custom-control-label" for="config-push-validation-verify-content">Verify Real File Type</label>
+                                    </div>
+                                    <small>Check magic bytes as well as the extension, so a renamed file cannot pass as an image. A mismatch blocks the operation.</small>
+                                </div>
+
+                                <h4 class="mt-4">UPDATE Behaviour</h4>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-enable-update-archive-mirror" name="enable_update_archive_mirror">
+                                        <label class="custom-control-label" for="config-enable-update-archive-mirror">Mirror UPDATE changes to PATH_C archive</label>
+                                    </div>
+                                    <small><strong>Off by default.</strong> When on, in-place changes made in PATH_B are replayed against the archive copy in PATH_C. Best-effort: a mirror failure is logged but does not fail the operation.</small>
+                                </div>
+                            </div>
+
                             <!-- Worker Settings -->
                             <div class="config-section" id="worker-configuration">
                                 <h3>Worker Configuration</h3>

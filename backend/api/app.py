@@ -1062,12 +1062,47 @@ async def push_operation_batch(
         # Acquire path lock per directory to prevent concurrent pushes
         async with operation_service._get_path_lock(source_path):
             try:
+                # Same two gates as the single-directory push. This is the
+                # endpoint the WebUI actually calls, so it must enforce them.
+                catalog_result, content_result = await run_catalog_preflight(
+                    source_path, request_data.worker_id, db, settings
+                )
+                if not (catalog_result.valid and content_result.valid):
+                    logger.warning(
+                        f"Batch PUSH refused for {source_path!r} "
+                        f"(user={current_user.username}): "
+                        f"catalog_valid={catalog_result.valid} "
+                        f"content_valid={content_result.valid} "
+                        f"reason={catalog_result.reason or content_result.reason}"
+                    )
+                    results.append(
+                        FilePushBatchResult(
+                            source_path=source_path,
+                            success=False,
+                            error="validation_failed",
+                            validation=preflight_failure_detail(
+                                catalog_result, content_result
+                            ),
+                        )
+                    )
+                    continue
+
                 operation = await operation_service.create_push_operation(
                     user=current_user,
                     source_dir=source_path,
                     worker_id=request_data.worker_id,
                     db=db,
                 )
+
+                operation.params_json = {
+                    **(operation.params_json or {}),
+                    "files": content_result.files,
+                    "catalog_name": (
+                        catalog_result.matched_name or catalog_result.catalog_name
+                    ),
+                    "username": current_user.username,
+                }
+                await db.commit()
 
                 await AuditLogger.log_operation(
                     user_id=current_user.id,

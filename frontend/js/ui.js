@@ -772,3 +772,10 @@ export function updatePullButtonState(hasSelection) {
         pullBtn.disabled = !hasSelection;
     }
 }
+
+export function updateUpdateButtonState(hasSelection) {
+    const updateBtn = document.getElementById('update-btn');
+    if (updateBtn) {
+        updateBtn.disabled = !hasSelection;
+    }
+}

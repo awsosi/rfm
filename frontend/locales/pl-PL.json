@@ -94,7 +94,7 @@
     "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}"
   },
   "operations": {
-    "pushDirectory": "Wysłać katalog \u201e{name}\u201d?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
+    "pushDirectory": "Wysłać katalog „{name}”?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
     "pushConfirmTitle": "Wysłać katalog \"{name}\"?",
     "pushConfirmTitleMulti": "Wysłać {count} katalogów?",
     "pushConfirmStepsHeader": "Spowoduje to:",
@@ -152,5 +152,60 @@
     "minutesAgo": "{count} min temu",
     "hoursAgo": "{count} godz. temu",
     "daysAgo": "{count} dni temu"
+  },
+  "validation": {
+    "title": "Nie można kontynuować",
+    "catalogTitle": "Nierozpoznana nazwa katalogu",
+    "contentTitle": "Odrzucona zawartość folderu",
+    "suggestionsHeader": "Czy chodziło o jedną z tych nazw?",
+    "noSuggestions": "Nie znaleziono podobnych nazw produktów.",
+    "useSuggestion": "Użyj tej nazwy",
+    "checking": "Sprawdzanie katalogu…",
+    "passed": "Weryfikacja katalogu zakończona pomyślnie",
+    "summary": "{images} z {required} wymaganych plików graficznych • łącznie {total} plików",
+    "garbageNote": "{count} plików niegraficznych zostanie mimo to wysłanych do PIM: {names}",
+    "catalogValidation": {
+      "noMatch": "„{name}” nie odpowiada żadnemu produktowi w PolkaSQL. Zmień nazwę folderu na nazwę istniejącego produktu.",
+      "emptyName": "Nazwa folderu katalogu jest pusta.",
+      "notConfigured": "Weryfikacja nazwy katalogu jest włączona, ale nieskonfigurowana. Skontaktuj się z administratorem.",
+      "serviceUnavailable": "Nie można połączyć się z PolkaSQL, więc nazwa katalogu nie może zostać zweryfikowana. Spróbuj ponownie za chwilę lub skontaktuj się z administratorem.",
+      "serviceError": "PolkaSQL odrzucił żądanie weryfikacji. Skontaktuj się z administratorem.",
+      "timeout": "PolkaSQL nie odpowiedział w wyznaczonym czasie. Spróbuj ponownie za chwilę."
+    },
+    "contentValidation": {
+      "tooFewImages": "Ten folder zawiera {images} plików graficznych; wymagane są co najmniej {required}.",
+      "tooFewImagesAfterUpdate": "Po tych zmianach folder zawierałby {images} plików graficznych; wymagane są co najmniej {required}.",
+      "typeMismatch": "Niektóre pliki nie są w rzeczywistości obrazami mimo swojego rozszerzenia: {names}. Usuń je lub zastąp.",
+      "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
+      "listFailed": "Nie udało się odczytać zawartości folderu."
+    }
+  },
+  "update": {
+    "title": "Aktualizuj katalog",
+    "openUpdate": "Aktualizuj katalog…",
+    "description": "Zmień nazwę, przenieś lub usuń pozycje wewnątrz katalogu, który został już wypchnięty.",
+    "catalogLabel": "Katalog",
+    "entriesHeader": "Zawartość",
+    "actionRename": "Zmień nazwę",
+    "actionMove": "Przenieś",
+    "actionDelete": "Usuń",
+    "actionNone": "Bez zmian",
+    "newNameLabel": "Nowa nazwa",
+    "newNamePlaceholder": "np. 01.png",
+    "pendingHeader": "Oczekujące zmiany",
+    "noPending": "Nie wybrano jeszcze żadnych zmian.",
+    "removeAction": "Usuń tę zmianę",
+    "apply": "Zastosuj zmiany",
+    "applying": "Stosowanie zmian…",
+    "started": "Rozpoczęto aktualizację „{name}”",
+    "succeeded": "Katalog „{name}” został zaktualizowany",
+    "failed": "Aktualizacja nie powiodła się: {error}",
+    "confirmTitle": "Zastosować {count} zmian w „{name}”?",
+    "confirmArchiveMirror": "Kopia archiwalna w PATH_C zostanie odpowiednio zaktualizowana.",
+    "confirmNoArchiveMirror": "Kopia archiwalna w PATH_C NIE zostanie zmieniona.",
+    "confirmIrreversible": "{count} usunięć nie będzie można cofnąć.",
+    "selectCatalog": "Najpierw wybierz zakończoną operację PUSH w historii.",
+    "duplicateTarget": "„{name}” ma już oczekującą zmianę.",
+    "emptyActions": "Najpierw dodaj przynajmniej jedną zmianę."
   }
 }

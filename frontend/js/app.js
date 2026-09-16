@@ -23,6 +23,8 @@ import {
     pushOperationBatch,
     getPushSettings,
     pullOperation,
+    preflightCatalog,
+    updateOperation,
     getOperationHistory,
     searchOperations,
     listActiveWorkers
@@ -59,9 +61,10 @@ import {
     filterDirectoriesOnly,
     markDirectoryRows,
     updatePushButtonState,
-    updatePullButtonState
+    updatePullButtonState,
+    updateUpdateButtonState
 } from './ui.js';
-import { normalizePath, joinPath, debounce } from './utils.js';
+import { normalizePath, joinPath, debounce, showModal } from './utils.js';
 
 // Application state
 const state = {
@@ -1595,6 +1598,26 @@ function setupVFRedesignControls() {
         });
     }
 
+    // Update catalog button
+    const updateBtn = document.getElementById('update-btn');
+    if (updateBtn) {
+        updateBtn.addEventListener('click', async () => {
+            await openUpdateModal();
+        });
+    }
+
+    const updateModalClose = document.getElementById('update-modal-close');
+    const updateModalCancel = document.getElementById('update-modal-cancel');
+    const updateModalApply = document.getElementById('update-modal-apply');
+    [updateModalClose, updateModalCancel].forEach(el => {
+        if (el) el.addEventListener('click', () => closeUpdateModal());
+    });
+    if (updateModalApply) {
+        updateModalApply.addEventListener('click', async () => {
+            await handleUpdateOperation();
+        });
+    }
+
     // Refresh queue button
     const refreshQueueBtn = document.getElementById('refresh-queue');
     if (refreshQueueBtn) {
@@ -1864,6 +1887,313 @@ async function loadOperationHistory(append = false) {
 /**
  * Handle Push operation (VF Redesign)
  */
+// =========================================================================
+// UPDATE catalog
+// =========================================================================
+
+// Working state for the update modal. `actions` maps an entry name to the
+// change queued for it, so an entry can never carry two conflicting changes.
+const updateState = {
+    catalogPath: null,
+    catalogName: null,
+    entries: [],
+    actions: new Map()
+};
+
+/**
+ * Open the update modal for the catalog selected in Path B.
+ */
+async function openUpdateModal() {
+    const selectedOperationId = getSelectedOperationId();
+    if (!selectedOperationId) {
+        showError(t('update.selectCatalog'));
+        return;
+    }
+
+    const operation = state.operationQueue.operations.find(
+        op => op.id === selectedOperationId
+    );
+    if (!operation || !operation.dest_path) {
+        showError(t('operations.operationNotFound'));
+        return;
+    }
+
+    // dest_path is the catalog in PATH_B, e.g. "B:/TORBA HB0788 FA0542-910 SILVER"
+    const catalogPath = operation.dest_path;
+    const catalogName = catalogPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+
+    updateState.catalogPath = catalogPath;
+    updateState.catalogName = catalogName;
+    updateState.actions = new Map();
+    updateState.entries = [];
+
+    try {
+        updateOperationStatus(t('validation.checking'), 'info');
+        const listing = await listFiles(catalogPath, 0, 1000, state.workerId);
+        // Drop the ".." navigation entry the worker prepends
+        updateState.entries = (listing.items || []).filter(item => item.name !== '..');
+    } catch (error) {
+        console.error('Failed to list catalog for update:', error);
+        showError(t('errors.failedToLoadDirectory', { error: error.message }));
+        return;
+    } finally {
+        clearOperationStatus();
+    }
+
+    document.getElementById('update-catalog-name').textContent = catalogName;
+    renderUpdateEntries();
+    renderUpdatePending();
+    document.getElementById('update-modal').classList.remove('hidden');
+}
+
+function closeUpdateModal() {
+    document.getElementById('update-modal').classList.add('hidden');
+    updateState.catalogPath = null;
+    updateState.catalogName = null;
+    updateState.entries = [];
+    updateState.actions = new Map();
+}
+
+/**
+ * Render one row per catalog entry with its action selector.
+ *
+ * Built with createElement/textContent throughout: entry names come from the
+ * filesystem and must never be interpolated into markup.
+ */
+function renderUpdateEntries() {
+    const container = document.getElementById('update-entries');
+    container.textContent = '';
+
+    const table = document.createElement('table');
+    table.className = 'data-table';
+
+    const tbody = document.createElement('tbody');
+
+    updateState.entries.forEach(entry => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = entry.name;
+        if (entry.is_directory) {
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.textContent = '/';
+            nameCell.appendChild(document.createTextNode(' '));
+            nameCell.appendChild(badge);
+        }
+        row.appendChild(nameCell);
+
+        const actionCell = document.createElement('td');
+        const select = document.createElement('select');
+        select.className = 'form-control';
+        [
+            ['none', t('update.actionNone')],
+            ['rename', t('update.actionRename')],
+            ['delete', t('update.actionDelete')]
+        ].forEach(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.appendChild(option);
+        });
+        const existing = updateState.actions.get(entry.name);
+        select.value = existing ? existing.action : 'none';
+        actionCell.appendChild(select);
+        row.appendChild(actionCell);
+
+        const destCell = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.placeholder = t('update.newNamePlaceholder');
+        input.value = existing && existing.dest ? existing.dest : '';
+        input.hidden = select.value !== 'rename';
+        destCell.appendChild(input);
+        row.appendChild(destCell);
+
+        const syncAction = () => {
+            const kind = select.value;
+            input.hidden = kind !== 'rename';
+
+            if (kind === 'none') {
+                updateState.actions.delete(entry.name);
+            } else if (kind === 'delete') {
+                updateState.actions.set(entry.name, {
+                    action: 'delete',
+                    source: entry.name
+                });
+            } else if (kind === 'rename') {
+                const dest = input.value.trim();
+                if (dest) {
+                    updateState.actions.set(entry.name, {
+                        action: 'rename',
+                        source: entry.name,
+                        dest: dest
+                    });
+                } else {
+                    updateState.actions.delete(entry.name);
+                }
+            }
+            renderUpdatePending();
+        };
+
+        select.addEventListener('change', syncAction);
+        input.addEventListener('input', syncAction);
+
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+function renderUpdatePending() {
+    const container = document.getElementById('update-pending');
+    container.textContent = '';
+
+    if (updateState.actions.size === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted';
+        empty.textContent = t('update.noPending');
+        container.appendChild(empty);
+        return;
+    }
+
+    const list = document.createElement('ul');
+    updateState.actions.forEach(action => {
+        const item = document.createElement('li');
+        if (action.action === 'delete') {
+            item.textContent = `${t('update.actionDelete')}: ${action.source}`;
+        } else {
+            item.textContent = `${t('update.actionRename')}: ${action.source} → ${action.dest}`;
+        }
+        list.appendChild(item);
+    });
+    container.appendChild(list);
+}
+
+/**
+ * Submit the queued changes as an UPDATE operation.
+ */
+async function handleUpdateOperation() {
+    if (updateState.actions.size === 0) {
+        showError(t('update.emptyActions'));
+        return;
+    }
+
+    const actions = Array.from(updateState.actions.values());
+    const deletions = actions.filter(a => a.action === 'delete').length;
+
+    const confirmLines = [
+        t('update.confirmTitle', {
+            count: actions.length,
+            name: updateState.catalogName
+        })
+    ];
+    if (deletions > 0) {
+        confirmLines.push(t('update.confirmIrreversible', { count: deletions }));
+    }
+
+    const confirmed = await confirmAction(confirmLines.join('\n'));
+    if (!confirmed) return;
+
+    const catalogPath = updateState.catalogPath;
+    const catalogName = updateState.catalogName;
+    closeUpdateModal();
+
+    try {
+        updateOperationStatus(t('update.applying'), 'info');
+        await updateOperation(catalogPath, state.workerId, actions);
+        showSuccess(t('update.succeeded', { name: catalogName }));
+
+        await loadOperationHistory();
+    } catch (error) {
+        console.error('Update operation failed:', error);
+        if (error.detail && error.detail.error === 'validation_failed') {
+            await showValidationFailure(error.detail, catalogName);
+        } else {
+            showError(t('update.failed', { error: error.message }));
+        }
+    } finally {
+        clearOperationStatus();
+    }
+}
+
+/**
+ * Turn a structured validation rejection into readable, localised text.
+ *
+ * The backend returns i18n keys (never English prose) plus the numbers and
+ * names needed to fill them, so both gates render correctly in pl-PL and
+ * en-US without the server knowing the user's locale.
+ *
+ * @param {Object} validation - { catalog, content } from the 422 detail
+ * @returns {string} Multi-line message ready for the modal
+ */
+function formatValidationFailure(validation) {
+    const lines = [];
+    const catalog = validation?.catalog || {};
+    const content = validation?.content || {};
+
+    if (catalog.valid === false) {
+        lines.push(t('validation.catalogTitle'));
+        if (catalog.reason) {
+            lines.push(t(`validation.${catalog.reason}`, { name: catalog.catalog_name || '' }));
+        }
+        if (Array.isArray(catalog.suggestions) && catalog.suggestions.length > 0) {
+            lines.push('');
+            lines.push(t('validation.suggestionsHeader'));
+            catalog.suggestions.forEach(name => lines.push(`  • ${name}`));
+        } else if (catalog.reason === 'catalogValidation.noMatch') {
+            lines.push(t('validation.noSuggestions'));
+        }
+    }
+
+    if (content.valid === false) {
+        if (lines.length > 0) lines.push('');
+        lines.push(t('validation.contentTitle'));
+        if (content.reason) {
+            const names = (content.invalid_files || [])
+                .map(f => f.name)
+                .join(', ');
+            lines.push(t(`validation.${content.reason}`, {
+                images: content.image_count ?? 0,
+                required: content.min_required ?? 0,
+                names: names
+            }));
+        }
+        lines.push('');
+        lines.push(t('validation.summary', {
+            images: content.image_count ?? 0,
+            required: content.min_required ?? 0,
+            total: content.total_files ?? 0
+        }));
+        const garbage = content.non_image_files || [];
+        if (garbage.length > 0) {
+            lines.push(t('validation.garbageNote', {
+                count: garbage.length,
+                names: garbage.slice(0, 10).join(', ')
+            }));
+        }
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Present a validation rejection. Informational only - these gates are hard
+ * blocks with no override, so there is nothing to confirm.
+ *
+ * @param {Object} validation - { catalog, content }
+ * @param {string} [pathLabel] - Directory the rejection applies to
+ */
+async function showValidationFailure(validation, pathLabel) {
+    const body = formatValidationFailure(validation);
+    const title = pathLabel
+        ? `${t('validation.title')} — ${pathLabel}`
+        : t('validation.title');
+    await showModal(title, body);
+}
+
 async function handlePushOperation() {
     const selectedFiles = getSelectedFiles('a');
 
@@ -1909,11 +2239,23 @@ async function handlePushOperation() {
         }
 
         if (failures.length > 0) {
-            const preview = failures
-                .slice(0, 3)
-                .map(item => `${item.source_path}: ${item.error || 'unknown error'}`)
-                .join('; ');
-            showError(t('operations.pushBatchFailed', { count: failures.length, errors: preview }));
+            // A validation rejection carries structured detail; show it in full
+            // so the user sees the reason and any name suggestions, rather than
+            // a truncated toast.
+            const rejected = failures.filter(item => item.validation);
+            const other = failures.filter(item => !item.validation);
+
+            if (other.length > 0) {
+                const preview = other
+                    .slice(0, 3)
+                    .map(item => `${item.source_path}: ${item.error || 'unknown error'}`)
+                    .join('; ');
+                showError(t('operations.pushBatchFailed', { count: other.length, errors: preview }));
+            }
+
+            for (const item of rejected) {
+                await showValidationFailure(item.validation, item.source_path);
+            }
         }
 
         clearSelection('a');
@@ -1926,7 +2268,11 @@ async function handlePushOperation() {
 
     } catch (error) {
         console.error('Push operation failed:', error);
-        showError(t('operations.pushFailed', { error: error.message }));
+        if (error.detail && error.detail.error === 'validation_failed') {
+            await showValidationFailure(error.detail);
+        } else {
+            showError(t('operations.pushFailed', { error: error.message }));
+        }
     } finally {
         clearOperationStatus();
     }
@@ -2055,6 +2401,20 @@ function updateVFButtonStates() {
     // Update Pull button
     const selectedOperationId = getSelectedOperationId();
     updatePullButtonState(!!selectedOperationId);
+
+    // Update button: a completed PUSH/UPDATE selected in the operation queue.
+    // This layout has a single file pane plus the queue, so the catalog to
+    // update is identified by the operation that created it - same entry
+    // point as Pull.
+    const selectedOperation = selectedOperationId
+        ? state.operationQueue.operations.find(op => op.id === selectedOperationId)
+        : null;
+    updateUpdateButtonState(
+        !!selectedOperation &&
+        ['PUSH', 'UPDATE'].includes(selectedOperation.type) &&
+        selectedOperation.status === 'COMPLETED' &&
+        !!selectedOperation.dest_path
+    );
 }
 
 /**

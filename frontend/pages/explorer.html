@@ -83,6 +83,9 @@
                 <button class="btn btn-secondary btn-pull" id="pull-btn" data-i18n-title="explorer.pullButtonTitle" title="Revert selected operation from Operation Queue" disabled>
                     <span class="arrow-horizontal">&lt;</span><span class="arrow-vertical">&#x2191;</span> <span data-i18n="explorer.pullButton">Pull</span>
                 </button>
+                <button class="btn btn-secondary btn-update" id="update-btn" data-i18n-title="update.description" title="Rename, move or delete entries inside a pushed catalog" disabled>
+                    <span data-i18n="update.title">Update catalog</span>
+                </button>
             </div>
 
             <!-- Operation History (Right Side) -->
@@ -172,6 +175,30 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="modal-cancel" data-i18n="modal.cancel">Cancel</button>
                 <button class="btn btn-primary" id="modal-confirm" data-i18n="modal.confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Catalog Modal -->
+    <div class="modal hidden" id="update-modal">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="update-modal-title" data-i18n="update.title">Update catalog</h3>
+                <button class="modal-close" id="update-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" data-i18n="update.description">Rename, move or delete entries inside a catalog that has already been pushed.</p>
+                <p><strong><span data-i18n="update.catalogLabel">Catalog</span>:</strong> <span id="update-catalog-name"></span></p>
+
+                <h4 data-i18n="update.entriesHeader">Contents</h4>
+                <div id="update-entries" class="update-entries"></div>
+
+                <h4 data-i18n="update.pendingHeader">Pending changes</h4>
+                <div id="update-pending" class="update-pending"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="update-modal-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="update-modal-apply" data-i18n="update.apply">Apply changes</button>
             </div>
         </div>
     </div>

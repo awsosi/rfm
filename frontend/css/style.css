@@ -1854,3 +1854,56 @@ select {
         display: none;
     }
 }
+
+/* ==========================================================================
+   Update Catalog modal
+   ========================================================================== */
+
+.update-entries {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 6px;
+}
+
+.update-entries table {
+    width: 100%;
+}
+
+.update-entries td {
+    padding: 6px 8px;
+    vertical-align: middle;
+}
+
+.update-entries td:first-child {
+    width: 45%;
+    word-break: break-all;
+}
+
+.update-entries select,
+.update-entries input {
+    width: 100%;
+    min-width: 0;
+}
+
+.update-pending {
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.update-pending ul {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.update-pending li {
+    word-break: break-all;
+    margin-bottom: 2px;
+}
+
+@media (max-width: 640px) {
+    .update-entries td:first-child {
+        width: auto;
+    }
+}

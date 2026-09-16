@@ -234,6 +234,9 @@ export function showModal(title, message, showInput = false, inputValue = '') {
 
         // Set content
         modalTitle.textContent = title;
+        // textContent keeps this XSS-safe for user-supplied catalog and file
+        // names; pre-line makes embedded newlines render as line breaks.
+        modalMessage.style.whiteSpace = 'pre-line';
         modalMessage.textContent = message;
 
         // Show/hide input
