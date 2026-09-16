@@ -158,7 +158,14 @@ async def validate_directory_content(
             error_detail=response.message,
         )
 
+    # ``worker.py`` stores the worker's own ``error_details`` nested inside the
+    # command's ``response_data``, and ``worker_service.send_command`` hands that
+    # whole wrapper back as ``error_details``. Unwrap one level when we see it, so
+    # this keeps working either way if that seam is ever flattened. Same shape
+    # dance as the list/search consumers in api/app.py.
     data = response.error_details or {}
+    if isinstance(data.get("error_details"), dict):
+        data = data["error_details"]
 
     files = [str(f) for f in (data.get("files") or [])]
     non_image_files = [str(f) for f in (data.get("non_image_files") or [])]

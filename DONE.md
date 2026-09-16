@@ -6,6 +6,23 @@
 
 ---
 
+## 2026-09-16 - Fix: validate_dir result was dropped, rejecting valid catalogs
+
+A catalog with 4 genuine images was refused with "0 of 2 required image files - 0 files in total", while the worker had correctly logged `7 file(s), 4 image(s), 1 non-image, 2 mismatched` for the same directory.
+
+- **Not a worker bug.** The worker returned the right payload on `CommandResponse.error_details`.
+- `api/routes/worker.py` stores the worker's `error_details` *nested* inside the command's `response_data`, and `worker_service.send_command` then hands that whole wrapper back as `WorkerCommandResponse.error_details`.
+- So the service received `{file_count, total_size_bytes, error_details: {...real payload...}}`. `validate_directory_content` read `files`/`image_count` straight off the wrapper, got `None`, and fell through to `0` images and `0` files - which trips the minimum-image gate and blocks PUSH/UPDATE.
+- The `list`/`search` consumers in `api/app.py` already unwrap this (with a comment describing the exact trap); the newer validation service did not.
+
+**Fix:** `validate_directory_content` unwraps one level when it sees a nested `error_details`, tolerating both shapes so it keeps working if that seam is ever flattened. Single call site, so this covers PUSH, UPDATE and the PIM `files` array.
+
+**Tests:** `backend/tests/test_content_validation.py` (6 tests) pins the nested and flat shapes, that a genuinely empty directory still fails, that mismatched files still reject, and the `validate_dir` command contract. Verified to fail without the fix - 3 tests red, logging the exact production message `0 image file(s), 2 required (total files: 0...)`.
+
+**Still open:** the double-wrap itself at the `worker.py` / `worker_service.py` seam. `admin_system.py` reads `response.error_details.get("config")` for `get_status`, which the wrapper also defeats. Fixing the seam once and dropping the per-consumer unwraps is the better end state, but it touches ~6 consumers and was not attempted here.
+
+---
+
 ## 2026-09-16 - Fix: worker polling loop hammered the API instead of backing off
 
 Found while building `dev-vf` and pairing a worker with the dev stack.
