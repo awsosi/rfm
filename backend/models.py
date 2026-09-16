@@ -42,8 +42,9 @@ class UserRole(str, PyEnum):
 class WorkerStatus(str, PyEnum):
     """Worker status enumeration."""
     ACTIVE = "ACTIVE"
-    SUSPENDED = "SUSPENDED"
+    SUSPENDED = "SUSPENDED"  # set by an administrator only
     PENDING = "PENDING"
+    OFFLINE = "OFFLINE"  # missed heartbeats; returns to ACTIVE on check-in
 
 
 class OperationType(str, PyEnum):

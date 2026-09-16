@@ -41,7 +41,7 @@ def upgrade() -> None:
     # --- ENUM types ---
     for name, values in [
         ('userrole', "('ADMIN', 'USER')"),
-        ('workerstatus', "('ACTIVE', 'SUSPENDED', 'PENDING')"),
+        ('workerstatus', "('ACTIVE', 'SUSPENDED', 'PENDING', 'OFFLINE')"),
         ('operationtype', "('COPY', 'MOVE', 'DELETE', 'MKDIR', 'PUSH', 'PULL')"),
         ('operationstatus', "('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK')"),
         ('commandstatus', "('PENDING', 'SENT', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'TIMEOUT')"),
@@ -106,7 +106,7 @@ def upgrade() -> None:
         sa.Column('path_b_prefix', sa.String(length=500), nullable=True),
         sa.Column('path_c_prefix', sa.String(length=500), nullable=True),
         sa.Column('public_key', sa.Text(), nullable=False),
-        sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'PENDING', name='workerstatus', create_type=False), nullable=False),
+        sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'PENDING', 'OFFLINE', name='workerstatus', create_type=False), nullable=False),
         sa.Column('version', sa.String(length=50), nullable=True),
         sa.Column('last_heartbeat', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -394,7 +394,7 @@ def upgrade() -> None:
         ('enable_log_compression', 'true', 'BOOLEAN', 'Enable automatic log compression'),
         # Worker settings
         ('worker_heartbeat_interval', '30', 'INT', 'Worker heartbeat interval in seconds'),
-        ('worker_heartbeat_timeout', '90', 'INT', 'Worker considered offline after this many seconds'),
+        ('worker_heartbeat_timeout', '180', 'INT', 'Worker marked OFFLINE after this many seconds without a heartbeat'),
         ('worker_timeout', '300', 'INT', 'Worker command timeout in seconds'),
         ('worker_retry_attempts', '3', 'INT', 'Number of retry attempts for failed worker operations'),
         # Operations

@@ -104,10 +104,18 @@ class BackgroundTaskManager:
         """
         Periodic worker health check.
 
-        Marks workers as SUSPENDED if no heartbeat for 5 minutes.
+        Marks ACTIVE workers as OFFLINE when their last heartbeat is older than
+        the worker_heartbeat_timeout config value. OFFLINE workers return to
+        ACTIVE on their own when they check in again; SUSPENDED is reserved for
+        administrators and is never set here.
         """
+        from api.middleware.logging import AuditLogger
+        from api.services.worker_service import (
+            get_worker_heartbeat_timeout,
+            mark_stale_workers_offline,
+        )
+
         interval = 60  # Check every minute
-        heartbeat_timeout = 5 * 60  # 5 minutes
 
         while self._running:
             try:
@@ -119,32 +127,25 @@ class BackgroundTaskManager:
                 logger.debug("Checking worker health...")
 
                 async with get_db_session() as db:
-                    from models import Worker, WorkerStatus
-                    from sqlalchemy import select, and_
+                    heartbeat_timeout = await get_worker_heartbeat_timeout(db)
+                    offline_workers = await mark_stale_workers_offline(db, heartbeat_timeout)
 
-                    # Find active workers with stale heartbeats
-                    cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=heartbeat_timeout)
-
-                    stmt = select(Worker).where(
-                        and_(
-                            Worker.status == WorkerStatus.ACTIVE,
-                            Worker.last_heartbeat < cutoff_time
-                        )
+                for worker_id, worker_name, last_heartbeat in offline_workers:
+                    logger.warning(
+                        f"Worker {worker_name} marked as OFFLINE "
+                        f"(last heartbeat: {last_heartbeat}, timeout: {heartbeat_timeout}s)"
                     )
-
-                    result = await db.execute(stmt)
-                    stale_workers = result.scalars().all()
-
-                    for worker in stale_workers:
-                        logger.warning(
-                            f"Worker {worker.name} marked as SUSPENDED "
-                            f"(last heartbeat: {worker.last_heartbeat})"
-                        )
-                        worker.status = WorkerStatus.SUSPENDED
-                        await db.commit()
-
-                    if stale_workers:
-                        logger.info(f"Marked {len(stale_workers)} workers as SUSPENDED")
+                    await AuditLogger.log_admin_action(
+                        user_id=None,
+                        action="worker_offline",
+                        target="worker",
+                        details={
+                            "worker_id": worker_id,
+                            "worker_name": worker_name,
+                            "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
+                            "heartbeat_timeout": heartbeat_timeout,
+                        },
+                    )
 
             except asyncio.CancelledError:
                 break

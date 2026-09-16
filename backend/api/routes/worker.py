@@ -11,7 +11,7 @@ Provides endpoints for:
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,9 @@ from api.schemas import (
     CommandResponseRequest,
     WorkerConfigResponse,
 )
+from api.middleware.logging import get_client_ip
 from api.services.command_queue_service import CommandQueueService
+from api.services.worker_service import reactivate_offline_worker
 from database import get_db
 from models import Worker, WorkerStatus
 
@@ -41,6 +43,7 @@ async def get_worker_by_hostname(
 @router.get("/{worker_id}/commands/poll")
 async def poll_commands(
     worker_id: str,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
     timeout: int = Query(default=30, ge=1, le=60),
@@ -65,6 +68,10 @@ async def poll_commands(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Worker '{worker_id}' not found"
         )
+
+    # A poll proves an OFFLINE worker is alive again: reactivate it first so
+    # this poll is served normally.
+    await reactivate_offline_worker(worker, db, "poll", get_client_ip(request))
 
     # Check if worker is active
     if worker.status != WorkerStatus.ACTIVE:
@@ -186,12 +193,14 @@ async def submit_command_response(
 @router.post("/{worker_id}/heartbeat")
 async def submit_heartbeat(
     worker_id: str,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """
     Submit worker heartbeat (worker-side).
 
     Workers call this endpoint periodically to indicate they're online.
+    Accepted for every status; an OFFLINE worker is returned to ACTIVE.
 
     Args:
         worker_id: Worker hostname/name
@@ -210,6 +219,8 @@ async def submit_heartbeat(
     # Update last heartbeat
     worker.last_heartbeat = datetime.now(timezone.utc)
     await db.commit()
+
+    await reactivate_offline_worker(worker, db, "heartbeat", get_client_ip(request))
 
     return {
         "status": "ok",

@@ -1725,6 +1725,11 @@ body[data-theme="dark"] .file-list tbody tr.selected {
     color: #92400e;
 }
 
+.status-suspended {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
 .status-online {
     background-color: #dcfce7;
     color: #166534;

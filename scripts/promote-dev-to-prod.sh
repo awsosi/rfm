@@ -69,9 +69,13 @@ do_rollback() {
     ( cd "$PROD_DIR" && docker compose -f "$PROD_COMPOSE" up -d --force-recreate api webui )
 
     warn "Database was NOT restored automatically."
-    warn "Migration 012 only ADDS an enum value and config rows, so the previous"
-    warn "code runs fine against the newer schema and a DB rollback is usually"
-    warn "unnecessary. If you do need it:"
+    warn "Migrations 012 and 013 only ADD enum values and config rows, so the"
+    warn "previous code runs against the newer schema and a DB rollback is usually"
+    warn "unnecessary. One exception: code older than 013 cannot load workers in"
+    warn "the OFFLINE status. Move them to SUSPENDED (an administrator reactivates"
+    warn "them) before using the rolled-back admin panel:"
+    warn "  docker exec $PROD_DB_CONTAINER psql -U filemanager -d filemanager -c \"UPDATE workers SET status='SUSPENDED' WHERE status='OFFLINE';\""
+    warn "If you do need a full DB restore:"
     warn "  gunzip -c $backup_dir/prod-db.sql.gz | docker exec -i $PROD_DB_CONTAINER psql -U filemanager -d filemanager"
     ok "Rollback complete"
     exit 0
@@ -226,6 +230,11 @@ enum_has_update="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filem
 [ "$enum_has_update" = "1" ] || die "operationtype enum is missing the UPDATE value"
 ok "operationtype enum includes UPDATE"
 
+enum_has_offline="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc \
+    "select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='workerstatus' and e.enumlabel='OFFLINE';" | tr -d '[:space:]')"
+[ "$enum_has_offline" = "1" ] || die "workerstatus enum is missing the OFFLINE value"
+ok "workerstatus enum includes OFFLINE"
+
 seeded="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc \
     "select count(*) from config where key like 'pim%' or key like 'catalog_validation%' or key like 'push_validation%' or key='enable_update_archive_mirror';" | tr -d '[:space:]')"
 [ "$seeded" -ge 25 ] || die "Expected at least 25 seeded config rows, found $seeded"
@@ -266,5 +275,9 @@ Remaining manual steps:
      when the variable is present, leaving them unset keeps the Admin Panel
      authoritative across restarts.
   3. Deploy the rebuilt worker to the Windows host and re-pair it.
+  4. Workers that the old health check left SUSPENDED stay SUSPENDED (they
+     cannot be told apart from administrator suspensions). Reactivate each
+     one once in Admin Panel -> Workers; from then on a worker that misses
+     heartbeats goes OFFLINE and returns to ACTIVE on its own.
 
 EOF

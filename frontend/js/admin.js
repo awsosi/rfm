@@ -512,11 +512,17 @@ async function loadWorkers() {
         activeWorkers.forEach(worker => {
             const status = worker.status?.toUpperCase();
             const isActive = status === 'ACTIVE';
+            // OFFLINE = missed heartbeats; the worker returns to ACTIVE by itself
+            // when it checks in, so it can be suspended but needs no activation.
+            const isOffline = status === 'OFFLINE';
+            const statusTitle = isOffline
+                ? 'No heartbeat received. Returns to ACTIVE automatically when the worker checks in.'
+                : '';
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${worker.id}</td>
                 <td>${escapeHtml(worker.hostname || 'N/A')}</td>
-                <td><span class="status-badge status-${worker.status}">${worker.status}</span></td>
+                <td><span class="status-badge status-${(worker.status || '').toLowerCase()}" title="${statusTitle}">${worker.status}</span></td>
                 <td>${formatDate(worker.last_heartbeat)}</td>
                 <td>
                     <small>A: ${escapeHtml(worker.path_a_prefix || 'Not set')}<br>
@@ -524,7 +530,7 @@ async function loadWorkers() {
                     C: ${escapeHtml(worker.path_c_prefix || 'Not set')}</small>
                 </td>
                 <td>
-                    ${isActive
+                    ${isActive || isOffline
                         ? `<button class="btn btn-sm btn-warning suspend-worker-btn" data-id="${worker.id}">Suspend</button>`
                         : `<button class="btn btn-sm btn-success activate-worker-btn" data-id="${worker.id}">Activate</button>`
                     }

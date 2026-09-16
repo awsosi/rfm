@@ -9,17 +9,22 @@ Handles all communication with Windows worker services including:
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
 from api.schemas import WorkerRequest, WorkerCommandResponse
 from api.services.command_queue_service import CommandQueueService
-from models import Worker, WorkerStatus, CommandStatus
+from api.middleware.logging import AuditLogger
+from models import Config, Worker, WorkerStatus, CommandStatus
+
+# Fallback when the worker_heartbeat_timeout config row is missing or invalid.
+# The worker heartbeats every 60s, so 180s tolerates two lost heartbeats.
+DEFAULT_WORKER_HEARTBEAT_TIMEOUT = 180
 
 
 class WorkerCommunicationError(Exception):
@@ -185,25 +190,6 @@ class WorkerService:
             db: Database session
         """
         worker.last_heartbeat = datetime.now(timezone.utc)
-        await db.commit()
-
-    async def _mark_worker_suspended(
-        self,
-        worker: Worker,
-        db: AsyncSession,
-        reason: str,
-    ) -> None:
-        """
-        Mark worker as suspended due to communication failure.
-
-        Args:
-            worker: Worker model
-            db: Database session
-            reason: Reason for suspension
-        """
-        logger.error(f"Suspending worker {worker.name}: {reason}")
-
-        worker.status = WorkerStatus.SUSPENDED
         await db.commit()
 
     async def check_worker_health(
@@ -437,3 +423,106 @@ async def get_active_workers(db: AsyncSession) -> list[Worker]:
     stmt = select(Worker).where(Worker.status == WorkerStatus.ACTIVE)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_worker_heartbeat_timeout(db: AsyncSession) -> int:
+    """Read worker_heartbeat_timeout (seconds) from the config table."""
+    stmt = select(Config.value).where(Config.key == "worker_heartbeat_timeout")
+    value = (await db.execute(stmt)).scalar_one_or_none()
+    try:
+        timeout = int(value)
+    except (TypeError, ValueError):
+        timeout = 0
+    if timeout <= 0:
+        logger.warning(
+            f"Invalid worker_heartbeat_timeout {value!r}; "
+            f"using {DEFAULT_WORKER_HEARTBEAT_TIMEOUT}s"
+        )
+        return DEFAULT_WORKER_HEARTBEAT_TIMEOUT
+    return timeout
+
+
+async def mark_stale_workers_offline(
+    db: AsyncSession,
+    heartbeat_timeout: int,
+) -> list[tuple[int, str, Optional[datetime]]]:
+    """
+    Move ACTIVE workers without a recent heartbeat to OFFLINE.
+
+    A single conditional UPDATE, so a heartbeat that lands concurrently keeps
+    the worker ACTIVE, and when several API processes run this check at once
+    only one of them reports (and audits) each transition.
+
+    Returns:
+        (id, name, last_heartbeat) for every worker this call moved to OFFLINE
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=heartbeat_timeout)
+    stmt = (
+        update(Worker)
+        .where(
+            Worker.status == WorkerStatus.ACTIVE,
+            Worker.last_heartbeat < cutoff,
+        )
+        .values(status=WorkerStatus.OFFLINE)
+        .returning(Worker.id, Worker.name, Worker.last_heartbeat)
+        .execution_options(synchronize_session=False)
+    )
+    rows = (await db.execute(stmt)).all()
+    await db.commit()
+    return [tuple(row) for row in rows]
+
+
+async def reactivate_offline_worker(
+    worker: Worker,
+    db: AsyncSession,
+    trigger: str,
+    ip_address: Optional[str] = None,
+) -> bool:
+    """
+    Return an OFFLINE worker to ACTIVE because it checked in again.
+
+    Only OFFLINE is ever reactivated. SUSPENDED (administrator decision) and
+    PENDING (awaiting approval) are left alone. The UPDATE is conditional on
+    the row still being OFFLINE, so an administrator suspension that commits
+    first is never overwritten.
+
+    Args:
+        worker: Worker loaded in this request; refreshed when changed
+        db: Database session
+        trigger: What proved the worker alive ("heartbeat", "poll", "register")
+        ip_address: Client IP of the check-in, recorded in the audit log
+
+    Returns:
+        True if this call moved the worker to ACTIVE
+    """
+    if worker.status != WorkerStatus.OFFLINE:
+        return False
+
+    stmt = (
+        update(Worker)
+        .where(Worker.id == worker.id, Worker.status == WorkerStatus.OFFLINE)
+        .values(status=WorkerStatus.ACTIVE, last_heartbeat=datetime.now(timezone.utc))
+        .returning(Worker.id)
+        .execution_options(synchronize_session=False)
+    )
+    reactivated = (await db.execute(stmt)).scalar_one_or_none() is not None
+    await db.commit()
+    await db.refresh(worker)
+
+    if not reactivated:
+        return False
+
+    logger.info(f"Worker {worker.name} checked in ({trigger}); OFFLINE -> ACTIVE")
+    await AuditLogger.log_admin_action(
+        user_id=None,
+        action="worker_auto_reactivate",
+        target="worker",
+        details={
+            "worker_id": worker.id,
+            "worker_name": worker.name,
+            "previous_status": WorkerStatus.OFFLINE.value,
+            "trigger": trigger,
+        },
+        ip_address=ip_address,
+    )
+    return True

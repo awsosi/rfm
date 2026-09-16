@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-09-16 - Fix: workers stayed SUSPENDED after a restart until an admin reactivated them
+
+Observed on dev: `DELA-5420-AW` (id=2) rebooted for a Windows update at 06:04 and from then on every poll got `403 Worker is not active (status: SUSPENDED)`, although it was running, registering and heartbeating normally.
+
+- `background_tasks._worker_health_check_loop` set `SUSPENDED` on any ACTIVE worker with a heartbeat older than a hardcoded 5 minutes - the same status `admin.suspend_worker` sets. Nothing recorded *why*, so the server could not undo the automatic case without also undoing a deliberate administrator suspension.
+- Nothing ever moved a worker back: register, heartbeat and poll all ignored status, and poll refused non-ACTIVE workers before touching anything. The evidence the worker was alive (fresh heartbeats) was stored and ignored.
+- The `worker_heartbeat_timeout` config row (90) was never read; `WorkerService._mark_worker_suspended` had no callers.
+
+**Fix:**
+- New `WorkerStatus.OFFLINE`, set only by the health check. `SUSPENDED` is now administrator-only. Chosen over a `suspended_reason` column: status stays the single source of truth, every existing `status != ACTIVE` check already does the right thing, and the admin UI can show the two differently without a second field.
+- Health check reads `worker_heartbeat_timeout` from the `config` table and moves stale ACTIVE workers to OFFLINE with one conditional `UPDATE ... WHERE status='ACTIVE' AND last_heartbeat < cutoff RETURNING`. uvicorn runs 4 processes, each with its own loop; the conditional update means exactly one of them reports and audits (`worker_offline`) each transition.
+- `worker_service.reactivate_offline_worker` is called from heartbeat, poll and register. It runs `UPDATE ... SET status='ACTIVE' WHERE id=:id AND status='OFFLINE'`, so a concurrent administrator suspension is never overwritten, writes `worker_auto_reactivate` (`user_id=None`, trigger, client IP) and logs at INFO. In poll it runs *before* the ACTIVE check, so the poll that proves the worker is alive is served normally. SUSPENDED and PENDING are never touched. The 403 message format (`... (status: OFFLINE)`) that the worker parses is unchanged.
+- Timeout **180s** (was: 300s hardcoded, 90s seeded but unused). The worker heartbeats every 60s on its own task, independent of command execution, so 180s tolerates two lost heartbeats (e.g. an API restart during a long copy) while detecting a dead worker within ~4 minutes (timeout + 60s check interval). Recovery is automatic, so a flap costs only an audit pair.
+- **Commands are deliberately not cancelled** when a worker goes OFFLINE. Heartbeats keep running while a command executes, so OFFLINE with a SENT command means the worker lost contact, not that it stopped work: during a network outage it may still finish and report. `cancel_pending_commands` would mark it FAILED, the caller would report failure, and the late response would then flip the command and operation to COMPLETED. PENDING commands are already bounded by `worker_timeout` and marked TIMEOUT, so they are not picked up after the caller gave up. The edge race the brief mentioned is in `wait_for_command_completion` and is unrelated to OFFLINE - see TODO.md.
+- `admin_system` stats: `workers_offline` now counts OFFLINE status (was: ACTIVE with a 5-minute-old heartbeat); `workers_healthy` = ACTIVE.
+- Admin UI: OFFLINE workers stay in the approved list with a grey badge and tooltip, and offer **Suspend** (to keep a dead worker from coming back) rather than Activate. Badge classes are now lowercased so the existing `.status-*` styles apply (they never matched the uppercase status before); added `.status-suspended`.
+- Removed dead `WorkerService._mark_worker_suspended`.
+
+**Schema:** `OFFLINE` added to `workerstatus` in `001` (fresh installs) and in new revision **`013_worker_offline_status.py`** for existing databases, following 012's precedent and agreed as the resolution to TODO.md rule 3. 013 also moves `worker_heartbeat_timeout` 90 -> 180 only if still at the untouched seed. Downgrade maps OFFLINE rows to SUSPENDED (older code cannot load OFFLINE). `promote-dev-to-prod.sh` verifies the enum value and its rollback text explains the OFFLINE caveat.
+
+**Rollout note:** workers that the *old* health check suspended are indistinguishable from administrator suspensions and stay SUSPENDED. An administrator reactivates each one once. Dev id=2 was in exactly that state.
+
+**Tests:** `backend/tests/test_worker_offline.py`, 18 tests against real PostgreSQL 16 (schema built with `alembic upgrade head`; set `TEST_DATABASE_URL`). They cover the health-check transition via the real loop (config-driven timeout, audit, SUSPENDED/PENDING untouched), invalid-config fallback, 4 concurrent health checks -> 1 transition, reactivation via poll/heartbeat/register with audit, no reactivation from SUSPENDED/PENDING for each trigger (including the exact 403 text), the conditional guard against a concurrent admin suspension, and concurrent check-ins -> 1 audit entry. All 18 pass. Mutation-checked: dropping the `status='OFFLINE'` guard, writing SUSPENDED on stale, or reactivating any non-ACTIVE status each turns the matching tests red. Full suite: 33 passed, 17 errors - all 17 in the pre-existing `test_auth.py`, which requests a `db_session` fixture that does not exist.
+
+**Migration verified** on a throwaway postgres:16-alpine: 011 -> 013 in one run (prod path) and 012 -> 013 (dev path) both give `{ACTIVE,SUSPENDED,PENDING,OFFLINE}`, timeout 180, existing SUSPENDED row untouched; re-run is a no-op; downgrade maps OFFLINE -> SUSPENDED and restores 90.
+
+**Dev deploy (2026-09-16 08:40 UTC):** api-dev rebuilt, migration `012 -> 013` ran, `worker_heartbeat_timeout=180`. The real worker's first heartbeat on the new code (08:41:08) left id=2 SUSPENDED, as designed. Acceptance criteria 1-2 (stop the Windows service > timeout, start it, see OFFLINE -> ACTIVE and the worker's `ACTIVE again ... (was OFFLINE)` log) require stopping the service on the Windows host and were not run from the server.
+
+**Not addressed here:** worker identity is not verified at all - see TODO.md.
+
+---
+
 ## 2026-09-16 - Fix: worker reconnect path and Event Viewer noise
 
 **Reconnect (worker side).** After the dev host rebooted, the approved worker came back and was refused forever with `403 (status: SUSPENDED)`.

@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     worker_retry_attempts: int = 3
     worker_retry_delays: list[int] = [2, 4, 8]
     worker_heartbeat_interval: int = 30
-    worker_heartbeat_timeout: int = 90
+    worker_heartbeat_timeout: int = 180
 
     # External Integrations
     # PolkaSQL Authentication (Sybase SQL Anywhere 17 - RFM_Auth WebService)

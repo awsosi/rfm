@@ -278,6 +278,7 @@ class AdminSystem {
             case 'ACTIVE': return 'badge-success';
             case 'SUSPENDED': return 'badge-warning';
             case 'PENDING': return 'badge-info';
+            case 'OFFLINE': return 'badge-secondary';
             default: return 'badge-secondary';
         }
     }

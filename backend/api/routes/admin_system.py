@@ -582,14 +582,9 @@ async def get_system_stats(
     )
     pending_workers = (await db.execute(pending_workers_stmt)).scalar() or 0
 
-    # Count offline workers (no heartbeat in 5 minutes)
-    five_min_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+    # Offline workers are marked by the health check (worker_heartbeat_timeout)
     offline_workers_stmt = select(sql_func.count(Worker.id)).where(
-        Worker.status == WorkerStatus.ACTIVE,
-        or_(
-            Worker.last_heartbeat < five_min_ago,
-            Worker.last_heartbeat == None,
-        ),
+        Worker.status == WorkerStatus.OFFLINE
     )
     offline_workers = (await db.execute(offline_workers_stmt)).scalar() or 0
 
@@ -637,7 +632,7 @@ async def get_system_stats(
         operations_failed_last_hour=failed_last_hour,
         operations_in_progress=in_progress,
         operations_pending=pending,
-        workers_healthy=active_workers - offline_workers,
+        workers_healthy=active_workers,
         workers_suspended=suspended_workers,
         workers_offline=offline_workers,
         total_users=total_users,

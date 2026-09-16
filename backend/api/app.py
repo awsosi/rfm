@@ -30,6 +30,7 @@ from api.services.worker_service import (
     WorkerService,
     get_worker_by_id,
     get_active_workers,
+    reactivate_offline_worker,
     unwrap_worker_data,
 )
 from api.services.operation_service import OperationService
@@ -1637,6 +1638,10 @@ async def register_worker(
 
         await db.commit()
         await db.refresh(existing_worker)
+
+        # Re-registration after a restart proves an OFFLINE worker is alive.
+        # SUSPENDED and PENDING workers keep their status.
+        await reactivate_offline_worker(existing_worker, db, "register", get_client_ip(request))
 
         return WorkerResponse.model_validate(existing_worker)
 

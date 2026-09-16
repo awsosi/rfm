@@ -2,7 +2,7 @@
 
 > **Critical patterns and anti-patterns discovered during development**
 > **Purpose:** Prevent recurring bugs and document invisible failure modes
-> **Last Updated:** 2026-02-09
+> **Last Updated:** 2026-09-16
 
 ---
 
@@ -18,6 +18,19 @@
 1. Model *why* a resource is unavailable, not just *that* it is. An automatic, self-healing condition needs a status (or reason) that an automatic process is allowed to clear.
 2. Log the state the server reported, never an assumed one. A hardcoded "PENDING" in a log line is a bug that looks like documentation.
 3. A rejection is not a reason to re-register. Re-registering on 403 rewrote the stored public key every 30 seconds and changed nothing.
+
+---
+
+## Worker Status, Server Side: Making Automatic Transitions Safe
+
+Follows the lesson above. The fix introduced `OFFLINE` (health check only) next to administrator-only `SUSPENDED`, and moves a worker back to ACTIVE when it checks in. Getting that edge right needed more than a new enum value.
+
+**Rules:**
+1. Design both edges of an automatic state together. If a state can be entered automatically, define now what automatically leaves it.
+2. Automatic transitions use conditional updates (`UPDATE ... WHERE status = <expected>`), never read-modify-write. A human decision committed in between must win.
+3. Background loops run once per process. With `uvicorn --workers 4` a select-then-update loop applies and audits every transition 4 times; `UPDATE ... RETURNING` lets exactly one process own each transition.
+4. A config key that exists but is never read is worse than none: `worker_heartbeat_timeout=90` sat in the table while 300s was hardcoded. When touching such code, wire the key or delete it.
+5. Before cancelling work on a liveness timeout, check whether liveness and work share a thread. The worker heartbeats on its own task, so "no heartbeat" means "no contact", not "no work"; cancelling its SENT commands would fail operations it still completes.
 
 ---
 
