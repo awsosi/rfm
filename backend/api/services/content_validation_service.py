@@ -11,9 +11,10 @@ Enforces the minimum-content rules before a catalog may be PUSHed or UPDATEd:
 Anything that is not an image ("garbage") does not count toward the minimum
 but is still reported, and is still included in the file list handed to PIM.
 
-Files matching ``push_ignore_file_masks`` (default ``Thumbs.db``) are dropped
-from the listing: PUSH does not copy them, so they must neither count nor be
-announced to PIM.
+Files matching ``push_ignore_file_masks`` (default ``Thumbs.db``), plus the
+operating systems' metadata files while ``push_ignore_system_files`` is on
+(default), are dropped from the listing: PUSH does not copy them, so they must
+neither count nor be announced to PIM.
 
 When ``push_validation_file_names`` is on (default), every remaining file must
 be named ``<number>.<extension>`` (e.g. ``3.png``), the only form PIM accepts.
@@ -48,11 +49,19 @@ _CONFIG_KEYS = [
     'push_validation_allowed_extensions',
     'push_validation_verify_content',
     'push_validation_file_names',
-    'push_ignore_file_masks',
 ]
+
+# Every setting that decides which files PUSH ignores (and destroys at source)
+IGNORE_CONFIG_KEYS = ['push_ignore_file_masks', 'push_ignore_system_files']
 
 _DEFAULT_EXTENSIONS = "jpg,jpeg,png,gif,bmp,tif,tiff,webp"
 DEFAULT_IGNORE_MASKS = "Thumbs.db"
+
+# Metadata that macOS and Windows leave in folders; never catalog content
+SYSTEM_FILE_MASKS = [
+    ".DS_Store", "._*", ".localized", ".apdisk",   # macOS (._* = AppleDouble)
+    "Thumbs.db", "ehthumbs.db", "desktop.ini",      # Windows
+]
 
 # The file name form PIM accepts: "<number>.<extension>", e.g. "3.png"
 _PIM_FILE_NAME_RE = re.compile(r"[0-9]+\.[A-Za-z0-9]+")
@@ -101,7 +110,7 @@ class ContentValidationResult:
 
 
 async def _get_validation_config(db: AsyncSession) -> dict:
-    stmt = select(Config).where(Config.key.in_(_CONFIG_KEYS))
+    stmt = select(Config).where(Config.key.in_(_CONFIG_KEYS + IGNORE_CONFIG_KEYS))
     result = await db.execute(stmt)
     return {c.key: c.value for c in result.scalars()}
 
@@ -112,9 +121,18 @@ def _truthy(value: Optional[str], default: bool = False) -> bool:
     return value.strip().lower() in ('true', '1', 'yes')
 
 
-def parse_ignore_masks(value: Optional[str]) -> List[str]:
-    """Split the ``push_ignore_file_masks`` setting into its masks."""
-    return [m.strip() for m in (value or "").split(",") if m.strip()]
+def ignore_masks_from_config(config: dict) -> List[str]:
+    """
+    The masks PUSH ignores: ``push_ignore_file_masks`` plus, while
+    ``push_ignore_system_files`` is on (default), ``SYSTEM_FILE_MASKS``.
+    ``config`` holds the ``IGNORE_CONFIG_KEYS`` rows.
+    """
+    value = config.get('push_ignore_file_masks', DEFAULT_IGNORE_MASKS)
+    masks = [m.strip() for m in (value or "").split(",") if m.strip()]
+    if _truthy(config.get('push_ignore_system_files'), default=True):
+        present = {m.lower() for m in masks}
+        masks += [m for m in SYSTEM_FILE_MASKS if m.lower() not in present]
+    return masks
 
 
 def matches_ignore_mask(name: str, masks: List[str]) -> bool:
@@ -163,7 +181,7 @@ async def validate_directory_content(
     ]
     verify_content = _truthy(config.get('push_validation_verify_content'), default=True)
     check_file_names = _truthy(config.get('push_validation_file_names'), default=True)
-    ignore_masks = parse_ignore_masks(config.get('push_ignore_file_masks', DEFAULT_IGNORE_MASKS))
+    ignore_masks = ignore_masks_from_config(config)
 
     if not _truthy(config.get('push_validation_enabled'), default=True):
         logger.debug("Directory content validation is disabled, skipping")
@@ -240,7 +258,7 @@ async def validate_directory_content(
         files = [name for name in files if name not in ignored]
         non_image_files = [name for name in non_image_files if name not in ignored]
         invalid_files = [f for f in invalid_files if f.get("name") not in ignored]
-        logger.info(f"Content validation of {path!r} ignores {ignored} (push_ignore_file_masks)")
+        logger.info(f"Content validation of {path!r} ignores {ignored} (ignored file masks)")
 
     result = ContentValidationResult(
         valid=True,

@@ -1057,19 +1057,17 @@ class OperationService:
         Returns:
             WorkerCommandResponse from worker
         """
-        from api.services.content_validation_service import DEFAULT_IGNORE_MASKS, parse_ignore_masks
+        from api.services.content_validation_service import IGNORE_CONFIG_KEYS, ignore_masks_from_config
 
         # Read push settings from DB (runtime source of truth)
-        push_config_keys = ['enable_push_flatten', 'enable_push_archive', 'push_ignore_file_masks']
+        push_config_keys = ['enable_push_flatten', 'enable_push_archive', *IGNORE_CONFIG_KEYS]
         stmt = select(Config).where(Config.key.in_(push_config_keys))
         result = await db.execute(stmt)
         push_config = {c.key: c.value for c in result.scalars()}
 
         flatten = push_config.get("enable_push_flatten", "false").lower() == "true"
         archive = push_config.get("enable_push_archive", "false").lower() == "true"
-        ignore_masks = parse_ignore_masks(
-            push_config.get("push_ignore_file_masks", DEFAULT_IGNORE_MASKS)
-        )
+        ignore_masks = ignore_masks_from_config(push_config)
 
         logger.info(
             f"Executing PUSH operation {operation.id}: "

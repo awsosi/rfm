@@ -6,6 +6,21 @@
 
 ---
 
+## 2026-09-17 - Ignore OS metadata files on PUSH (`.DS_Store` blocked a catalog)
+
+**Report.** `A:/olek/AKCESORIA 001GDM301031M 0-YELLOW` (4 images, 5 files) was refused by the new PIM file name rule: "Rename or remove: .DS_Store". macOS metadata is not catalog content and may be destroyed.
+
+**Fix.** New `push_ignore_system_files` (**on by default**, migration `017`, env `ENABLE_PUSH_IGNORE_SYSTEM_FILES`, Admin Panel -> PUSH Operation Settings -> Ignore operating system files). While on, `SYSTEM_FILE_MASKS` (`.DS_Store`, `._*`, `.localized`, `.apdisk`, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`) are added to `push_ignore_file_masks` (case-insensitive, no duplicates) by one helper, `ignore_masks_from_config`, used by:
+- content validation (PUSH and UPDATE): not counted, not name-checked, not sent to PIM
+- PUSH execution: the worker does not copy them, and archive cleanup destroys them (no worker change, it already takes `ignore_masks`)
+- `/api/config/push-settings`: the push confirmation lists the effective masks
+
+The toggle lives in the optional env block, so an Admin Panel change survives restarts (unlike `push_ignore_file_masks`, see TODO).
+
+**Tests.** 99 passed, 17 errors (pre-existing `test_auth.py` fixture). Unit: default/off/deduplicated masks, the reported folder shape (`.DS_Store`, `._1.jpg`) valid by default and refused when off. End to end through `push_operation`: off -> 422 naming `.DS_Store`, `._1.png`, `desktop.ini`; on -> completed, only `1.png`/`2.png` copied, the copy command carries the masks, PIM body `["1.png", "2.png"]`, confirmation shows the masks. Mutation: defaulting the toggle to off fails both unit tests.
+
+---
+
 ## 2026-09-17 - PIM 422 on `Thumbs.db`; PIM file name rule in preflight
 
 **Bug.** PUSH #9 (`A:/olek/TORBA HB0788 FA0542-910 SILVER`, 7 files) completed, but PIM answered `HTTP 422 ... "files[7]": Nazwa pliku musi mieć format "<numer>.<rozszerzenie>"` on every retry. The event's `files` were `["1.png", ..., "7.png", "Thumbs.db"]`.

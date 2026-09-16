@@ -192,6 +192,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
             ("PUSH_VALIDATION_VERIFY_CONTENT",),
             str(settings.push_validation_verify_content).lower(),
         ),
+        "push_ignore_system_files": (
+            ("ENABLE_PUSH_IGNORE_SYSTEM_FILES", "PUSH_IGNORE_SYSTEM_FILES"),
+            str(settings.push_ignore_system_files).lower(),
+        ),
         "push_validation_file_names": (
             ("ENABLE_PUSH_VALIDATION_FILE_NAMES", "PUSH_VALIDATION_FILE_NAMES"),
             str(settings.push_validation_file_names).lower(),
@@ -2055,14 +2059,16 @@ async def get_push_settings(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get PUSH operation settings for confirmation dialog."""
-    keys = ['enable_push_flatten', 'enable_push_archive', 'push_ignore_file_masks']
+    from api.services.content_validation_service import IGNORE_CONFIG_KEYS, ignore_masks_from_config
+
+    keys = ['enable_push_flatten', 'enable_push_archive', *IGNORE_CONFIG_KEYS]
     stmt = select(Config).where(Config.key.in_(keys))
     result = await db.execute(stmt)
     configs = {c.key: c.value for c in result.scalars()}
     return {
         "flatten": configs.get("enable_push_flatten", "false").lower() == "true",
         "archive": configs.get("enable_push_archive", "false").lower() == "true",
-        "ignore_masks": configs.get("push_ignore_file_masks", "Thumbs.db"),
+        "ignore_masks": ", ".join(ignore_masks_from_config(configs)),
     }
 
 

@@ -667,6 +667,13 @@
                                     <input type="text" id="config-push-ignore-masks" name="push_ignore_file_masks" class="form-control" placeholder="Thumbs.db">
                                     <small>Files matching these masks are excluded from PUSH and destroyed at source. Examples: Thumbs.db, *.tmp, desktop.ini</small>
                                 </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="config-push-ignore-system-files" name="push_ignore_system_files">
+                                        Ignore operating system files
+                                    </label>
+                                    <small>On by default. Also treats macOS and Windows metadata files as ignored (excluded from PUSH, from validation and from PIM, and destroyed at source): .DS_Store, ._*, .localized, .apdisk, Thumbs.db, ehthumbs.db, desktop.ini</small>
+                                </div>
                             </div>
 
                             <!-- UI Settings -->

@@ -275,6 +275,11 @@ class Settings(BaseSettings):
     enable_push_flatten: bool = False
     enable_push_archive: bool = False
     push_ignore_file_masks: str = "Thumbs.db"
+    # Also ignore (and destroy at source) OS metadata files: .DS_Store, ._*, Thumbs.db, desktop.ini, ...
+    push_ignore_system_files: bool = Field(
+        default=True,
+        validation_alias=AliasChoices('enable_push_ignore_system_files', 'push_ignore_system_files'),
+    )
 
     # UPDATE operation behavior
     # Mirrors in-place changes made in PATH_B into the PATH_C archive.

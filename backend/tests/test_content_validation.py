@@ -275,3 +275,39 @@ async def test_bad_names_are_reported_alongside_another_failure():
 
     assert result.reason == "contentValidation.tooFewImages"
     assert result.invalid_names == ["front.jpg"]
+
+
+# ---------------------------------------------------------------------------
+# Operating system metadata files (push_ignore_system_files)
+# ---------------------------------------------------------------------------
+
+from api.services.content_validation_service import ignore_masks_from_config
+
+
+def test_system_files_are_ignored_by_default():
+    assert ignore_masks_from_config({}) == [
+        "Thumbs.db", ".DS_Store", "._*", ".localized", ".apdisk", "ehthumbs.db", "desktop.ini",
+    ]
+    # An operator's own mask is kept, and not repeated in another case
+    assert ignore_masks_from_config({"push_ignore_file_masks": "*.tmp, DESKTOP.INI"}) == [
+        "*.tmp", "DESKTOP.INI", ".DS_Store", "._*", ".localized", ".apdisk", "Thumbs.db", "ehthumbs.db",
+    ]
+    assert ignore_masks_from_config({"push_ignore_system_files": "false"}) == ["Thumbs.db"]
+
+
+@pytest.mark.asyncio
+async def test_ds_store_does_not_block_a_catalog():
+    """Dev, 2026-09-17: A:/olek/AKCESORIA 001GDM301031M 0-YELLOW was refused
+    with "Rename or remove: .DS_Store" (4 images, 5 files)."""
+    payload = {"files": ["._1.jpg", ".DS_Store", "1.jpg", "2.jpg", "3.jpg", "4.jpg"], "total_files": 6,
+               "image_count": 5, "non_image_files": [".DS_Store"], "invalid_files": []}
+
+    result = await _validate_with(payload)
+
+    assert result.valid is True
+    assert result.files == ["1.jpg", "2.jpg", "3.jpg", "4.jpg"]
+    assert (result.total_files, result.image_count) == (4, 4)
+
+    refused = await _validate_with(payload, push_ignore_system_files="false")
+    assert refused.reason == "contentValidation.invalidFileNames"
+    assert refused.invalid_names == ["._1.jpg", ".DS_Store"]

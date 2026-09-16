@@ -718,3 +718,36 @@ async def test_name_rule_judges_update_after_its_actions(session, db_manager, se
     received = await remote.wait_for_pim(1)
     assert received[0]["body"]["files"] == ["1.png", "2.png"]
     assert received[0]["body"]["eventType"] == "updated"
+
+
+async def test_system_files_are_ignored_and_not_copied(session, db_manager, settings, remote, name_rule_setup):
+    from api.app import get_push_settings, push_operation
+    from api.schemas import FilePushRequest
+
+    user, worker, fake = name_rule_setup["user"], name_rule_setup["worker"], name_rule_setup["fake"]
+    source = f"A:/{TORBA}"
+    fake.files.update({
+        f"{source}/1.png": PNG, f"{source}/2.png": PNG,
+        f"{source}/.DS_Store": b"mac", f"{source}/._1.png": b"appledouble", f"{source}/desktop.ini": b"win",
+    })
+    request = FilePushRequest(source_path=source, worker_id=worker.id)
+
+    # Switched off, the metadata files are ordinary files and fail the name rule
+    await set_config(session, push_ignore_system_files="false")
+    with pytest.raises(HTTPException) as refused:
+        await push_operation(request, fake_request(), user, session, settings)
+    assert refused.value.detail["content"]["invalid_names"] == [".DS_Store", "._1.png", "desktop.ini"]
+    assert remote.pim_received == []
+
+    # On (the default): not validated, not copied, not announced to PIM, and listed in the confirmation
+    await set_config_value(session, push_ignore_system_files="true")
+    shown = await get_push_settings(user, session)
+    assert shown["ignore_masks"].split(", ")[:3] == ["Thumbs.db", "*.tmp", ".DS_Store"]
+
+    push = await push_operation(request, fake_request(), user, session, settings)
+    assert push.status == OperationStatus.COMPLETED
+    assert sorted(p for p in fake.files if p.startswith("B:/")) == [f"B:/{TORBA}/1.png", f"B:/{TORBA}/2.png"]
+    copy = next(c for c in fake.commands if c[0] == "copy")
+    assert ".DS_Store" in copy[3]["ignore_masks"] and "._*" in copy[3]["ignore_masks"]
+    received = await remote.wait_for_pim(1)
+    assert received[0]["body"]["files"] == ["1.png", "2.png"]
