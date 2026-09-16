@@ -26,7 +26,12 @@ from api.middleware.logging import (
     get_client_ip,
 )
 from api.schemas import *
-from api.services.worker_service import WorkerService, get_worker_by_id, get_active_workers
+from api.services.worker_service import (
+    WorkerService,
+    get_worker_by_id,
+    get_active_workers,
+    unwrap_worker_data,
+)
 from api.services.operation_service import OperationService
 from database import init_database, close_database, get_db, health_check
 from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType, OperationStatus
@@ -542,19 +547,11 @@ async def list_directory(
             worker, path, db, offset, limit
         )
 
-        # Parse response into FileInfo objects
-        # The response structure has error_details nested inside error_details
-        # because worker.py wraps the worker's error_details in a response_dict
+        # Parse response into FileInfo objects. The worker's payload is nested
+        # inside error_details by the worker route; unwrap_worker_data handles
+        # that (and the flat shape) in one place.
         items = []
-        data = None
-
-        if response.error_details:
-            # Check if error_details is nested (new structure after recent changes)
-            if "error_details" in response.error_details:
-                data = response.error_details["error_details"]
-            # Or if items is directly in error_details (old structure)
-            elif "items" in response.error_details:
-                data = response.error_details
+        data = unwrap_worker_data(response)
 
         if data and "items" in data:
             # Transform worker response format to FileInfo format

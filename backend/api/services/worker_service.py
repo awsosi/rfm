@@ -46,6 +46,39 @@ class WorkerTimeoutError(WorkerCommunicationError):
     pass
 
 
+def unwrap_worker_data(response) -> dict:
+    """
+    Return the worker's own result payload from a WorkerCommandResponse.
+
+    A worker puts its result dict on ``CommandResponse.ErrorDetails``; the
+    worker route then serialises the whole response (file_count,
+    total_size_bytes, error_details) into ``response_data``. The payload
+    therefore normally arrives nested one level deep:
+
+        {"file_count": 7, "total_size_bytes": 392,
+         "error_details": {"files": [...], "image_count": 4, ...}}
+
+    Some paths deliver it flat, so both shapes are accepted. Reading
+    ``response.error_details`` directly silently yields an empty result for
+    the nested shape, which is easy to mistake for an empty directory.
+
+    Args:
+        response: WorkerCommandResponse (or anything with ``error_details``)
+
+    Returns:
+        The worker's payload dict, or an empty dict when there is none.
+    """
+    details = getattr(response, "error_details", None)
+    if not isinstance(details, dict):
+        return {}
+
+    inner = details.get("error_details")
+    if isinstance(inner, dict):
+        return inner
+
+    return details
+
+
 class WorkerService:
     """
     Service for communicating with Windows worker services via command queue.

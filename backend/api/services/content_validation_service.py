@@ -14,9 +14,12 @@ but is still reported, and is still included in the file list handed to PIM.
 The listing happens once, on the worker, via the ``validate_dir`` command, and
 its result feeds both this validation and the PIM ``files`` array.
 
-Note: the worker's full response payload arrives in
+Note: the worker's payload arrives on
 ``WorkerCommandResponse.error_details`` — that field doubles as the generic
-data channel throughout this codebase (see ``list_directory`` in app.py).
+data channel throughout this codebase — and is nested one level deeper by the
+worker route. ``unwrap_worker_data()`` handles both shapes; reading
+``error_details`` directly yields an empty result that looks like an empty
+directory.
 """
 
 from dataclasses import dataclass, field
@@ -27,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas import WorkerRequest
+from api.services.worker_service import unwrap_worker_data
 from models import Config
 
 _CONFIG_KEYS = [
@@ -158,7 +162,7 @@ async def validate_directory_content(
             error_detail=response.message,
         )
 
-    data = response.error_details or {}
+    data = unwrap_worker_data(response)
 
     files = [str(f) for f in (data.get("files") or [])]
     non_image_files = [str(f) for f in (data.get("non_image_files") or [])]
