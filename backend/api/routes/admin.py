@@ -14,6 +14,8 @@ from api.config import get_settings, Settings
 from api.middleware.auth import get_current_user, require_admin
 from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import (
+    IntegrationQueueResponse,
+    IntegrationStopResponse,
     UserCreate,
     UserUpdate,
     UserResponse,
@@ -695,3 +697,64 @@ async def create_or_update_config(
     )
 
     return ConfigResponse.model_validate(config)
+
+
+# ---------------------------------------------------------------------------
+# Background integrations: PIM deliveries and image host checks
+# ---------------------------------------------------------------------------
+
+@router.get("/integrations/queue", response_model=IntegrationQueueResponse)
+async def get_integration_queue(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """How many PIM notifications and image host checks are still scheduled to run."""
+    from api.services import pim_service, remote_sync_service
+
+    return IntegrationQueueResponse(
+        **await pim_service.queue_counts(db),
+        **await remote_sync_service.queue_counts(db),
+    )
+
+
+@router.post("/integrations/pim/stop-all", response_model=IntegrationStopResponse)
+async def stop_all_pim_deliveries(
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Stop every PIM notification waiting to be sent or retrying."""
+    from api.services.pim_service import stop_pending_events
+
+    stopped = await stop_pending_events(db, current_user.username)
+    return await _report_stopped(stopped, "pim_stop_all", "pim_events", current_user, request)
+
+
+@router.post("/integrations/remote-sync/stop-all", response_model=IntegrationStopResponse)
+async def stop_all_remote_sync_checks(
+    request: Request,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Stop every image host check waiting for PIM or checking."""
+    from api.services.remote_sync_service import stop_active_checks
+
+    stopped = await stop_active_checks(db, current_user.username)
+    return await _report_stopped(stopped, "remote_sync_stop_all", "remote_sync_checks", current_user, request)
+
+
+async def _report_stopped(stopped: list, action: str, target: str, current_user: User, request: Request):
+    from api.services.pim_service import notify_integration_update
+
+    await AuditLogger.log_admin_action(
+        user_id=current_user.id,
+        action=action,
+        target=target,
+        details={"stopped": len(stopped), "operation_ids": stopped},
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    if stopped:
+        # One refresh for every open WebUI, not one per operation
+        await notify_integration_update(None)
+    return IntegrationStopResponse(stopped=len(stopped), operation_ids=stopped)

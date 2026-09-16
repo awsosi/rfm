@@ -101,12 +101,17 @@
       that made the change (4 uvicorn processes, no shared pub/sub); the 10 s history
       polling covers the rest. Same limitation as every other broadcast.
 
+### Follow-ups from stopping PIM / sync jobs (2026-09-17)
+- [ ] A sync check WAITING for a PIM event that was stopped (or FAILED) keeps waiting, polled
+      every 15 s, until the event is sent again or the check is stopped too. Stopping PIM does
+      not stop the check on purpose: sending again should resume both.
+
 ### Follow-ups from the PIM file name rule (2026-09-17)
 - [ ] With `enable_push_flatten` on, nested files are copied flat into Path B, but the PIM
       list and the name rule only see top-level files, so PIM is not told about them.
 - [ ] PIM events queued before the fix keep their stored `files` (dev: event 1 / operation 9
-      still lists `Thumbs.db` and keeps failing with 422). Remove the name from
-      `pim_events.files` and use "Send to PIM again", or let it reach FAILED.
+      still lists `Thumbs.db` and keeps failing with 422). Stop it from the operation details
+      (or Admin Panel -> PIM -> Stop all). Sending it again resends the same stored list.
 
 ### Follow-ups from UPDATE replace/add (2026-09-16)
 - [ ] **UPDATE and PULL of the same catalog are not mutually exclusive.** UPDATE locks

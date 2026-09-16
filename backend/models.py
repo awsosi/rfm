@@ -615,6 +615,7 @@ class PimEventStatus:
     PENDING = "PENDING"      # waiting for its first or next delivery attempt
     DELIVERED = "DELIVERED"  # PIM answered 2xx
     FAILED = "FAILED"        # gave up after pim_retry_max_hours; can be retried by hand
+    CANCELLED = "CANCELLED"  # stopped by a user (cancelled_by); can be sent again by hand
 
 
 class PimEvent(Base):
@@ -659,6 +660,9 @@ class PimEvent(Base):
     last_status_code = Column(Integer, nullable=True)
     last_error = Column(Text, nullable=True)
     payload = Column(JSON, nullable=True)
+    # Who stopped delivery, and when (status CANCELLED); cleared by "send again"
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_by = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
@@ -675,7 +679,7 @@ class RemoteSyncStatus:
     CHECKING = "CHECKING"    # polling the image URLs
     SYNCED = "SYNCED"        # every image is served
     TIMEOUT = "TIMEOUT"      # gave up after remote_sync_check_timeout_minutes
-    CANCELLED = "CANCELLED"  # the catalog was pulled before it synced
+    CANCELLED = "CANCELLED"  # pulled before it synced, or stopped by a user (cancelled_by)
 
     ACTIVE = (WAITING, CHECKING)
 
@@ -714,6 +718,9 @@ class RemoteSyncCheck(Base):
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
+    # Set when a user stopped the check (a PULL leaves them empty); cleared by "check again"
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_by = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (

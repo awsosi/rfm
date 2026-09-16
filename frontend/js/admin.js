@@ -767,6 +767,46 @@ function setupConfigEvents() {
             console.error('Failed to save configuration:', error);
         }
     });
+
+    setupStopAll('pim-stop-all-btn', '/api/admin/integrations/pim/stop-all',
+        'Stop every PIM notification that is waiting to be sent or retrying?\n\nThey will not be retried. An attempt already in progress may still reach PIM.',
+        'PIM notification(s) stopped');
+    setupStopAll('sync-stop-all-btn', '/api/admin/integrations/remote-sync/stop-all',
+        'Stop every image host check that is waiting for PIM or checking?',
+        'image host check(s) stopped');
+}
+
+function setupStopAll(buttonId, endpoint, question, doneLabel) {
+    const button = document.getElementById(buttonId);
+    button.addEventListener('click', async () => {
+        if (!await showConfirm(question)) return;
+        button.disabled = true;
+        try {
+            const result = await apiRequest(endpoint, { method: 'POST' });
+            showNotification(`${result.stopped} ${doneLabel}`, 'success');
+        } catch (error) {
+            showNotification('Could not stop: ' + error.message, 'error');
+        }
+        await loadIntegrationQueue();
+    });
+}
+
+/**
+ * Show how many PIM notifications and image host checks are still scheduled,
+ * and enable "stop all" only when there is something to stop.
+ */
+async function loadIntegrationQueue() {
+    const pimStatus = document.getElementById('pim-queue-status');
+    const syncStatus = document.getElementById('sync-queue-status');
+    try {
+        const q = await apiRequest('/api/admin/integrations/queue');
+        pimStatus.textContent = `${q.pim_pending} waiting for the first attempt, ${q.pim_retrying} retrying`;
+        syncStatus.textContent = `${q.sync_waiting} waiting for PIM, ${q.sync_checking} checking`;
+        document.getElementById('pim-stop-all-btn').disabled = q.pim_pending + q.pim_retrying === 0;
+        document.getElementById('sync-stop-all-btn').disabled = q.sync_waiting + q.sync_checking === 0;
+    } catch (error) {
+        pimStatus.textContent = syncStatus.textContent = 'Could not load the queue: ' + error.message;
+    }
 }
 
 /**
@@ -774,6 +814,7 @@ function setupConfigEvents() {
  */
 export async function loadConfigurationData() {
     try {
+        loadIntegrationQueue();
         const configs = await apiRequest('/api/admin/config');
 
         const configMap = {};

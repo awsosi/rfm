@@ -1782,6 +1782,75 @@ async def recheck_remote_sync(
     return status_map[operation_id]["remote_sync"]
 
 
+@app.post("/api/operations/{operation_id}/pim/stop", response_model=PimDeliveryResponse)
+async def stop_pim_delivery(
+    operation_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Stop an operation's PIM event that is waiting to be sent or retrying. It
+    is not attempted again unless sent again by hand. 409 when it is not
+    pending (already delivered, failed or stopped).
+    """
+    from api.services.pim_service import notify_integration_update, stop_pending_events
+
+    stopped = await stop_pending_events(db, current_user.username, operation_id=operation_id)
+    status_map = await get_integration_status(db, [operation_id])
+    pim = status_map.get(operation_id, {}).get("pim_delivery")
+    if pim is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id} has no PIM event")
+    if not stopped:
+        raise HTTPException(status_code=409, detail=f"PIM notification is not pending (status {pim.status})")
+    await AuditLogger.log_operation(
+        user_id=current_user.id,
+        operation_id=operation_id,
+        action="pim_stop",
+        details={"attempts": pim.attempts, "last_error": pim.last_error},
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        username=current_user.username,
+    )
+    await notify_integration_update(operation_id)
+    return pim
+
+
+@app.post("/api/operations/{operation_id}/remote-sync/stop", response_model=RemoteSyncResponse)
+async def stop_remote_sync(
+    operation_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Stop a PUSH's image host check that is waiting for PIM or checking. It can
+    be started again with "check again". Works while verification is disabled,
+    so leftovers can be cleared. 409 when the check is not active.
+    """
+    from api.services.pim_service import notify_integration_update
+    from api.services.remote_sync_service import stop_active_checks
+
+    stopped = await stop_active_checks(db, current_user.username, push_operation_id=operation_id)
+    status_map = await get_integration_status(db, [operation_id])
+    sync = status_map.get(operation_id, {}).get("remote_sync")
+    if sync is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id} has no remote sync check")
+    if not stopped:
+        raise HTTPException(status_code=409, detail=f"Image host check is not active (status {sync.status})")
+    await AuditLogger.log_operation(
+        user_id=current_user.id,
+        operation_id=operation_id,
+        action="remote_sync_stop",
+        details={"synced_files": sync.synced_files, "total_files": sync.total_files},
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        username=current_user.username,
+    )
+    await notify_integration_update(operation_id)
+    return sync
+
+
 @app.get("/api/operations/search", response_model=Dict[str, Any])
 async def search_operations(
     current_user: Annotated[User, Depends(get_current_user)],

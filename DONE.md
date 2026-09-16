@@ -6,6 +6,23 @@
 
 ---
 
+## 2026-09-17 - Stop pending PIM deliveries and image host checks
+
+**What.** Queued background jobs can now be stopped instead of retrying for up to 72 h (e.g. dev event 1, PUSH #9, stuck on 422).
+- **PIM:** a PENDING event (not yet attempted, or retrying) becomes `CANCELLED` with `cancelled_at`/`cancelled_by`. It is never attempted again and no longer holds back later events of its catalog. "Send to PIM again" clears the stop and delivers.
+- **Image host sync:** a WAITING or CHECKING check becomes `CANCELLED` with `cancelled_by`. Unlike a PULL's cancellation (no `cancelled_by`, catalog gone), "Check image host again" restarts it. Stopping works while verification is disabled, so leftovers can be cleared.
+- Stopped rows stay in the history; nothing is deleted. Finished jobs (DELIVERED, FAILED, SYNCED, TIMEOUT) have nothing to stop: 409.
+
+**Races.** Each stop is one conditional `UPDATE ... RETURNING`. An attempt or check already under way when stopped keeps running, but its result is discarded (the existing "apply only to an unchanged row" guards); a PIM request already on the wire may still reach PIM.
+
+**API.** `POST /api/operations/{id}/pim/stop`, `POST /api/operations/{id}/remote-sync/stop` (any user, like retry; 404 without a job, 409 when not active; audit `pim_stop` / `remote_sync_stop`). Admin: `GET /api/admin/integrations/queue` (pending / retrying / waiting / checking counts), `POST /api/admin/integrations/pim/stop-all`, `POST /api/admin/integrations/remote-sync/stop-all` (audit `pim_stop_all` / `remote_sync_stop_all` with the operation ids). Responses carry `cancelled_at`/`cancelled_by`. One WebSocket refresh per bulk stop. Migration `018` adds the columns; its downgrade turns stopped PIM events into FAILED so they are not sent.
+
+**UI.** Operation details: "Stop sending to PIM" / "Stop checking image host", each behind a confirmation; "Stopped: <time> by <user>". Badges `PIM: stopped`, `Sync: stopped n/m` (PULL keeps `Sync: cancelled`), tooltip names who stopped it. Admin Panel: Notification Queue under PIM and Active Checks under Image Host Sync, with live counts and "Stop all" (disabled when empty). EN + PL, 311 keys each.
+
+**Tests.** 105 passed, 17 errors (pre-existing `test_auth.py` fixture), real PostgreSQL 16: stop a retrying event -> no attempts -> 409 twice / 404 -> send again -> delivered; a stopped PUSH event releases its UPDATE event; stop during an attempt discards a 200; stop during a probe discards served files, then restart -> SYNCED; PULL-cancelled check cannot be restarted; admin counts, stop-all of each kind leaves finished jobs alone; audit rows. Mutation-checked (in-flight guard, PULL restart guard, clearing the stop on retry): each turns a test red. Migration 018 downgrade/upgrade round-trip. Browser: 35 Playwright checks against the dev WebUI with a mocked API (badges and tooltips in en-US/pl-PL, buttons per state, cancelled confirmation sends nothing, confirmed stop posts once and refreshes, Admin Panel counts / disabled / stop-all). They caught a real bug: `showDialog` resolves `{confirmed}`, so `!await showDialog(...)` never saw Cancel.
+
+---
+
 ## 2026-09-17 - Ignore OS metadata files on PUSH (`.DS_Store` blocked a catalog)
 
 **Report.** `A:/olek/AKCESORIA 001GDM301031M 0-YELLOW` (4 images, 5 files) was refused by the new PIM file name rule: "Rename or remove: .DS_Store". macOS metadata is not catalog content and may be destroyed.

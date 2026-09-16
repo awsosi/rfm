@@ -304,14 +304,16 @@
       "PENDING": "PIM: sending",
       "RETRYING": "PIM: retrying ({attempts})",
       "DELIVERED": "PIM: notified",
-      "FAILED": "PIM: failed"
+      "FAILED": "PIM: failed",
+      "CANCELLED": "PIM: stopped"
     },
     "sync": {
       "WAITING": "Sync: waiting for PIM",
       "CHECKING": "Sync: {synced}/{total}",
       "SYNCED": "Synced {synced}/{total}",
       "TIMEOUT": "Sync: timed out {synced}/{total}",
-      "CANCELLED": "Sync: cancelled"
+      "CANCELLED": "Sync: cancelled",
+      "STOPPED": "Sync: stopped {synced}/{total}"
     },
     "attempts": "Attempts: {attempts}",
     "deliveredAt": "Delivered: {time}",
@@ -335,6 +337,15 @@
     "retryPimDone": "The PIM notification will be sent again.",
     "recheckSync": "Check image host again",
     "recheckSyncDone": "The image host will be checked again.",
-    "actionFailed": "Action failed: {error}"
+    "actionFailed": "Action failed: {error}",
+    "stoppedLabel": "Stopped",
+    "stoppedBy": "{time} by {user}",
+    "stoppedTip": "Stopped by {user}: {time}",
+    "stopPim": "Stop sending to PIM",
+    "stopPimDone": "The PIM notification was stopped.",
+    "stopPimConfirm": "This notification will not be sent to PIM and will not be retried. An attempt already in progress may still reach PIM. You can send it again later from this dialog.",
+    "stopSync": "Stop checking image host",
+    "stopSyncDone": "The image host check was stopped.",
+    "stopSyncConfirm": "The image host will no longer be checked for this catalog. You can start checking again later from this dialog."
   }
 }

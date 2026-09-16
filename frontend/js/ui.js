@@ -735,7 +735,9 @@ export function formatPimDelivery(pim) {
  * Short label for a PUSH's image host synchronization state.
  */
 export function formatRemoteSync(sync) {
-    return t('integration.sync.' + sync.status, {
+    // A user stopped it; without cancelled_by a PULL cancelled it
+    const status = sync.status === 'CANCELLED' && sync.cancelled_by ? 'STOPPED' : sync.status;
+    return t('integration.sync.' + status, {
         synced: sync.synced_files,
         total: sync.total_files
     });
@@ -764,6 +766,9 @@ export function buildIntegrationBadges(operation) {
         if (pim.status === 'PENDING' && pim.attempts > 0 && pim.next_attempt_at) {
             tip.push(t('integration.nextAttempt', { time: formatDateTime(pim.next_attempt_at) }));
         }
+        if (pim.cancelled_by) {
+            tip.push(t('integration.stoppedTip', { user: pim.cancelled_by, time: formatDateTime(pim.cancelled_at) }));
+        }
         if (pim.last_error && pim.status !== 'DELIVERED') tip.push(t('integration.lastError', { error: pim.last_error }));
         badge.title = tip.join('\n');
         wrap.appendChild(badge);
@@ -777,6 +782,9 @@ export function buildIntegrationBadges(operation) {
         const tip = [];
         if (missing.length > 0 && sync.status !== 'WAITING') {
             tip.push(t('integration.missingFiles', { files: missing.join(', ') }));
+        }
+        if (sync.cancelled_by) {
+            tip.push(t('integration.stoppedTip', { user: sync.cancelled_by, time: formatDateTime(sync.cancelled_at) }));
         }
         if (sync.last_checked_at) tip.push(t('integration.lastChecked', { time: formatDateTime(sync.last_checked_at) }));
         if (sync.last_error) tip.push(t('integration.lastError', { error: sync.last_error }));

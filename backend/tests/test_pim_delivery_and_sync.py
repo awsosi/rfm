@@ -751,3 +751,189 @@ async def test_system_files_are_ignored_and_not_copied(session, db_manager, sett
     assert ".DS_Store" in copy[3]["ignore_masks"] and "._*" in copy[3]["ignore_masks"]
     received = await remote.wait_for_pim(1)
     assert received[0]["body"]["files"] == ["1.png", "2.png"]
+
+
+# ---------------------------------------------------------------------------
+# Stopping PIM deliveries and image host checks
+# ---------------------------------------------------------------------------
+
+async def audit_actions(db_manager) -> list:
+    from models import AuditLog
+    async with db_manager.session() as s:
+        return [row[0] for row in (await s.execute(select(AuditLog.action).order_by(AuditLog.id))).all()]
+
+
+async def test_stopping_a_retrying_event_ends_delivery_until_sent_again(session, db_manager, remote, configured):
+    from api.app import retry_pim_delivery, stop_pim_delivery
+    from api.services.pim_service import deliver_due_events, enqueue_pim_event
+    user = await add_user(session)
+    push = await completed_operation(session, user, tg_id=TORBA_TG)
+    await enqueue_pim_event(push)
+    remote.pim_statuses = [503]
+    await deliver_due_events()
+    assert (await event_of(db_manager, push.id)).attempts == 1  # retrying
+
+    state = await stop_pim_delivery(push.id, fake_request(), user, session)
+
+    assert (state.status, state.cancelled_by) == ("CANCELLED", user.username)
+    assert state.cancelled_at is not None and state.attempts == 1
+    await make_due(db_manager)
+    assert await deliver_due_events() == 0
+    assert len(remote.pim_received) == 1
+    assert "pim_stop" in await audit_actions(db_manager)
+
+    # Stopping twice, or an operation without an event
+    with pytest.raises(HTTPException) as exc:
+        await stop_pim_delivery(push.id, fake_request(), user, session)
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        await stop_pim_delivery(999999, fake_request(), user, session)
+    assert exc.value.status_code == 404
+
+    # "Send to PIM again" clears the stop and delivers
+    state = await retry_pim_delivery(push.id, fake_request(), user, session)
+    assert (state.status, state.cancelled_by, state.cancelled_at) == ("PENDING", None, None)
+    for _ in range(100):
+        if (await event_of(db_manager, push.id)).status == "DELIVERED":
+            break
+        await asyncio.sleep(0.05)
+    assert (await event_of(db_manager, push.id)).status == "DELIVERED"
+    with pytest.raises(HTTPException) as exc:
+        await stop_pim_delivery(push.id, fake_request(), user, session)
+    assert exc.value.status_code == 409  # nothing left to stop
+
+
+async def test_a_stopped_event_no_longer_holds_back_its_catalog(session, db_manager, remote, configured):
+    from api.app import stop_pim_delivery
+    from api.services.pim_service import deliver_due_events, enqueue_pim_event
+    user = await add_user(session)
+    push = await completed_operation(session, user, TORBA, tg_id=TORBA_TG)
+    update_op = await completed_operation(session, user, TORBA, op_type=OperationType.UPDATE, tg_id=TORBA_TG)
+    await enqueue_pim_event(push)
+    await enqueue_pim_event(update_op)
+    remote.pim_statuses = [503]
+    await deliver_due_events()
+    assert (await event_of(db_manager, update_op.id)).attempts == 0  # waits behind the PUSH
+
+    await stop_pim_delivery(push.id, fake_request(), user, session)
+    await deliver_due_events()
+
+    assert [r["body"]["eventType"] for r in remote.pim_received] == ["created", "updated"]
+    assert (await event_of(db_manager, update_op.id)).status == "DELIVERED"
+    assert (await event_of(db_manager, push.id)).status == "CANCELLED"
+
+
+async def test_stop_during_an_attempt_discards_its_outcome(session, db_manager, remote, configured):
+    from api.services.pim_service import _attempt, _claim_next_event, enqueue_pim_event, get_pim_config, stop_pending_events
+    user = await add_user(session)
+    push = await completed_operation(session, user, tg_id=TORBA_TG)
+    await enqueue_pim_event(push)
+    async with db_manager.session() as s:
+        config = await get_pim_config(s)
+
+    event = await _claim_next_event(lease_seconds=130)  # attempt under way
+    assert await stop_pending_events(session, "bob", operation_id=push.id) == [push.id]
+    await _attempt(event, config)  # PIM answers 200
+
+    stored = await event_of(db_manager, push.id)
+    assert (stored.status, stored.cancelled_by, stored.delivered_at) == ("CANCELLED", "bob", None)
+
+
+async def test_stopping_a_check_and_starting_it_again(session, db_manager, remote, configured):
+    from api.app import recheck_remote_sync, stop_remote_sync
+    from api.services.remote_sync_service import _claim_next_check, _process, get_sync_config, process_due_checks, track_operation
+    await set_config(session, remote_sync_check_enabled="true")
+    user = await add_user(session)
+    push = await completed_operation(session, user)
+    await track_operation(push, None)
+    async with db_manager.session() as s:
+        config = await get_sync_config(s)
+
+    claimed = await _claim_next_check()  # a pass is probing right now
+    state = await stop_remote_sync(push.id, fake_request(), user, session)
+    assert (state.status, state.cancelled_by) == ("CANCELLED", user.username)
+    assert state.completed_at is not None
+    remote.images[(TORBA, "1.png")] = (200, "image/png", PNG)
+    remote.images[(TORBA, "2.jpg")] = (200, "image/jpeg", PNG)
+    await _process(claimed, config)  # its result is discarded
+    await make_due(db_manager, RemoteSyncCheck)
+    assert await process_due_checks() == 0
+    check = await check_of(db_manager, push.id)
+    assert (check.status, check.synced_files) == ("CANCELLED", 0)
+    assert "remote_sync_stop" in await audit_actions(db_manager)
+
+    with pytest.raises(HTTPException) as exc:
+        await stop_remote_sync(push.id, fake_request(), user, session)
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        await stop_remote_sync(999999, fake_request(), user, session)
+    assert exc.value.status_code == 404
+
+    # A check a user stopped can be started again, unlike one a PULL cancelled
+    state = await recheck_remote_sync(push.id, user, session)
+    assert (state.status, state.cancelled_by, state.cancelled_at) == ("CHECKING", None, None)
+    remote.image_requests.clear()
+    await process_due_checks()
+    assert (await check_of(db_manager, push.id)).status == "SYNCED"
+
+    # Stopping also works while verification is off, so leftovers can be cleared
+    other = await completed_operation(session, user, OZDOBA)
+    await track_operation(other, None)
+    await set_config_value(session, remote_sync_check_enabled="false")
+    assert (await stop_remote_sync(other.id, fake_request(), user, session)).status == "CANCELLED"
+
+
+async def test_pull_cancelled_check_cannot_be_restarted(session, db_manager, remote, configured):
+    from api.app import recheck_remote_sync
+    from api.services.remote_sync_service import track_operation
+    await set_config(session, remote_sync_check_enabled="true")
+    user = await add_user(session)
+    push = await completed_operation(session, user)
+    await track_operation(push, None)
+    pull = Operation(user_id=user.id, type=OperationType.PULL, source_path=push.dest_path,
+                     dest_path=push.original_path, rollback_operation_id=push.id,
+                     status=OperationStatus.COMPLETED, params_json={"username": user.username})
+    session.add(pull)
+    await session.commit()
+    await track_operation(pull, None)
+
+    state = await recheck_remote_sync(push.id, user, session)
+
+    assert (state.status, state.cancelled_by) == ("CANCELLED", None)
+
+
+async def test_admin_sees_the_queue_and_stops_everything(session, db_manager, remote, configured):
+    from api.routes.admin import get_integration_queue, stop_all_pim_deliveries, stop_all_remote_sync_checks
+    from api.services.pim_service import deliver_due_events, enqueue_pim_event
+    from api.services.remote_sync_service import process_due_checks, track_operation
+    await set_config(session, remote_sync_check_enabled="true")
+    admin = await add_user(session, "admin")
+    delivered = await completed_operation(session, admin, "DONE", tg_id="TG")
+    retrying = await completed_operation(session, admin, TORBA, tg_id=TORBA_TG)
+    for op in (delivered, retrying):
+        await enqueue_pim_event(op)
+    remote.pim_statuses = [200, 503]
+    await deliver_due_events()
+    waiting = await completed_operation(session, admin, OZDOBA, tg_id=OZDOBA_TG)
+    waiting_event = await enqueue_pim_event(waiting)  # not attempted yet
+    await track_operation(waiting, waiting_event)     # sync WAITING for it
+    checking = await completed_operation(session, admin, "CHECKED")
+    await track_operation(checking, None)             # sync CHECKING
+
+    queue = await get_integration_queue(admin, session)
+    assert queue.model_dump() == {"pim_pending": 1, "pim_retrying": 1, "sync_waiting": 1, "sync_checking": 1}
+
+    result = await stop_all_pim_deliveries(fake_request(), admin, session)
+    assert (result.stopped, sorted(result.operation_ids)) == (2, sorted([retrying.id, waiting.id]))
+    result = await stop_all_remote_sync_checks(fake_request(), admin, session)
+    assert (result.stopped, sorted(result.operation_ids)) == (2, sorted([waiting.id, checking.id]))
+
+    queue = await get_integration_queue(admin, session)
+    assert queue.model_dump() == {"pim_pending": 0, "pim_retrying": 0, "sync_waiting": 0, "sync_checking": 0}
+    assert (await event_of(db_manager, delivered.id)).status == "DELIVERED"  # finished jobs untouched
+    await make_due(db_manager)
+    await make_due(db_manager, RemoteSyncCheck)
+    assert await deliver_due_events() == 0 and await process_due_checks() == 0
+    assert (await stop_all_pim_deliveries(fake_request(), admin, session)).stopped == 0
+    actions = await audit_actions(db_manager)
+    assert "pim_stop_all" in actions and "remote_sync_stop_all" in actions

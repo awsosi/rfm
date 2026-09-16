@@ -26,6 +26,10 @@ Delivery is reliable (transactional outbox):
 4. Events of one catalog are delivered in order: an event waits while an older
    event of the same catalog is still pending, so PIM never sees "updated"
    before "created".
+5. A user can stop a PENDING event (``stop_pending_events``): it becomes
+   CANCELLED, is never attempted again unless sent again by hand, and no longer
+   holds back later events of its catalog. An attempt already on the wire when
+   it is stopped may still reach PIM; its outcome is not recorded.
 
 A timeout after PIM processed the request but before it answered causes a
 repeat delivery; PIM receives the same event twice rather than never.
@@ -52,7 +56,7 @@ from typing import Optional
 
 import httpx
 from loguru import logger
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.orm import aliased
 
 from database import DatabaseManager
@@ -184,8 +188,11 @@ def retry_delay_seconds(attempts: int, base: int, max_delay: int) -> float:
     return delay * random.uniform(0.8, 1.2)
 
 
-async def notify_integration_update(operation_id: int) -> None:
-    """Tell this process's WebUI clients that an operation's PIM/sync state changed."""
+async def notify_integration_update(operation_id: Optional[int]) -> None:
+    """
+    Tell this process's WebUI clients that an operation's PIM/sync state
+    changed (``None``: several operations at once).
+    """
     try:
         from api.websocket_manager import ws_manager
         await ws_manager.broadcast(
@@ -460,9 +467,9 @@ async def deliver_due_events(limit: int = 50) -> int:
 
 async def retry_event(operation_id: int, db) -> Optional[PimEvent]:
     """
-    Make an operation's PENDING or FAILED event due now, with a fresh retry
-    window. Returns the event, or None if the operation has no event.
-    Delivered events are left alone.
+    Make an operation's PENDING, FAILED or CANCELLED event due now, with a
+    fresh retry window. Returns the event, or None if the operation has no
+    event. Delivered events are left alone.
     """
     event = (
         await db.execute(select(PimEvent).where(PimEvent.operation_id == operation_id))
@@ -473,6 +480,44 @@ async def retry_event(operation_id: int, db) -> Optional[PimEvent]:
     event.status = PimEventStatus.PENDING
     event.queued_at = now
     event.next_attempt_at = now
+    event.cancelled_at = None
+    event.cancelled_by = None
     await db.commit()
     await db.refresh(event)
     return event
+
+
+async def stop_pending_events(db, username: str, operation_id: Optional[int] = None) -> list:
+    """
+    Stop PENDING events (waiting for their first attempt or retrying): they
+    become CANCELLED and are not attempted again. Only the operation's event
+    when ``operation_id`` is given, else every pending event. Returns the
+    operation ids stopped. One statement, so a delivery pass never sees a
+    half-stopped queue; an event claimed for an attempt right now is stopped
+    too, and that attempt's outcome is discarded.
+    """
+    now = datetime.now(timezone.utc)
+    stmt = (
+        update(PimEvent)
+        .where(PimEvent.status == PimEventStatus.PENDING)
+        .values(status=PimEventStatus.CANCELLED, cancelled_at=now, cancelled_by=username)
+        .returning(PimEvent.operation_id)
+    )
+    if operation_id is not None:
+        stmt = stmt.where(PimEvent.operation_id == operation_id)
+    stopped = [row[0] for row in (await db.execute(stmt)).all()]
+    await db.commit()
+    if stopped:
+        logger.info(f"PIM delivery stopped by '{username}' for operation(s) {stopped}")
+    return stopped
+
+
+async def queue_counts(db) -> dict:
+    """PENDING events split into not yet attempted and retrying."""
+    pending, retrying = (await db.execute(
+        select(
+            func.count().filter(PimEvent.attempts == 0),
+            func.count().filter(PimEvent.attempts > 0),
+        ).where(PimEvent.status == PimEventStatus.PENDING)
+    )).one()
+    return {"pim_pending": pending, "pim_retrying": retrying}

@@ -304,14 +304,16 @@
       "PENDING": "PIM: wysyłanie",
       "RETRYING": "PIM: ponawianie ({attempts})",
       "DELIVERED": "PIM: powiadomiono",
-      "FAILED": "PIM: błąd"
+      "FAILED": "PIM: błąd",
+      "CANCELLED": "PIM: zatrzymano"
     },
     "sync": {
       "WAITING": "Synchronizacja: czeka na PIM",
       "CHECKING": "Synchronizacja: {synced}/{total}",
       "SYNCED": "Zsynchronizowano {synced}/{total}",
       "TIMEOUT": "Synchronizacja: przekroczono czas {synced}/{total}",
-      "CANCELLED": "Synchronizacja: anulowano"
+      "CANCELLED": "Synchronizacja: anulowano",
+      "STOPPED": "Synchronizacja: zatrzymano {synced}/{total}"
     },
     "attempts": "Próby: {attempts}",
     "deliveredAt": "Dostarczono: {time}",
@@ -335,6 +337,15 @@
     "retryPimDone": "Powiadomienie PIM zostanie wysłane ponownie.",
     "recheckSync": "Sprawdź ponownie serwer zdjęć",
     "recheckSyncDone": "Serwer zdjęć zostanie sprawdzony ponownie.",
-    "actionFailed": "Nie udało się wykonać akcji: {error}"
+    "actionFailed": "Nie udało się wykonać akcji: {error}",
+    "stoppedLabel": "Zatrzymano",
+    "stoppedBy": "{time}, użytkownik {user}",
+    "stoppedTip": "Zatrzymał(a) {user}: {time}",
+    "stopPim": "Zatrzymaj wysyłanie do PIM",
+    "stopPimDone": "Powiadomienie PIM zostało zatrzymane.",
+    "stopPimConfirm": "To powiadomienie nie zostanie wysłane do PIM ani ponowione. Próba, która już trwa, może jeszcze dotrzeć do PIM. Możesz je później wysłać ponownie z tego okna.",
+    "stopSync": "Zatrzymaj sprawdzanie serwera obrazów",
+    "stopSyncDone": "Sprawdzanie serwera obrazów zostało zatrzymane.",
+    "stopSyncConfirm": "Serwer obrazów nie będzie już sprawdzany dla tego katalogu. Możesz później wznowić sprawdzanie z tego okna."
   }
 }

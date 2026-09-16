@@ -30,6 +30,8 @@ import {
     getOperationDetails,
     retryPimDelivery,
     recheckRemoteSync,
+    stopPimDelivery,
+    stopRemoteSync,
     getOperationHistory,
     searchOperations,
     listActiveWorkers
@@ -2765,7 +2767,8 @@ let detailsOperationId = null;
 
 /**
  * PIM delivery and image host sync for one operation, with the actions a
- * user can take: send the PIM event again, check the image host again.
+ * user can take: stop a pending PIM notification or an active check, send
+ * the PIM event again, check the image host again.
  */
 function buildIntegrationDetails(operation) {
     const pim = operation.pim_delivery;
@@ -2775,6 +2778,7 @@ function buildIntegrationDetails(operation) {
     if (!pim && !sync) return block;
 
     const when = value => (value ? new Date(value).toLocaleString() : null);
+    const stoppedBy = job => t('integration.stoppedBy', { time: when(job.cancelled_at), user: job.cancelled_by });
     const facts = document.createElement('dl');
     facts.className = 'operation-facts';
     const fact = (labelKey, value) => {
@@ -2785,12 +2789,16 @@ function buildIntegrationDetails(operation) {
         dd.textContent = value;
         facts.append(dt, dd);
     };
-    const actionButton = (labelKey, run) => {
+    const actionButton = (labelKey, run, confirmKey = null) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-secondary btn-sm';
         button.textContent = t(labelKey);
         button.addEventListener('click', async () => {
+            if (confirmKey) {
+                const { confirmed } = await showDialog({ title: t(labelKey), message: t(confirmKey), confirmLabel: t(labelKey) });
+                if (!confirmed) return;
+            }
             button.disabled = true;
             try {
                 await run();
@@ -2813,6 +2821,7 @@ function buildIntegrationDetails(operation) {
         if (pim.status === 'PENDING' && pim.attempts > 0) {
             fact('integration.nextAttemptLabel', when(pim.next_attempt_at));
         }
+        if (pim.cancelled_by) fact('integration.stoppedLabel', stoppedBy(pim));
         if (pim.status !== 'DELIVERED') fact('integration.lastErrorLabel', pim.last_error);
     }
     if (sync) {
@@ -2820,7 +2829,11 @@ function buildIntegrationDetails(operation) {
         fact('integration.syncStarted', when(sync.started_at));
         fact('integration.lastCheckedLabel', when(sync.last_checked_at));
         if (sync.status === 'CHECKING') fact('integration.nextCheckLabel', when(sync.next_check_at));
-        fact('integration.syncCompleted', when(sync.completed_at));
+        if (sync.cancelled_by) {
+            fact('integration.stoppedLabel', stoppedBy(sync));
+        } else {
+            fact('integration.syncCompleted', when(sync.completed_at));
+        }
         fact('integration.lastErrorLabel', sync.last_error);
     }
     block.appendChild(facts);
@@ -2840,10 +2853,19 @@ function buildIntegrationDetails(operation) {
 
     const actions = document.createElement('div');
     actions.className = 'integration-actions';
+    if (pim && pim.status === 'PENDING') {
+        actions.appendChild(actionButton('integration.stopPim', () => stopPimDelivery(operation.id),
+            'integration.stopPimConfirm'));
+    }
     if (pim && pim.status !== 'DELIVERED') {
         actions.appendChild(actionButton('integration.retryPim', () => retryPimDelivery(operation.id)));
     }
-    if (sync && ['CHECKING', 'TIMEOUT', 'SYNCED'].includes(sync.status)) {
+    if (sync && ['WAITING', 'CHECKING'].includes(sync.status)) {
+        actions.appendChild(actionButton('integration.stopSync', () => stopRemoteSync(operation.id),
+            'integration.stopSyncConfirm'));
+    }
+    // A check cancelled by a PULL stays cancelled: the catalog is gone
+    if (sync && (['CHECKING', 'TIMEOUT', 'SYNCED'].includes(sync.status) || sync.cancelled_by)) {
         actions.appendChild(actionButton('integration.recheckSync', () => recheckRemoteSync(operation.id)));
     }
     if (actions.children.length > 0) block.appendChild(actions);

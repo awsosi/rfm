@@ -471,7 +471,7 @@ class OperationCreate(BaseModel):
 class PimDeliveryResponse(BaseModel):
     """Delivery state of an operation's PIM event (see pim_service)."""
 
-    status: str  # PENDING | DELIVERED | FAILED
+    status: str  # PENDING | DELIVERED | FAILED | CANCELLED
     event_type: str
     tg_id: Optional[str] = None
     attempts: int = 0
@@ -480,6 +480,8 @@ class PimDeliveryResponse(BaseModel):
     next_attempt_at: Optional[datetime] = None
     last_attempt_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[str] = None
 
 
 class RemoteSyncFileResponse(BaseModel):
@@ -501,6 +503,25 @@ class RemoteSyncResponse(BaseModel):
     next_check_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     last_error: Optional[str] = None
+    # Set when a user stopped the check; a PULL cancels without them
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[str] = None
+
+
+class IntegrationQueueResponse(BaseModel):
+    """Background PIM deliveries and image host checks still scheduled to run."""
+
+    pim_pending: int = 0
+    pim_retrying: int = 0
+    sync_waiting: int = 0
+    sync_checking: int = 0
+
+
+class IntegrationStopResponse(BaseModel):
+    """Result of stopping queued PIM deliveries or image host checks."""
+
+    stopped: int
+    operation_ids: list[int] = Field(default_factory=list)
 
 
 class OperationResponse(BaseModel):

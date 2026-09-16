@@ -435,6 +435,13 @@
                                     <input type="number" id="config-pim-retry-max-hours" name="pim_retry_max_hours" class="form-control" min="0" max="8760" value="72">
                                     <small>The notification is then marked failed; users can send it again from the operation details. <code>0</code> retries forever.</small>
                                 </div>
+
+                                <h4 class="mt-4">Notification Queue</h4>
+                                <p class="text-muted small">Notifications waiting to be sent or retrying. Stopping them marks them stopped: they are kept in the operation history, are not retried, and can be sent again one by one from the operation details. A single notification can also be stopped there.</p>
+                                <div class="form-group">
+                                    <p id="pim-queue-status" class="integration-queue-status">&hellip;</p>
+                                    <button type="button" class="btn btn-danger btn-sm" id="pim-stop-all-btn">Stop all pending notifications</button>
+                                </div>
                             </div>
 
                             <!-- Validation Settings -->
@@ -600,6 +607,13 @@
                                         <label class="custom-control-label" for="config-remote-sync-check-cache-bust">Bypass CDN cache</label>
                                     </div>
                                     <small>Adds a unique <code>rfm_sync</code> query parameter to every request. The image CDN caches 404 answers for an hour and was seen serving an empty cached 200 for a missing file; keep on unless the host rejects query parameters.</small>
+                                </div>
+
+                                <h4 class="mt-4">Active Checks</h4>
+                                <p class="text-muted small">Checks waiting for PIM or polling the image host. Stopping them marks them stopped: they are kept in the operation history and can be started again one by one from the operation details. Works while verification is switched off.</p>
+                                <div class="form-group">
+                                    <p id="sync-queue-status" class="integration-queue-status">&hellip;</p>
+                                    <button type="button" class="btn btn-danger btn-sm" id="sync-stop-all-btn">Stop all active checks</button>
                                 </div>
                             </div>
 

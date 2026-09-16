@@ -120,6 +120,8 @@ async def get_integration_status(
             next_attempt_at=event.next_attempt_at,
             last_attempt_at=event.last_attempt_at,
             delivered_at=event.delivered_at,
+            cancelled_at=event.cancelled_at,
+            cancelled_by=event.cancelled_by,
         )
     checks = await db.execute(
         select(RemoteSyncCheck).where(RemoteSyncCheck.operation_id.in_(operation_ids))
@@ -136,6 +138,8 @@ async def get_integration_status(
             next_check_at=check.next_check_at,
             completed_at=check.completed_at,
             last_error=check.last_error,
+            cancelled_at=check.cancelled_at,
+            cancelled_by=check.cancelled_by,
         )
     return status
 

@@ -22,6 +22,8 @@ Lifecycle of a ``remote_sync_checks`` row (one per PUSH):
   UPDATE added, replaced or renamed into place are checked again, and it
   waits for the UPDATE's PIM event.
 - PULL completes -> an active row is CANCELLED.
+- A user stops an active row (``stop_active_checks``) -> CANCELLED with
+  ``cancelled_by``; unlike a PULL's, it can be started again ("check again").
 
 What counts as served: HTTP 200 with an ``image/*`` content type and a
 non-empty body. The image host sits behind Cloudflare, which was observed to
@@ -41,7 +43,7 @@ from urllib.parse import quote
 
 import httpx
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from api.services.pim_service import notify_integration_update
 from database import DatabaseManager
@@ -245,11 +247,14 @@ async def recheck(push_operation_id: int, db) -> Optional[RemoteSyncCheck]:
     """
     Check a PUSH's files again now, with a fresh timeout window.
 
-    Files already served stay served. A check still waiting for PIM, or a
-    cancelled one, is returned unchanged.
+    Files already served stay served. A check still waiting for PIM, or one
+    cancelled by a PULL (the catalog is gone), is returned unchanged; one a
+    user stopped starts again.
     """
     check = await _check_for(db, push_operation_id, lock=True)
-    if check is None or check.status in (RemoteSyncStatus.WAITING, RemoteSyncStatus.CANCELLED):
+    if check is None or check.status == RemoteSyncStatus.WAITING or (
+        check.status == RemoteSyncStatus.CANCELLED and not check.cancelled_by
+    ):
         return check
     now = datetime.now(timezone.utc)
     check.status = RemoteSyncStatus.CHECKING
@@ -257,6 +262,8 @@ async def recheck(push_operation_id: int, db) -> Optional[RemoteSyncCheck]:
     check.next_check_at = now
     check.completed_at = None
     check.wait_event_id = None
+    check.cancelled_at = None
+    check.cancelled_by = None
     if check.synced_files == check.total_files:
         # "Check again" on a synced catalog verifies every file once more
         check.files = [{**f, "synced": False} for f in check.files]
@@ -264,6 +271,43 @@ async def recheck(push_operation_id: int, db) -> Optional[RemoteSyncCheck]:
     await db.commit()
     await db.refresh(check)
     return check
+
+
+async def stop_active_checks(db, username: str, push_operation_id: Optional[int] = None) -> list:
+    """
+    Stop WAITING and CHECKING checks: they become CANCELLED and are not checked
+    again unless restarted by hand. Only the PUSH's check when
+    ``push_operation_id`` is given, else every active check. Returns the PUSH
+    operation ids stopped. A check being probed right now is stopped too; that
+    pass's result is discarded (``_process`` applies only to an unchanged row).
+    """
+    now = datetime.now(timezone.utc)
+    stmt = (
+        update(RemoteSyncCheck)
+        .where(RemoteSyncCheck.status.in_(RemoteSyncStatus.ACTIVE))
+        .values(status=RemoteSyncStatus.CANCELLED, completed_at=now, cancelled_at=now, cancelled_by=username)
+        .returning(RemoteSyncCheck.operation_id)
+    )
+    if push_operation_id is not None:
+        stmt = stmt.where(RemoteSyncCheck.operation_id == push_operation_id)
+    stopped = [row[0] for row in (await db.execute(stmt)).all()]
+    await db.commit()
+    if stopped:
+        logger.info(f"Remote sync check stopped by '{username}' for PUSH(es) {stopped}")
+    return stopped
+
+
+async def queue_counts(db) -> dict:
+    """Active checks by status."""
+    rows = await db.execute(
+        select(RemoteSyncCheck.status, func.count())
+        .where(RemoteSyncCheck.status.in_(RemoteSyncStatus.ACTIVE))
+        .group_by(RemoteSyncCheck.status)
+    )
+    counts = {"sync_waiting": 0, "sync_checking": 0}
+    for status, count in rows.all():
+        counts["sync_" + status.lower()] = count
+    return counts
 
 
 # ---------------------------------------------------------------------------

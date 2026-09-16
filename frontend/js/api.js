@@ -354,6 +354,24 @@ export async function retryPimDelivery(operationId) {
 }
 
 /**
+ * Stop an operation's PIM notification that is waiting to be sent or retrying
+ * @param {number} operationId - Operation ID
+ * @returns {Promise<Object>} PIM delivery state
+ */
+export async function stopPimDelivery(operationId) {
+    return await apiRequest(`/api/operations/${operationId}/pim/stop`, { method: 'POST' });
+}
+
+/**
+ * Stop a PUSH's image host check that is waiting for PIM or checking
+ * @param {number} operationId - PUSH operation ID
+ * @returns {Promise<Object>} Remote sync state
+ */
+export async function stopRemoteSync(operationId) {
+    return await apiRequest(`/api/operations/${operationId}/remote-sync/stop`, { method: 'POST' });
+}
+
+/**
  * Check a PUSH's images on the image host again now
  * @param {number} operationId - PUSH operation ID
  * @returns {Promise<Object>} Remote sync state

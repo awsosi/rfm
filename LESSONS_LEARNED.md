@@ -6,6 +6,16 @@
 
 ---
 
+## `showDialog` Resolves an Object: `!await showDialog()` Is Always False
+
+**Problem:** A "Stop sending to PIM" button asked `if (!await showDialog({...})) return;`. `showDialog` (`frontend/js/utils.js`) resolves `{ confirmed, value, dontAskAgain }`, an object, which is always truthy, so Cancel went ahead and stopped the job.
+
+**Why it is invisible:** Confirm works, the dialog looks right, and nobody clicks Cancel in a demo. Found only by a browser check that clicked Cancel and asserted no request was sent.
+
+**Rules:**
+1. Destructure: `const { confirmed } = await showDialog(...)`. For a plain yes/no use `showConfirm`/`showModal`, which return booleans.
+2. Every confirmation needs a test that clicks Cancel and asserts nothing was sent.
+
 ## What You Validate Must Be What You Ship
 
 **Problem:** PUSH stored the preflight listing (`validate_dir`, every file) as the PIM `files` array, but the copy skips `push_ignore_file_masks`. `Thumbs.db` was announced to PIM without ever reaching Path B, and PIM rejected its name with 422, after the operation had already completed.
