@@ -17,7 +17,9 @@ Found while building `dev-vf` and pairing a worker with the dev stack.
 
 **Fix:** `PollingLoop` now waits when no command came back — `PollingIntervalSeconds` normally, `UnauthorizedRetrySeconds` (30s) while the API is rejecting the worker, via the new `ApiClient.IsRegistered`. After processing a command it `continue`s, so a queued backlog still drains without waiting.
 
-**Verified:** same worker, still `PENDING`, 70s sample — 1 registration and 0 403 spins (was 94 in 15s). Once approved, commands arrive at a steady ~5.1s, matching the configured interval.
+**Verified (approved worker, 90s sample against the dev stack):** 1 registration, 0 spins, 20 commands executed (`list`/`ping`/`get_status`); log 17.6 KB vs 174.6 KB in 15s before the fix. Idle polls settle to a steady ~5.1s, matching `PollingIntervalSeconds`, and a queued backlog still drains back-to-back (0.1s between two commands), confirming the `continue`.
+
+**Not separately re-measured:** the `UnauthorizedRetrySeconds` branch. The worker was approved on the dev stack before the fixed build existed, so the post-fix `PENDING` path could not be observed without suspending it. The 94-registrations-in-15s figure is the *pre-fix* `PENDING` measurement. Both branches are the same `Task.Delay`, differing only in the constant.
 
 ---
 
