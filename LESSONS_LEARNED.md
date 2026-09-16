@@ -6,6 +6,48 @@
 
 ---
 
+## Polling Loops: Never Let the Server Be Your Only Pacing
+
+**Problem:** A single worker awaiting admin approval generated ~6 registrations + polls per second against the API. Nothing errored, nothing was logged as a failure, and the worker reported itself healthy the whole time.
+
+**Root Cause:** `WorkerService.PollingLoop` delayed only in its `catch` block. On the success path it looped straight back into the next poll. That was survivable *only* because `/commands/poll?timeout=30` is a long poll — the server's 30s hold was the loop's sole rate limit.
+
+Two cases break that assumption, and both answer instantly:
+- Worker is `PENDING` approval → immediate `403`. `ApiClient` sets `_isRegistered = false` on 403, so each spin **also** re-registered.
+- Worker is approved but no command is queued → immediate `204 No Content`.
+
+`PollingIntervalSeconds` existed in config, was parsed, and was logged at startup — but was never referenced by the loop. It looked configured while doing nothing.
+
+**Why it was invisible:** Every individual request *succeeded*. There was no exception, no error log, and no failing operation — just a correct-looking worker quietly saturating the API. It only surfaced because a log file grew 175 KB in 15 seconds.
+
+**Correct Pattern:**
+```csharp
+var command = await _apiClient.PollForCommandAsync(cancellationToken);
+
+if (command != null)
+{
+    // ... handle it ...
+    continue;               // drain a backlog without an artificial wait
+}
+
+// Nothing waiting: pace the loop ourselves. Never assume the server's
+// long poll is holding the connection - it does not when it rejects us
+// (403 while PENDING) or when it has nothing to send (204).
+await Task.Delay(
+    _apiClient.IsRegistered
+        ? TimeSpan.FromSeconds(_config.PollingIntervalSeconds)
+        : TimeSpan.FromSeconds(UnauthorizedRetrySeconds),
+    cancellationToken);
+```
+
+**Rules:**
+1. A polling loop owns its own pacing. Server-side long-poll timeouts are an optimization, not a rate limit.
+2. If a config value names an interval, the loop must actually use it — otherwise delete it rather than log it.
+3. Treat "auth rejected" as a distinct, slower backoff. Retrying an authorization decision at full speed can never help; only an admin action changes it.
+4. Watch log growth rate, not just log contents. An all-`INFO` log growing at 10 KB/s is an incident.
+
+---
+
 ## Windows Client Integration: Credential Storage and Path Mapping
 
 **Problem:** Windows client required authentication every time despite implementing OAuth device flow. Additionally, deep links only worked for root-level folders, not nested directory structures.

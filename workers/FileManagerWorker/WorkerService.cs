@@ -22,6 +22,14 @@ namespace FileManagerWorker
         private FileOperations _fileOps;
         private RollbackManager _rollbackManager;
         private CommandHandler _commandHandler;
+        private ServiceConfiguration _config;
+
+        /// <summary>
+        /// How long to wait before polling again while the API is rejecting this
+        /// worker (registered, not yet approved). Deliberately much longer than the
+        /// normal polling interval: nothing can happen until an admin acts.
+        /// </summary>
+        private const int UnauthorizedRetrySeconds = 30;
 
         private CancellationTokenSource _cancellationTokenSource;
         private Task _pollingTask;
@@ -51,6 +59,8 @@ namespace FileManagerWorker
                     Logger.Error("Failed to load configuration");
                     return false;
                 }
+
+                _config = config;
 
                 // Initialize certificate manager (read-only mode)
                 _certManager = new CertificateManager();
@@ -171,7 +181,22 @@ namespace FileManagerWorker
                             var response = _commandHandler.ExecuteAsync(command).Result;
                             _apiClient.SendResponseAsync(response).Wait();
                         }
+
+                        // Another command may already be queued behind this one.
+                        continue;
                     }
+
+                    // Nothing waiting. PollForCommandAsync is a long poll, so this
+                    // usually just adds a short pause after a 30s server-side wait.
+                    // It matters when the API answers immediately: a worker that is
+                    // still PENDING approval gets an instant 403 on every poll, and
+                    // without this delay the loop - and the re-registration it
+                    // triggers - runs flat out against the API.
+                    await Task.Delay(
+                        _apiClient.IsRegistered
+                            ? TimeSpan.FromSeconds(_config.PollingIntervalSeconds)
+                            : TimeSpan.FromSeconds(UnauthorizedRetrySeconds),
+                        cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {

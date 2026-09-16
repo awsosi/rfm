@@ -6,6 +6,21 @@
 
 ---
 
+## 2026-09-16 - Fix: worker polling loop hammered the API instead of backing off
+
+Found while building `dev-vf` and pairing a worker with the dev stack.
+
+- `WorkerService.PollingLoop` had no delay on its normal path — only inside its `catch`. Pacing relied entirely on the API holding the long poll (`?timeout=30`).
+- Whenever the API answered immediately the loop spun flat out: **94 registrations in 15s (~6/s)** from a single worker awaiting approval. A `PENDING` worker gets an instant 403, and `ApiClient` resets `_isRegistered` on 403, so every spin also re-registered.
+- The same spin hit **approved** workers, which get an immediate `204 No Content` when no command is queued.
+- `PollingIntervalSeconds` was parsed and logged but never actually used to pace anything.
+
+**Fix:** `PollingLoop` now waits when no command came back — `PollingIntervalSeconds` normally, `UnauthorizedRetrySeconds` (30s) while the API is rejecting the worker, via the new `ApiClient.IsRegistered`. After processing a command it `continue`s, so a queued backlog still drains without waiting.
+
+**Verified:** same worker, still `PENDING`, 70s sample — 1 registration and 0 403 spins (was 94 in 15s). Once approved, commands arrive at a steady ~5.1s, matching the configured interval.
+
+---
+
 ## 2026-09-16 - Feature: UPDATE operation, PIM signalling, catalog & content validation
 
 Implemented on `dev-vf` and verified against the dev stack.
