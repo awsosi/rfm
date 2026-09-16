@@ -534,8 +534,12 @@ async def list_directory(
     limit: int = 1000,
 ):
     """List directory contents on worker."""
-    # Validate Path A
-    validate_path_a(path)
+    # Path A for the explorer; Path B for the UPDATE modal, which lists an
+    # already-pushed catalog before offering rename/delete actions.
+    if path.upper().startswith('B:'):
+        validate_path_b(path)
+    else:
+        validate_path_a(path)
 
     worker = await get_worker_by_id(worker_id, db)
     if not worker:

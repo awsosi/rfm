@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-09-16 - Fix: UPDATE button returned 400 before the modal opened
+
+Selecting a pushed catalog and clicking **Update** showed a 400 in the WebUI. `openUpdateModal` lists the catalog (`operation.dest_path`, e.g. `B:/subfolder`) through `GET /api/files/list`, which called `validate_path_a` and rejected every non-`A:` path. The endpoint was written for the Path A explorer; the UPDATE UI (2f5c7d8) was the first caller to list Path B.
+
+**Fix:**
+- `/api/files/list` validates `B:` paths with `validate_path_b` and everything else with `validate_path_a`. `C:` and mixed drive letters are still refused. Elasticsearch indexing of the listed entries is unchanged; file search filters on exact `parent_path`, so B entries do not appear in Path A search.
+- Second bug behind the first: `listFiles()` returns the items array, but `openUpdateModal` read `listing.items`, so the modal would always have opened empty. Now uses the array directly.
+
+**No worker change:** `FileOperations.ResolvePath` already maps `A:`, `B:` and `C:`, and UPDATE only sends existing commands (`list`, `validate_dir`, `move`, `delete`).
+
+**Verified:** in-process against the real worker `DELA-5420-AW`, before the fix `B:/subfolder` -> 400 (`Path A operations must use paths starting with 'A:'`); after: 200 with the catalog entries, `A:/TEST CATALOG` still 200, `C:/x` and `B:/x/A:/y` still 400. api-dev rebuilt and healthy. The apply step (`POST /api/operations/update`) was not exercised, as it would have changed files on the real share.
+
+---
+
 ## 2026-09-16 - Fix: workers stayed SUSPENDED after a restart until an admin reactivated them
 
 Observed on dev: `DELA-5420-AW` (id=2) rebooted for a Windows update at 06:04 and from then on every poll got `403 Worker is not active (status: SUSPENDED)`, although it was running, registering and heartbeating normally.

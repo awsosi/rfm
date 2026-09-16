@@ -1939,9 +1939,10 @@ async function openUpdateModal() {
 
     try {
         updateOperationStatus(t('validation.checking'), 'info');
-        const listing = await listFiles(catalogPath, 0, 1000, state.workerId);
+        // listFiles returns the items array, not the response object
+        const items = await listFiles(catalogPath, 0, 1000, state.workerId);
         // Drop the ".." navigation entry the worker prepends
-        updateState.entries = (listing.items || []).filter(item => item.name !== '..');
+        updateState.entries = items.filter(item => item.name !== '..');
     } catch (error) {
         console.error('Failed to list catalog for update:', error);
         showError(t('errors.failedToLoadDirectory', { error: error.message }));
