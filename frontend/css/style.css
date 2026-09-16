@@ -2506,3 +2506,125 @@ body[data-theme="dark"] .operation-status.rolled_back {
         width: auto;
     }
 }
+
+/* ==========================================================================
+   Update: replace/add sources, Path A picker, confirmations, details
+   ========================================================================== */
+
+.link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.link-button:hover,
+.link-button:focus-visible {
+    text-decoration: underline;
+}
+
+.update-refs {
+    display: block;
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+.update-add-controls,
+.update-content-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 0.5rem;
+}
+
+.update-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    word-break: break-all;
+}
+
+.update-content-label {
+    font-size: 0.9em;
+}
+
+.update-remove-source {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.update-entries .update-remove-source input {
+    width: auto;
+}
+
+.path-picker-list label {
+    cursor: pointer;
+}
+
+.path-picker-list input {
+    width: auto;
+    margin-right: 4px;
+}
+
+.path-picker-location code {
+    word-break: break-all;
+}
+
+.modal-dont-ask {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: var(--spacing-md);
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.modal-dont-ask.hidden {
+    display: none;
+}
+
+.text-danger {
+    color: var(--danger-color);
+}
+
+.operation-summary {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.operation-summary-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.operation-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 2px 12px;
+    margin: 0 0 4px;
+    font-size: 0.9em;
+}
+
+.operation-facts dt {
+    color: var(--text-secondary);
+}
+
+.operation-facts dd {
+    margin: 0;
+    word-break: break-all;
+}
+
+.operation-actions {
+    margin: 4px 0;
+    padding-left: 1.25rem;
+    word-break: break-all;
+}

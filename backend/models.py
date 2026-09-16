@@ -13,6 +13,7 @@ from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -55,7 +56,7 @@ class OperationType(str, PyEnum):
     MKDIR = "MKDIR"
     PUSH = "PUSH"  # Copy to pathB + archive to pathC
     PULL = "PULL"  # Revert from pathB to original location
-    UPDATE = "UPDATE"  # In-place move/rename/delete inside an already-pushed catalog
+    UPDATE = "UPDATE"  # In-place rename/replace/add/delete inside an already-pushed catalog
 
 
 class OperationStatus(str, PyEnum):
@@ -566,6 +567,47 @@ class UserPreferences(Base):
 
     def __repr__(self) -> str:
         return f"<UserPreferences(user_id={self.user_id}, theme='{self.ui_theme}')>"
+
+
+class UpdateUpload(Base):
+    """
+    A file uploaded through the WebUI for an UPDATE (replace or add).
+
+    The bytes live on the API host under ``update_upload_dir/<id>``; the worker
+    downloads them while the UPDATE runs. The row outlives the file as the
+    audit record of what was uploaded (name, size, SHA-256) and by whom.
+
+    Garbage collection deletes the file and sets ``deleted_at`` once the
+    UPDATE it belongs to has finished, or once ``expires_at`` passes.
+    """
+    __tablename__ = "update_uploads"
+
+    id = Column(String(32), primary_key=True)  # uuid4 hex, also the file name on disk
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    original_filename = Column(Text, nullable=False)
+    size_bytes = Column(BigInteger, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<UpdateUpload(id={self.id}, filename={self.original_filename!r})>"
 
 
 class DeviceAuthorizationRequest(Base):

@@ -275,30 +275,52 @@ class FilePushRequest(BaseModel):
 
 
 class UpdateAction(BaseModel):
-    """A single in-place change inside an already-pushed catalog."""
+    """
+    A single in-place change inside an already-pushed catalog.
+
+    - ``rename``/``move``: ``source`` -> ``dest``
+    - ``delete``: ``source``
+    - ``replace``: overwrite ``source`` with new content
+    - ``add``: create ``dest`` with new content
+
+    New content (replace/add) comes from exactly one of ``from_path`` (a file
+    in Path A) or ``upload_id`` (a file uploaded via ``POST /api/uploads``).
+    Semantic rules live in ``validate_update_actions``.
+    """
 
     action: str = Field(
         ...,
-        description="One of: move, rename, delete",
+        description="One of: move, rename, delete, replace, add",
     )
-    source: str = Field(
-        ...,
-        min_length=1,
-        description="Entry to act on, relative to the catalog root",
+    source: Optional[str] = Field(
+        None,
+        description="Entry to act on, relative to the catalog root (not used by add)",
     )
     dest: Optional[str] = Field(
         None,
-        description="New location relative to the catalog root (move/rename only)",
+        description="New location relative to the catalog root (move/rename/add)",
     )
     recursive: bool = Field(
         True,
         description="Delete directories recursively (delete only)",
     )
+    from_path: Optional[str] = Field(
+        None,
+        description="Path A file providing the new content (replace/add)",
+    )
+    upload_id: Optional[str] = Field(
+        None,
+        description="Uploaded file providing the new content (replace/add)",
+    )
+    remove_source: bool = Field(
+        False,
+        description="Delete from_path from Path A once the UPDATE succeeded",
+    )
 
     @field_validator("action")
     @classmethod
     def validate_action(cls, v: str) -> str:
-        allowed = {"move", "rename", "delete"}
+        allowed = {"move", "rename", "delete", "replace", "add"}
         normalised = (v or "").strip().lower()
         if normalised not in allowed:
             raise ValueError(f"action must be one of: {', '.join(sorted(allowed))}")
@@ -309,7 +331,7 @@ class FileUpdateRequest(BaseModel):
     """
     UPDATE operation request (VF redesign).
 
-    Rearranges the contents of a catalog that already lives in PATH_B.
+    Changes the contents of a catalog that already lives in PATH_B.
     All action paths are relative to ``catalog_path``.
     """
 
@@ -319,11 +341,31 @@ class FileUpdateRequest(BaseModel):
         description="Path of the already-pushed catalog (Path B)",
     )
     worker_id: int = Field(..., description="Worker ID to execute operation")
+    push_operation_id: Optional[int] = Field(
+        None,
+        description=(
+            "PUSH operation that created the catalog. Resolved from catalog_path "
+            "when omitted."
+        ),
+    )
     actions: list[UpdateAction] = Field(
         ...,
         min_items=1,
         description="Changes to apply inside the catalog",
     )
+
+
+class UploadResponse(BaseModel):
+    """A file stored for use by an UPDATE (replace/add)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    original_filename: str
+    size_bytes: int
+    sha256: str
+    created_at: datetime
+    expires_at: datetime
 
 
 class CatalogValidationResponse(BaseModel):
@@ -442,7 +484,23 @@ class OperationResponse(BaseModel):
     params_json: Optional[dict[str, Any]]
     rollback_operation_id: Optional[int] = None  # ID of original operation if this is a PULL
     has_been_pulled: bool = False  # True if this PUSH has been successfully pulled/reverted
+    # PUSH only: completed UPDATE operations that changed this catalog, oldest first
+    update_operation_ids: list[int] = Field(default_factory=list)
     created_at: datetime
+
+
+class OperationDetailsResponse(BaseModel):
+    """
+    One operation with the operations linked to it, for the history details view.
+
+    For a PUSH: every UPDATE made to its catalog (any status) and the PULL, if
+    any. For an UPDATE or PULL: the PUSH it belongs to.
+    """
+
+    operation: OperationResponse
+    push: Optional[OperationResponse] = None
+    updates: list[OperationResponse] = Field(default_factory=list)
+    pull: Optional[OperationResponse] = None
 
 
 class OperationStatusUpdate(BaseModel):

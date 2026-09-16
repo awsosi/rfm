@@ -6,6 +6,32 @@
 
 ---
 
+## API Errors: Client and Exception Handler Must Agree on the Body Shape
+
+**Problem:** The UPDATE button showed only "Request failed with status 400". The server had sent a precise message, and a structured 422 that the WebUI had code to render as a localised popup.
+
+**Root Cause:** `app.py`'s `HTTPException` handler returns `{"error": detail}`. `frontend/js/api.js` read only `errorData.detail`, which is FastAPI's *default* shape. Every server-side explanation was dropped, and the validation popup branch (`error.detail.error === 'validation_failed'`) could never run.
+
+**Why it was invisible:** The fallback text looks like a real error message, and FastAPI's own 422 for malformed request bodies *does* use `detail`, so some errors displayed correctly.
+
+**Rules:**
+1. When a custom exception handler changes the error body, grep every client that parses errors and change them in the same commit.
+2. Test the rendered message of a failure path, not just its status code.
+
+---
+
+## Multi-Step File Changes: Stage, Check, Swap, Delete Last
+
+**Problem:** Replacing files in a live catalog mixes reversible steps (moves) with irreversible ones (overwrites, deletes) across several worker round-trips, any of which can fail.
+
+**Rules:**
+1. Bring every new byte onto the target share *before* changing anything visible (a working folder inside the target, so later swaps are same-volume renames).
+2. Inspect what was staged (type, "is it a file at all") before the first visible change. A rejection then costs nothing.
+3. Replace = move the old file aside, then move the new one in. Never overwrite in place: the old version is the undo.
+4. Irreversible steps run last. Post-success housekeeping (cleanup, removing sources) is best-effort and recorded as warnings; it must not fail an operation whose result is already correct.
+
+---
+
 ## Worker Status: Don't Let "Offline" and "Suspended by an Admin" Share a Value
 
 **Problem:** A worker host rebooted for a Windows update. The worker came back, registered and heartbeated normally, and was refused every command indefinitely with `403 (status: SUSPENDED)`. Only an administrator could fix it.

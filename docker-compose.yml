@@ -31,6 +31,10 @@ volumes:
     driver: local
     name: file-manager-elasticsearch-data
 
+  uploads:
+    driver: local
+    name: file-manager-uploads
+
   logs:
     driver: local
     name: file-manager-logs
@@ -279,6 +283,8 @@ services:
     volumes:
       - logs:/var/log/file-manager
       - config:/etc/file-manager
+      # UPDATE uploads waiting for a worker to fetch them (shared by all API processes)
+      - uploads:/var/lib/file-manager/uploads
       # Mount SSL certificates (generated at startup)
       - ./ssl:/etc/ssl/file-manager:ro
 

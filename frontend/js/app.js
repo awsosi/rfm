@@ -25,6 +25,9 @@ import {
     pullOperation,
     preflightCatalog,
     updateOperation,
+    uploadUpdateFile,
+    discardUpload,
+    getOperationDetails,
     getOperationHistory,
     searchOperations,
     listActiveWorkers
@@ -64,7 +67,13 @@ import {
     updatePullButtonState,
     updateUpdateButtonState
 } from './ui.js';
-import { normalizePath, joinPath, debounce, showModal } from './utils.js';
+import { normalizePath, joinPath, debounce, showDialog, formatFileSize } from './utils.js';
+import {
+    DIALOGS,
+    confirmDialog,
+    getSuppressedDialogs,
+    resetDialogCache
+} from './dialogs.js';
 
 // Application state
 const state = {
@@ -1460,6 +1469,58 @@ function setupSystemThemeListener() {
 }
 
 /**
+ * Render one toggle per registered confirmation. Checked = shown.
+ * @param {Object} suppressed - { dialogKey: true }
+ */
+function renderDialogSettings(suppressed) {
+    const container = document.getElementById('settings-dialogs');
+    if (!container) return;
+    container.textContent = '';
+
+    DIALOGS.forEach(({ key, labelKey, helpKey }) => {
+        const id = `dialog-${key.replace(/\./g, '-')}`;
+
+        const field = document.createElement('div');
+        field.className = 'toggle-field';
+
+        const copy = document.createElement('span');
+        copy.className = 'toggle-copy';
+        const title = document.createElement('label');
+        title.className = 'toggle-title';
+        title.htmlFor = id;
+        title.textContent = t(labelKey);
+        const help = document.createElement('span');
+        help.className = 'toggle-help';
+        help.textContent = t(helpKey);
+        copy.append(title, help);
+
+        const toggle = document.createElement('span');
+        toggle.className = 'toggle';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = id;
+        input.dataset.dialogKey = key;
+        input.checked = !suppressed[key];
+        const track = document.createElement('span');
+        track.className = 'toggle-track';
+        track.setAttribute('aria-hidden', 'true');
+        toggle.append(input, track);
+
+        field.append(copy, toggle);
+        container.appendChild(field);
+    });
+}
+
+/** @returns {Object} { dialogKey: true } for every confirmation switched off */
+function readDialogSettings() {
+    const suppressed = {};
+    document.querySelectorAll('#settings-dialogs input[data-dialog-key]').forEach(input => {
+        if (!input.checked) suppressed[input.dataset.dialogKey] = true;
+    });
+    return suppressed;
+}
+
+/**
  * Open settings modal and load current preferences
  */
 async function openSettingsModal() {
@@ -1494,6 +1555,8 @@ async function openSettingsModal() {
 
         document.getElementById('remember-last-paths').checked = preferences.remember_last_paths !== false;
 
+        renderDialogSettings(await getSuppressedDialogs());
+
         // Show modal
         settingsModal.classList.remove('hidden');
 
@@ -1503,10 +1566,16 @@ async function openSettingsModal() {
                 const updatedPreferences = {
                     ui_theme: document.getElementById('ui-theme').value,
                     ui_language: document.getElementById('ui-language').value,
-                    remember_last_paths: document.getElementById('remember-last-paths').checked
+                    remember_last_paths: document.getElementById('remember-last-paths').checked,
+                    // Merge: other keys may live in custom_settings too
+                    custom_settings: {
+                        ...(preferences.custom_settings || {}),
+                        suppressed_dialogs: readDialogSettings()
+                    }
                 };
 
                 await updatePreferences(updatedPreferences);
+                resetDialogCache();
                 showSuccess(t('settings.settingsSaved'));
                 closeSettingsModal();
 
@@ -1528,9 +1597,11 @@ async function openSettingsModal() {
 
         // Reset button handler
         const resetHandler = async () => {
-            if (confirm(t('settings.settingsResetConfirm'))) {
+            if (await confirmDialog('settings.confirmReset', t('settings.settingsResetConfirm'))) {
                 try {
                     const defaultPrefs = await resetPreferences();
+                    resetDialogCache();
+                    renderDialogSettings({});
                     showSuccess(t('settings.settingsReset'));
 
                     // Re-populate form with defaults
@@ -1620,11 +1691,22 @@ function setupVFRedesignControls() {
     const updateModalCancel = document.getElementById('update-modal-cancel');
     const updateModalApply = document.getElementById('update-modal-apply');
     [updateModalClose, updateModalCancel].forEach(el => {
-        if (el) el.addEventListener('click', () => closeUpdateModal());
+        if (el) el.addEventListener('click', () => requestCloseUpdateModal());
     });
     if (updateModalApply) {
         updateModalApply.addEventListener('click', async () => {
             await handleUpdateOperation();
+        });
+    }
+    const addFromA = document.getElementById('update-add-from-a');
+    if (addFromA) addFromA.addEventListener('click', () => addFilesFromPathA());
+    const addUpload = document.getElementById('update-add-upload');
+    const uploadInput = document.getElementById('update-upload-input');
+    if (addUpload && uploadInput) {
+        addUpload.addEventListener('click', () => uploadInput.click());
+        uploadInput.addEventListener('change', () => {
+            addUploadedFiles(uploadInput.files);
+            uploadInput.value = '';
         });
     }
 
@@ -1708,6 +1790,12 @@ function setupVFRedesignControls() {
     // Operation queue selection change handler to update Pull button state
     const queueTable = document.getElementById('queue-table-body');
     if (queueTable) {
+        // Operation numbers and "updated by" references open the details view
+        queueTable.addEventListener('click', (e) => {
+            const link = e.target.closest('[data-details-id]');
+            if (link) openOperationDetails(parseInt(link.dataset.detailsId, 10));
+        });
+
         queueTable.addEventListener('change', (e) => {
             if (e.target.type === 'radio') {
                 updateVFButtonStates();
@@ -1901,17 +1989,45 @@ async function loadOperationHistory(append = false) {
 // UPDATE catalog
 // =========================================================================
 
-// Working state for the update modal. `actions` maps an entry name to the
-// change queued for it, so an entry can never carry two conflicting changes.
+// Working state of the update modal.
+//   changes:   entry name -> { action: 'rename', dest } | { action: 'delete' }
+//                            | { action: 'replace', content }
+//   additions: [{ dest, content }]
+//   content:   { kind: 'path', path, removeSource }
+//            | { kind: 'upload', name, size, uploadId, progress, failed }
+// Keyed by entry name, so one entry can never carry two conflicting changes.
 const updateState = {
     catalogPath: null,
     catalogName: null,
+    pushOperationId: null,
     entries: [],
-    actions: new Map()
+    changes: new Map(),
+    additions: [],
+    applying: false
 };
 
+function resetUpdateState() {
+    updateState.catalogPath = null;
+    updateState.catalogName = null;
+    updateState.pushOperationId = null;
+    updateState.entries = [];
+    updateState.changes = new Map();
+    updateState.additions = [];
+    updateState.applying = false;
+}
+
+/** Every content source currently in the draft. */
+function draftContents() {
+    const contents = [];
+    updateState.changes.forEach(change => {
+        if (change.content) contents.push(change.content);
+    });
+    updateState.additions.forEach(addition => contents.push(addition.content));
+    return contents;
+}
+
 /**
- * Open the update modal for the catalog selected in Path B.
+ * Open the update modal for the PUSH selected in the operation history.
  */
 async function openUpdateModal() {
     const selectedOperationId = getSelectedOperationId();
@@ -1929,18 +2045,15 @@ async function openUpdateModal() {
     }
 
     // dest_path is the catalog in PATH_B, e.g. "B:/TORBA HB0788 FA0542-910 SILVER"
-    const catalogPath = operation.dest_path;
-    const catalogName = catalogPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
-
-    updateState.catalogPath = catalogPath;
-    updateState.catalogName = catalogName;
-    updateState.actions = new Map();
-    updateState.entries = [];
+    resetUpdateState();
+    updateState.catalogPath = operation.dest_path;
+    updateState.catalogName = operation.dest_path.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+    updateState.pushOperationId = operation.id;
 
     try {
         updateOperationStatus(t('validation.checking'), 'info');
         // listFiles returns the items array, not the response object
-        const items = await listFiles(catalogPath, 0, 1000, state.workerId);
+        const items = await listFiles(updateState.catalogPath, 0, 1000, state.workerId);
         // Drop the ".." navigation entry the worker prepends
         updateState.entries = items.filter(item => item.name !== '..');
     } catch (error) {
@@ -1951,25 +2064,159 @@ async function openUpdateModal() {
         clearOperationStatus();
     }
 
-    document.getElementById('update-catalog-name').textContent = catalogName;
+    document.getElementById('update-catalog-name').textContent = updateState.catalogName;
     renderUpdateEntries();
+    renderUpdateAdditions();
     renderUpdatePending();
     document.getElementById('update-modal').classList.remove('hidden');
 }
 
-function closeUpdateModal() {
+/**
+ * Close the modal. Uploads that were not applied are discarded right away
+ * (the server would also expire them); after an apply the server has
+ * already released them.
+ */
+function closeUpdateModal({ discardUploads = true } = {}) {
     document.getElementById('update-modal').classList.add('hidden');
-    updateState.catalogPath = null;
-    updateState.catalogName = null;
-    updateState.entries = [];
-    updateState.actions = new Map();
+    draftContents().forEach(content => {
+        content.detached = true;
+        if (discardUploads && content.kind === 'upload' && content.uploadId) {
+            discardUpload(content.uploadId).catch(() => {});
+        }
+    });
+    resetUpdateState();
+}
+
+async function requestCloseUpdateModal() {
+    if (updateState.applying) return;
+    if (updateState.changes.size > 0 || updateState.additions.length > 0) {
+        const discard = await confirmDialog('update.discardChanges', t('update.discardConfirm'));
+        if (!discard) return;
+    }
+    closeUpdateModal();
+}
+
+/**
+ * Upload a file into a content source, updating its label as it goes.
+ * A modal closed mid-upload discards the finished upload immediately.
+ */
+function startUpload(file, content) {
+    Object.assign(content, {
+        kind: 'upload', name: file.name, size: file.size,
+        uploadId: null, progress: 0, failed: false
+    });
+    uploadUpdateFile(file, percent => {
+        content.progress = percent;
+        refreshContentLabel(content);
+    }).then(result => {
+        if (content.detached) {
+            discardUpload(result.id).catch(() => {});
+            return;
+        }
+        content.uploadId = result.id;
+        content.size = result.size_bytes;
+        refreshContentLabel(content);
+        renderUpdatePending();
+    }).catch(error => {
+        if (content.detached) return;
+        content.failed = true;
+        refreshContentLabel(content);
+        renderUpdatePending();
+        showError(t('update.uploadFailed', { name: file.name, error: error.message }));
+    });
+}
+
+function contentLabelText(content) {
+    if (content.kind === 'path') {
+        return content.path;
+    }
+    if (content.failed) {
+        return t('update.uploadFailedShort', { name: content.name });
+    }
+    if (!content.uploadId) {
+        return t('update.uploading', { name: content.name, percent: content.progress || 0 });
+    }
+    return t('update.uploaded', { name: content.name, size: formatFileSize(content.size) });
+}
+
+function refreshContentLabel(content) {
+    if (content.labelEl) {
+        content.labelEl.textContent = contentLabelText(content);
+        content.labelEl.classList.toggle('text-danger', Boolean(content.failed));
+    }
+}
+
+/**
+ * Label + "remove from Path A" checkbox for a chosen content source.
+ * Built with createElement/textContent: names come from the filesystem.
+ */
+function buildContentView(content) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'update-content';
+
+    const label = document.createElement('span');
+    label.className = 'update-content-label';
+    content.labelEl = label;
+    refreshContentLabel(content);
+    wrapper.appendChild(label);
+
+    if (content.kind === 'path') {
+        const option = document.createElement('label');
+        option.className = 'update-remove-source';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = Boolean(content.removeSource);
+        checkbox.addEventListener('change', () => {
+            content.removeSource = checkbox.checked;
+            renderUpdatePending();
+        });
+        option.append(checkbox, document.createTextNode(' ' + t('update.removeFromPathA')));
+        wrapper.appendChild(option);
+    }
+    return wrapper;
+}
+
+/**
+ * Buttons choosing the replacement for one catalog file: a Path A file or
+ * an upload. Calls onChosen once a source has been picked.
+ */
+function buildContentPicker(onChosen) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'update-content-picker';
+
+    const fromA = document.createElement('button');
+    fromA.type = 'button';
+    fromA.className = 'btn btn-secondary btn-sm';
+    fromA.textContent = t('update.fromPathA');
+    fromA.addEventListener('click', async () => {
+        const picked = await pickPathAFiles({ multiple: false });
+        if (picked && picked.length > 0) {
+            onChosen({ kind: 'path', path: picked[0].path, removeSource: false });
+        }
+    });
+
+    const upload = document.createElement('button');
+    upload.type = 'button';
+    upload.className = 'btn btn-secondary btn-sm';
+    upload.textContent = t('update.uploadFile');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.hidden = true;
+    upload.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+        if (input.files.length > 0) {
+            const content = {};
+            startUpload(input.files[0], content);
+            onChosen(content);
+        }
+    });
+
+    wrapper.append(fromA, upload, input);
+    return wrapper;
 }
 
 /**
  * Render one row per catalog entry with its action selector.
- *
- * Built with createElement/textContent throughout: entry names come from the
- * filesystem and must never be interpolated into markup.
  */
 function renderUpdateEntries() {
     const container = document.getElementById('update-entries');
@@ -1977,7 +2224,6 @@ function renderUpdateEntries() {
 
     const table = document.createElement('table');
     table.className = 'data-table';
-
     const tbody = document.createElement('tbody');
 
     updateState.entries.forEach(entry => {
@@ -1997,60 +2243,69 @@ function renderUpdateEntries() {
         const actionCell = document.createElement('td');
         const select = document.createElement('select');
         select.className = 'form-control';
-        [
-            ['none', t('update.actionNone')],
-            ['rename', t('update.actionRename')],
-            ['delete', t('update.actionDelete')]
-        ].forEach(([value, label]) => {
+        const options = [['none', t('update.actionNone')], ['rename', t('update.actionRename')]];
+        if (!entry.is_directory) options.push(['replace', t('update.actionReplace')]);
+        options.push(['delete', t('update.actionDelete')]);
+        options.forEach(([value, label]) => {
             const option = document.createElement('option');
             option.value = value;
             option.textContent = label;
             select.appendChild(option);
         });
-        const existing = updateState.actions.get(entry.name);
+        const existing = updateState.changes.get(entry.name);
         select.value = existing ? existing.action : 'none';
         actionCell.appendChild(select);
         row.appendChild(actionCell);
 
-        const destCell = document.createElement('td');
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'form-control';
-        input.placeholder = t('update.newNamePlaceholder');
-        input.value = existing && existing.dest ? existing.dest : '';
-        input.hidden = select.value !== 'rename';
-        destCell.appendChild(input);
-        row.appendChild(destCell);
+        const detailCell = document.createElement('td');
+        row.appendChild(detailCell);
 
-        const syncAction = () => {
-            const kind = select.value;
-            input.hidden = kind !== 'rename';
+        const renderDetail = () => {
+            detailCell.textContent = '';
+            const change = updateState.changes.get(entry.name);
+            if (!change) return;
 
-            if (kind === 'none') {
-                updateState.actions.delete(entry.name);
-            } else if (kind === 'delete') {
-                updateState.actions.set(entry.name, {
-                    action: 'delete',
-                    source: entry.name
+            if (change.action === 'rename') {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control';
+                input.placeholder = t('update.newNamePlaceholder');
+                input.value = change.dest || '';
+                input.addEventListener('input', () => {
+                    change.dest = input.value;
+                    renderUpdatePending();
                 });
-            } else if (kind === 'rename') {
-                const dest = input.value.trim();
-                if (dest) {
-                    updateState.actions.set(entry.name, {
-                        action: 'rename',
-                        source: entry.name,
-                        dest: dest
-                    });
+                detailCell.appendChild(input);
+            } else if (change.action === 'replace') {
+                if (change.content) {
+                    detailCell.appendChild(buildContentView(change.content));
                 } else {
-                    updateState.actions.delete(entry.name);
+                    detailCell.appendChild(buildContentPicker(content => {
+                        change.content = content;
+                        renderDetail();
+                        renderUpdatePending();
+                    }));
                 }
             }
-            renderUpdatePending();
         };
 
-        select.addEventListener('change', syncAction);
-        input.addEventListener('input', syncAction);
+        select.addEventListener('change', () => {
+            const previous = updateState.changes.get(entry.name);
+            if (previous?.content?.kind === 'upload' && previous.content.uploadId) {
+                discardUpload(previous.content.uploadId).catch(() => {});
+            }
+            if (previous?.content) previous.content.detached = true;
 
+            if (select.value === 'none') {
+                updateState.changes.delete(entry.name);
+            } else {
+                updateState.changes.set(entry.name, { action: select.value });
+            }
+            renderDetail();
+            renderUpdatePending();
+        });
+
+        renderDetail();
         tbody.appendChild(row);
     });
 
@@ -2058,11 +2313,208 @@ function renderUpdateEntries() {
     container.appendChild(table);
 }
 
+/**
+ * Render files queued to be added: name in the catalog, source, remove button.
+ */
+function renderUpdateAdditions() {
+    const container = document.getElementById('update-additions');
+    container.textContent = '';
+    container.hidden = updateState.additions.length === 0;
+    if (container.hidden) return;
+
+    const table = document.createElement('table');
+    table.className = 'data-table';
+    const tbody = document.createElement('tbody');
+
+    updateState.additions.forEach(addition => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.value = addition.dest;
+        input.setAttribute('aria-label', t('update.newNameLabel'));
+        input.addEventListener('input', () => {
+            addition.dest = input.value;
+            renderUpdatePending();
+        });
+        nameCell.appendChild(input);
+
+        const sourceCell = document.createElement('td');
+        sourceCell.appendChild(buildContentView(addition.content));
+
+        const removeCell = document.createElement('td');
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-ghost btn-sm';
+        remove.textContent = '×';
+        remove.title = t('update.removeAction');
+        remove.setAttribute('aria-label', t('update.removeAction'));
+        remove.addEventListener('click', () => {
+            addition.content.detached = true;
+            if (addition.content.kind === 'upload' && addition.content.uploadId) {
+                discardUpload(addition.content.uploadId).catch(() => {});
+            }
+            updateState.additions = updateState.additions.filter(a => a !== addition);
+            renderUpdateAdditions();
+            renderUpdatePending();
+        });
+        removeCell.appendChild(remove);
+
+        row.append(nameCell, sourceCell, removeCell);
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+async function addFilesFromPathA() {
+    const picked = await pickPathAFiles({ multiple: true });
+    (picked || []).forEach(file => {
+        updateState.additions.push({
+            dest: file.name,
+            content: { kind: 'path', path: file.path, removeSource: false }
+        });
+    });
+    renderUpdateAdditions();
+    renderUpdatePending();
+}
+
+function addUploadedFiles(files) {
+    Array.from(files).forEach(file => {
+        const content = {};
+        startUpload(file, content);
+        updateState.additions.push({ dest: file.name, content });
+    });
+    renderUpdateAdditions();
+    renderUpdatePending();
+}
+
+function contentFields(content) {
+    if (content.kind === 'path') {
+        return { from_path: content.path, remove_source: Boolean(content.removeSource) };
+    }
+    // `upload` is only used to describe the action; the server records its own copy
+    return { upload_id: content.uploadId, upload: { filename: content.name, size_bytes: content.size } };
+}
+
+/** The draft as API actions (including incomplete ones - see validateUpdateDraft). */
+function buildUpdateActions() {
+    const actions = [];
+    updateState.changes.forEach((change, name) => {
+        if (change.action === 'rename') {
+            actions.push({ action: 'rename', source: name, dest: (change.dest || '').trim() });
+        } else if (change.action === 'delete') {
+            actions.push({ action: 'delete', source: name });
+        } else if (change.action === 'replace' && change.content) {
+            actions.push({ action: 'replace', source: name, ...contentFields(change.content) });
+        }
+    });
+    updateState.additions.forEach(addition => {
+        actions.push({ action: 'add', dest: addition.dest.trim(), ...contentFields(addition.content) });
+    });
+    return actions;
+}
+
+/** @returns {string|null} Localised problem with the draft, or null when it can be applied */
+function validateUpdateDraft() {
+    const finalNames = new Set();
+    const claim = (name) => {
+        if (finalNames.has(name)) return t('update.errorNameTaken', { name });
+        finalNames.add(name);
+        return null;
+    };
+
+    for (const entry of updateState.entries) {
+        const change = updateState.changes.get(entry.name);
+        if (!change || change.action === 'replace') {
+            const problem = claim(entry.name);
+            if (problem) return problem;
+        }
+    }
+    for (const [name, change] of updateState.changes) {
+        if (change.action === 'rename') {
+            const dest = (change.dest || '').trim();
+            if (!dest) return t('update.errorRenameEmpty', { name });
+            const problem = claim(dest);
+            if (problem) return problem;
+        }
+        if (change.action === 'replace' && !change.content) {
+            return t('update.errorReplaceNoFile', { name });
+        }
+    }
+    for (const addition of updateState.additions) {
+        const dest = addition.dest.trim();
+        if (!dest) return t('update.errorAddEmpty');
+        const problem = claim(dest);
+        if (problem) return problem;
+    }
+    for (const content of draftContents()) {
+        if (content.kind === 'upload' && content.failed) {
+            return t('update.uploadFailedShort', { name: content.name });
+        }
+        if (content.kind === 'upload' && !content.uploadId) {
+            return t('update.errorUploading');
+        }
+    }
+    return null;
+}
+
+/**
+ * One line describing an UPDATE action - used for the pending list, the
+ * confirmation and the history details, so all three read the same.
+ */
+function describeUpdateAction(action) {
+    const upload = action.upload || {};
+    const file = upload.filename
+        ? t('update.describeUploadedFile', {
+            name: upload.filename,
+            size: upload.size_bytes != null ? formatFileSize(upload.size_bytes) : '?'
+        })
+        : null;
+
+    let text;
+    switch (action.action) {
+        case 'rename':
+        case 'move':
+            text = t('update.describeRename', { source: action.source, dest: action.dest });
+            break;
+        case 'delete':
+            text = t('update.describeDelete', { source: action.source });
+            break;
+        case 'replace':
+            text = t('update.describeReplace', { source: action.source, from: action.from_path || file });
+            break;
+        case 'add':
+            text = t('update.describeAdd', { dest: action.dest, from: action.from_path || file });
+            break;
+        default:
+            text = JSON.stringify(action);
+    }
+
+    if (action.remove_source) {
+        if (action.source_removed === true) {
+            text += ' — ' + t('update.describeSourceRemoved');
+        } else if (action.source_removed === false) {
+            text += ' — ' + t('update.describeSourceNotRemoved');
+        } else {
+            text += ' — ' + t('update.describeSourceWillBeRemoved');
+        }
+    }
+    if (upload.sha256) {
+        text += ' — ' + t('update.describeChecksum', { sha: upload.sha256.slice(0, 16) });
+    }
+    return text;
+}
+
 function renderUpdatePending() {
     const container = document.getElementById('update-pending');
     container.textContent = '';
 
-    if (updateState.actions.size === 0) {
+    const actions = buildUpdateActions();
+    if (actions.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'text-muted';
         empty.textContent = t('update.noPending');
@@ -2071,63 +2523,366 @@ function renderUpdatePending() {
     }
 
     const list = document.createElement('ul');
-    updateState.actions.forEach(action => {
+    actions.forEach(action => {
         const item = document.createElement('li');
-        if (action.action === 'delete') {
-            item.textContent = `${t('update.actionDelete')}: ${action.source}`;
-        } else {
-            item.textContent = `${t('update.actionRename')}: ${action.source} → ${action.dest}`;
-        }
+        item.textContent = describeUpdateAction(action);
         list.appendChild(item);
     });
     container.appendChild(list);
 }
 
 /**
- * Submit the queued changes as an UPDATE operation.
+ * Let the user choose files in Path A.
+ * @param {Object} options - { multiple }
+ * @returns {Promise<Array<{path: string, name: string}>|null>} null when cancelled
+ */
+function pickPathAFiles({ multiple }) {
+    const modal = document.getElementById('path-picker-modal');
+    const pathLabel = document.getElementById('path-picker-path');
+    const list = document.getElementById('path-picker-list');
+    const choose = document.getElementById('path-picker-choose');
+    const cancel = document.getElementById('path-picker-cancel');
+    const close = document.getElementById('path-picker-close');
+
+    document.getElementById('path-picker-title').textContent =
+        t(multiple ? 'update.pickerTitleMultiple' : 'update.pickerTitle');
+
+    const selected = new Map(); // path -> { path, name }
+    const syncChoose = () => {
+        choose.disabled = selected.size === 0;
+        choose.textContent = selected.size > 1
+            ? t('update.pickerChooseCount', { count: selected.size })
+            : t('update.pickerChoose');
+    };
+
+    const load = async (path) => {
+        pathLabel.textContent = path;
+        list.textContent = t('explorer.loading');
+        let items;
+        try {
+            items = await listFiles(path, 0, 1000, state.workerId);
+        } catch (error) {
+            list.textContent = t('errors.failedToLoadDirectory', { error: error.message });
+            return;
+        }
+
+        list.textContent = '';
+        const table = document.createElement('table');
+        table.className = 'data-table';
+        const tbody = document.createElement('tbody');
+
+        const addRow = (label, onActivate, control = null, isDir = false) => {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            if (control) cell.appendChild(control);
+            const text = document.createElement(isDir ? 'button' : 'label');
+            if (isDir) {
+                text.type = 'button';
+                text.className = 'link-button';
+                text.addEventListener('click', onActivate);
+            } else if (control) {
+                text.htmlFor = control.id;
+            }
+            text.textContent = label;
+            cell.appendChild(text);
+            row.appendChild(cell);
+            tbody.appendChild(row);
+        };
+
+        if (path.replace(/\/+$/, '').toUpperCase() !== 'A:') {
+            const parent = path.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || 'A:';
+            addRow('..', () => load(parent), null, true);
+        }
+
+        const sorted = items
+            .filter(item => item.name !== '..')
+            .sort((a, b) => (b.is_directory - a.is_directory) || a.name.localeCompare(b.name));
+
+        sorted.forEach((item, index) => {
+            const itemPath = joinPath(path, item.name);
+            if (item.is_directory) {
+                addRow(item.name + '/', () => load(itemPath), null, true);
+                return;
+            }
+            const control = document.createElement('input');
+            control.type = multiple ? 'checkbox' : 'radio';
+            control.name = 'path-picker-choice';
+            control.id = `path-picker-${index}`;
+            control.checked = selected.has(itemPath);
+            control.addEventListener('change', () => {
+                if (!multiple) selected.clear();
+                if (control.checked) {
+                    selected.set(itemPath, { path: itemPath, name: item.name });
+                } else {
+                    selected.delete(itemPath);
+                }
+                syncChoose();
+            });
+            addRow(` ${item.name} (${formatFileSize(item.size_bytes)})`, null, control);
+        });
+
+        if (sorted.length === 0) {
+            list.textContent = t('update.pickerEmpty');
+            return;
+        }
+        table.appendChild(tbody);
+        list.appendChild(table);
+    };
+
+    return new Promise(resolve => {
+        const finish = (result) => {
+            modal.classList.add('hidden');
+            choose.removeEventListener('click', onChoose);
+            cancel.removeEventListener('click', onCancel);
+            close.removeEventListener('click', onCancel);
+            resolve(result);
+        };
+        const onChoose = () => finish(Array.from(selected.values()));
+        const onCancel = () => finish(null);
+
+        choose.addEventListener('click', onChoose);
+        cancel.addEventListener('click', onCancel);
+        close.addEventListener('click', onCancel);
+
+        syncChoose();
+        modal.classList.remove('hidden');
+        load(state.panes.a.currentPath || 'A:');
+    });
+}
+
+/**
+ * Submit the draft as an UPDATE operation.
  */
 async function handleUpdateOperation() {
-    if (updateState.actions.size === 0) {
+    if (updateState.applying) return;
+
+    const problem = validateUpdateDraft();
+    if (problem) {
+        showError(problem);
+        return;
+    }
+
+    const actions = buildUpdateActions();
+    if (actions.length === 0) {
         showError(t('update.emptyActions'));
         return;
     }
 
-    const actions = Array.from(updateState.actions.values());
-    const deletions = actions.filter(a => a.action === 'delete').length;
+    const count = (predicate) => actions.filter(predicate).length;
+    const deletions = count(a => a.action === 'delete');
+    const replacements = count(a => a.action === 'replace');
+    const removals = count(a => a.remove_source);
 
-    const confirmLines = [
-        t('update.confirmTitle', {
-            count: actions.length,
-            name: updateState.catalogName
-        })
+    const lines = [
+        t('update.confirmTitle', { count: actions.length, name: updateState.catalogName }),
+        '',
+        ...actions.map(action => '• ' + describeUpdateAction(action))
     ];
-    if (deletions > 0) {
-        confirmLines.push(t('update.confirmIrreversible', { count: deletions }));
-    }
+    if (deletions > 0) lines.push('', t('update.confirmIrreversible', { count: deletions }));
+    if (replacements > 0) lines.push(t('update.confirmReplaceIrreversible', { count: replacements }));
+    if (removals > 0) lines.push(t('update.confirmRemoveFromPathA', { count: removals }));
 
-    const confirmed = await confirmAction(confirmLines.join('\n'));
+    const destructive = deletions + replacements + removals > 0;
+    const confirmed = await confirmDialog(
+        destructive ? 'update.confirmDestructive' : 'update.confirm',
+        lines.join('\n')
+    );
     if (!confirmed) return;
 
-    const catalogPath = updateState.catalogPath;
     const catalogName = updateState.catalogName;
-    closeUpdateModal();
+    const applyButton = document.getElementById('update-modal-apply');
+    updateState.applying = true;
+    applyButton.disabled = true;
 
     try {
         updateOperationStatus(t('update.applying'), 'info');
-        await updateOperation(catalogPath, state.workerId, actions);
-        showSuccess(t('update.succeeded', { name: catalogName }));
+        const result = await updateOperation(
+            updateState.catalogPath,
+            state.workerId,
+            updateState.pushOperationId,
+            actions.map(({ upload, ...action }) => action)
+        );
+        closeUpdateModal({ discardUploads: false });
+
+        const warnings = result?.params_json?.warnings || [];
+        if (warnings.length > 0) {
+            showError(t('update.succeededWithWarnings', { name: catalogName, warnings: warnings.join(' ') }));
+        } else {
+            showSuccess(t('update.succeeded', { name: catalogName }));
+        }
 
         await loadOperationHistory();
+        if (removals > 0) await refreshPane('a');
     } catch (error) {
         console.error('Update operation failed:', error);
+
+        // Once an operation was created and ran, the server has released its
+        // uploads: they must be uploaded again before retrying. Rejections
+        // before that point (400, preflight 422) leave them usable.
+        const operationRan = error.status >= 500 || error.status === 409 || error.detail?.content?.staged;
+        if (operationRan) {
+            draftContents().forEach(content => {
+                if (content.kind === 'upload' && content.uploadId) {
+                    content.uploadId = null;
+                    content.failed = true;
+                    refreshContentLabel(content);
+                }
+            });
+            renderUpdatePending();
+        }
+
         if (error.detail && error.detail.error === 'validation_failed') {
             await showValidationFailure(error.detail, catalogName);
         } else {
             showError(t('update.failed', { error: error.message }));
         }
+        if (operationRan) await loadOperationHistory();
     } finally {
+        updateState.applying = false;
+        applyButton.disabled = false;
         clearOperationStatus();
     }
+}
+
+// =========================================================================
+// Operation details
+// =========================================================================
+
+function formatOperationStatus(status) {
+    const keys = {
+        PENDING: 'explorer.pending',
+        IN_PROGRESS: 'explorer.inProgress',
+        COMPLETED: 'explorer.completed',
+        FAILED: 'explorer.failed',
+        ROLLED_BACK: 'details.rolledBack'
+    };
+    return keys[status] ? t(keys[status]) : status;
+}
+
+/**
+ * Who did what, when, and with which result, for one operation.
+ */
+function buildOperationSummary(operation) {
+    const block = document.createElement('div');
+    block.className = `operation-summary status-${String(operation.status).toLowerCase()}`;
+
+    const heading = document.createElement('div');
+    heading.className = 'operation-summary-heading';
+    const typeBadge = document.createElement('span');
+    typeBadge.className = 'operation-type ' + String(operation.type).toLowerCase();
+    typeBadge.textContent = operation.type;
+    const title = document.createElement('strong');
+    title.textContent = ` #${operation.id} `;
+    const status = document.createElement('span');
+    status.className = 'operation-status ' + String(operation.status).toLowerCase().replace('_', '-');
+    status.textContent = formatOperationStatus(operation.status);
+    const who = document.createElement('span');
+    who.className = 'text-muted';
+    who.textContent = ' ' + t('details.by', { user: operation.user_name || '?' });
+    heading.append(typeBadge, title, status, who);
+    block.appendChild(heading);
+
+    const facts = document.createElement('dl');
+    facts.className = 'operation-facts';
+    const fact = (labelKey, value) => {
+        if (value === null || value === undefined || value === '') return;
+        const dt = document.createElement('dt');
+        dt.textContent = t(labelKey);
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        facts.append(dt, dd);
+    };
+    const when = value => (value ? new Date(value).toLocaleString() : null);
+    fact('details.created', when(operation.created_at));
+    fact('details.started', when(operation.started_at));
+    fact('details.completed', when(operation.completed_at));
+    fact('details.source', operation.source_path);
+    if (operation.dest_path !== operation.source_path) fact('details.destination', operation.dest_path);
+    fact('details.archive', operation.archive_path);
+    if (operation.type !== 'UPDATE') fact('details.fileCount', operation.file_count);
+    fact('details.error', operation.error_msg);
+    block.appendChild(facts);
+
+    const params = operation.params_json || {};
+    if (operation.type === 'UPDATE' && Array.isArray(params.actions)) {
+        const list = document.createElement('ul');
+        list.className = 'operation-actions';
+        params.actions.forEach(action => {
+            const item = document.createElement('li');
+            item.textContent = describeUpdateAction(action);
+            list.appendChild(item);
+        });
+        block.appendChild(list);
+    }
+    if (operation.type === 'PULL' && (params.update_operation_ids || []).length > 0) {
+        const note = document.createElement('p');
+        note.textContent = t('details.pullIncludedUpdates', {
+            ids: params.update_operation_ids.map(id => '#' + id).join(', ')
+        });
+        block.appendChild(note);
+    }
+    (params.warnings || []).forEach(warning => {
+        const note = document.createElement('p');
+        note.className = 'text-danger';
+        note.textContent = '⚠ ' + warning;
+        block.appendChild(note);
+    });
+
+    return block;
+}
+
+async function openOperationDetails(operationId) {
+    let details;
+    try {
+        details = await getOperationDetails(operationId);
+    } catch (error) {
+        showError(t('details.loadFailed', { error: error.message }));
+        return;
+    }
+
+    const modal = document.getElementById('operation-details-modal');
+    const body = document.getElementById('operation-details-body');
+    body.textContent = '';
+
+    const main = details.operation;
+    document.getElementById('operation-details-title').textContent =
+        t('details.titleFor', { type: main.type, id: main.id });
+
+    const section = (headingText, children) => {
+        const heading = document.createElement('h4');
+        heading.textContent = headingText;
+        body.appendChild(heading);
+        children.forEach(child => body.appendChild(child));
+    };
+
+    body.appendChild(buildOperationSummary(main));
+
+    if (details.push) {
+        section(t('details.pushHeader'), [buildOperationSummary(details.push)]);
+    }
+    if (details.updates.length > 0) {
+        section(t('details.updatesHeader', { count: details.updates.length }),
+            details.updates.map(buildOperationSummary));
+    } else if (main.type === 'PUSH') {
+        const none = document.createElement('p');
+        none.className = 'text-muted';
+        none.textContent = t('details.noUpdates');
+        section(t('details.updatesHeader', { count: 0 }), [none]);
+    }
+    if (details.pull && details.pull.id !== main.id) {
+        section(t('details.pullHeader'), [buildOperationSummary(details.pull)]);
+    }
+
+    const closeButtons = [
+        document.getElementById('operation-details-close'),
+        document.getElementById('operation-details-ok')
+    ];
+    const close = () => {
+        modal.classList.add('hidden');
+        closeButtons.forEach(button => button.removeEventListener('click', close));
+    };
+    closeButtons.forEach(button => button.addEventListener('click', close));
+    modal.classList.remove('hidden');
 }
 
 /**
@@ -2157,6 +2912,18 @@ function formatValidationFailure(validation) {
         } else if (catalog.reason === 'catalogValidation.noMatch') {
             lines.push(t('validation.noSuggestions'));
         }
+    }
+
+    if (content.valid === false && content.staged) {
+        // New content for an UPDATE was rejected after staging; nothing changed
+        if (lines.length > 0) lines.push('');
+        lines.push(t('validation.contentTitle'));
+        const names = [
+            ...(content.missing || []),
+            ...(content.invalid_files || []).map(f => f.name)
+        ].join(', ');
+        lines.push(t(`validation.${content.reason}`, { names }));
+        return lines.join('\n');
     }
 
     if (content.valid === false) {
@@ -2202,7 +2969,7 @@ async function showValidationFailure(validation, pathLabel) {
     const title = pathLabel
         ? `${t('validation.title')} — ${pathLabel}`
         : t('validation.title');
-    await showModal(title, body);
+    await showDialog({ title, message: body, hideCancel: true, confirmLabel: t('modal.close') });
 }
 
 async function handlePushOperation() {
@@ -2230,7 +2997,7 @@ async function handlePushOperation() {
     // Build dynamic confirmation message
     const selectedNames = selectedFiles.map(file => file.name);
     const confirmMsg = buildPushConfirmMessage(selectedNames, pushSettings);
-    const confirmed = await confirmAction(confirmMsg);
+    const confirmed = await confirmDialog('push.confirm', confirmMsg);
 
     if (!confirmed) {
         return;
@@ -2363,10 +3130,19 @@ async function handlePullOperation() {
         return;
     }
 
-    // Confirm operation
-    const confirmed = await confirmAction(
-        t('operations.pullOperation', { id: operation.id, path: operation.original_path })
-    );
+    // A catalog changed by UPDATE comes back as it is now, not as it was
+    // pushed: say so explicitly, in a confirmation of its own.
+    const updateIds = operation.update_operation_ids || [];
+    const confirmed = updateIds.length > 0
+        ? await confirmDialog('pull.confirmAfterUpdate', t('operations.pullAfterUpdate', {
+            id: operation.id,
+            path: operation.original_path,
+            updates: updateIds.map(id => '#' + id).join(', ')
+        }))
+        : await confirmDialog('pull.confirm', t('operations.pullOperation', {
+            id: operation.id,
+            path: operation.original_path
+        }));
 
     if (!confirmed) {
         return;

@@ -214,14 +214,18 @@ export function normalizePath(path) {
 }
 
 /**
- * Show modal dialog
- * @param {string} title - Modal title
- * @param {string} message - Modal message
- * @param {boolean} showInput - Show input field
- * @param {string} inputValue - Initial input value
- * @returns {Promise<string|boolean>} Input value or true/false
+ * Show the shared #modal dialog.
+ *
+ * @param {Object} options
+ * @param {string} options.title - Dialog title
+ * @param {string} options.message - Plain text; newlines are kept
+ * @param {string} [options.confirmLabel] - Replaces the confirm button text
+ * @param {boolean} [options.hideCancel] - Single-button (informational) dialog
+ * @param {boolean} [options.dontAskAgain] - Show the "Don't ask again" checkbox
+ * @param {string|null} [options.input] - Initial value; shows a text input
+ * @returns {Promise<{confirmed: boolean, value: string|null, dontAskAgain: boolean}>}
  */
-export function showModal(title, message, showInput = false, inputValue = '') {
+export function showDialog({ title, message, confirmLabel, hideCancel = false, dontAskAgain = false, input = null }) {
     return new Promise((resolve) => {
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('modal-title');
@@ -231,61 +235,77 @@ export function showModal(title, message, showInput = false, inputValue = '') {
         const modalConfirm = document.getElementById('modal-confirm');
         const modalCancel = document.getElementById('modal-cancel');
         const modalClose = document.getElementById('modal-close');
+        // Only present on pages that use suppressible dialogs
+        const dontAsk = document.getElementById('modal-dont-ask');
+        const dontAskCheckbox = document.getElementById('modal-dont-ask-checkbox');
 
-        // Set content
+        const originalConfirmLabel = modalConfirm.textContent;
+        const showInput = input !== null;
+
         modalTitle.textContent = title;
         // textContent keeps this XSS-safe for user-supplied catalog and file
         // names; pre-line makes embedded newlines render as line breaks.
         modalMessage.style.whiteSpace = 'pre-line';
         modalMessage.textContent = message;
+        if (confirmLabel) modalConfirm.textContent = confirmLabel;
+        modalCancel.hidden = hideCancel;
 
-        // Show/hide input
+        if (dontAsk) {
+            dontAsk.classList.toggle('hidden', !dontAskAgain);
+            dontAskCheckbox.checked = false;
+        }
+
         if (showInput) {
             modalInputContainer.classList.remove('hidden');
-            modalInput.value = inputValue;
-            modalInput.focus();
+            modalInput.value = input;
         } else {
             modalInputContainer.classList.add('hidden');
         }
 
-        // Show modal
         modal.classList.remove('hidden');
+        (showInput ? modalInput : modalConfirm).focus();
 
-        // Event handlers
-        const handleConfirm = () => {
-            if (showInput) {
-                resolve(modalInput.value);
-            } else {
-                resolve(true);
-            }
-            cleanup();
-        };
-
-        const handleCancel = () => {
-            resolve(false);
-            cleanup();
-        };
-
-        const cleanup = () => {
+        const finish = (confirmed) => {
             modal.classList.add('hidden');
+            modalConfirm.textContent = originalConfirmLabel;
+            modalCancel.hidden = false;
             modalConfirm.removeEventListener('click', handleConfirm);
             modalCancel.removeEventListener('click', handleCancel);
             modalClose.removeEventListener('click', handleCancel);
+            modalInput.removeEventListener('keypress', handleKey);
+            resolve({
+                confirmed,
+                value: showInput && confirmed ? modalInput.value : null,
+                dontAskAgain: Boolean(dontAskAgain && dontAskCheckbox && dontAskCheckbox.checked)
+            });
+        };
+        const handleConfirm = () => finish(true);
+        const handleCancel = () => finish(false);
+        const handleKey = (e) => {
+            if (e.key === 'Enter') finish(true);
         };
 
         modalConfirm.addEventListener('click', handleConfirm);
         modalCancel.addEventListener('click', handleCancel);
         modalClose.addEventListener('click', handleCancel);
-
-        // Handle Enter key for input
-        if (showInput) {
-            modalInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    handleConfirm();
-                }
-            });
-        }
+        if (showInput) modalInput.addEventListener('keypress', handleKey);
     });
+}
+
+/**
+ * Show modal dialog
+ * @param {string} title - Modal title
+ * @param {string} message - Modal message
+ * @param {boolean} showInput - Show input field
+ * @param {string} inputValue - Initial input value
+ * @returns {Promise<string|boolean>} Input value or true/false
+ */
+export async function showModal(title, message, showInput = false, inputValue = '') {
+    const result = await showDialog({ title, message, input: showInput ? inputValue : null });
+    if (showInput) {
+        return result.confirmed ? result.value : false;
+    }
+    return result.confirmed;
 }
 
 /**

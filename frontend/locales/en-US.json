@@ -76,7 +76,8 @@
     "confirmAction": "Confirm Action",
     "cancel": "Cancel",
     "confirm": "Confirm",
-    "close": "Close"
+    "close": "Close",
+    "dontAskAgain": "Don't ask again"
   },
   "settings": {
     "title": "User Settings",
@@ -103,7 +104,9 @@
     "settingsResetFailed": "Failed to reset settings: {error}",
     "settingsLoadFailed": "Failed to load settings: {error}",
     "displayPreferencesHelp": "How the application looks and which language it uses.",
-    "sessionPreferencesHelp": "What the application remembers between sign-ins."
+    "sessionPreferencesHelp": "What the application remembers between sign-ins.",
+    "dialogsHeader": "Confirmations",
+    "dialogsHelp": "Choose which confirmations are shown. Ticking “Don't ask again” in a dialog switches it off here."
   },
   "operations": {
     "pushDirectory": "Push directory \"{name}\"?\n\nThis will:\n1. Copy to PATH_B\n2. Archive to PATH_C\n\nOriginal directory will be moved to archive.",
@@ -132,7 +135,8 @@
     "selectOneDirectory": "Please select only one directory",
     "selectDirectoryNotFile": "Please select a directory (not a file)",
     "selectOperation": "Please select a PUSH operation to revert",
-    "operationNotFound": "Selected operation not found"
+    "operationNotFound": "Selected operation not found",
+    "pullAfterUpdate": "Pull (revert) operation {id}?\n\nThis catalog was changed after it was pushed, by UPDATE {updates}.\nPULL restores the CURRENT, updated version – not the files as originally pushed.\n\nThis will:\n1. Copy the current catalog from PATH_B back to: {path}\n2. Remove it from PATH_B"
   },
   "device": {
     "pageTitle": "Authorize Device - RFM",
@@ -189,13 +193,15 @@
       "tooFewImagesAfterUpdate": "After these changes the folder would hold {images} image file(s); at least {required} are required.",
       "typeMismatch": "Some files are not really images despite their extension: {names}. Remove or replace them.",
       "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
-      "listFailed": "The folder contents could not be read."
+      "listFailed": "The folder contents could not be read.",
+      "stagedTypeMismatch": "The new file for {names} is not really an image despite its extension. Nothing was changed.",
+      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed."
     }
   },
   "update": {
     "title": "Update catalog",
     "openUpdate": "Update catalog…",
-    "description": "Rename, move or delete entries inside a catalog that has already been pushed.",
+    "description": "Rename, replace or delete files inside a catalog that has already been pushed, or add new ones.",
     "catalogLabel": "Catalog",
     "entriesHeader": "Contents",
     "actionRename": "Rename",
@@ -218,6 +224,78 @@
     "confirmIrreversible": "{count} deletion(s) cannot be undone.",
     "selectCatalog": "Select a completed PUSH operation in the history first.",
     "duplicateTarget": "“{name}” already has a pending change.",
-    "emptyActions": "Add at least one change first."
+    "emptyActions": "Add at least one change first.",
+    "addHeader": "Add files",
+    "addFromPathA": "Add from Path A…",
+    "addUpload": "Upload new files…",
+    "actionReplace": "Replace",
+    "fromPathA": "From Path A…",
+    "uploadFile": "Upload…",
+    "removeFromPathA": "Remove from Path A after the update",
+    "uploading": "Uploading {name}… {percent}%",
+    "uploaded": "Uploaded: {name} ({size})",
+    "uploadFailed": "Upload of {name} failed: {error}",
+    "uploadFailedShort": "{name}: upload failed or expired – choose the file again",
+    "pickerTitle": "Choose a file from Path A",
+    "pickerTitleMultiple": "Choose files from Path A",
+    "pickerChoose": "Choose",
+    "pickerChooseCount": "Choose {count} files",
+    "pickerEmpty": "This folder is empty.",
+    "discardConfirm": "Discard the changes and uploaded files you have not applied yet?",
+    "errorNameTaken": "“{name}” would exist twice in the catalog. Choose another name.",
+    "errorRenameEmpty": "Enter a new name for “{name}”.",
+    "errorReplaceNoFile": "Choose the replacement file for “{name}”.",
+    "errorAddEmpty": "Enter a name for every added file.",
+    "errorUploading": "Wait until all uploads have finished.",
+    "describeUploadedFile": "uploaded file “{name}” ({size})",
+    "describeRename": "Rename {source} → {dest}",
+    "describeDelete": "Delete {source}",
+    "describeReplace": "Replace {source} with {from}",
+    "describeAdd": "Add {dest} from {from}",
+    "describeSourceRemoved": "removed from Path A",
+    "describeSourceNotRemoved": "could NOT be removed from Path A",
+    "describeSourceWillBeRemoved": "will be removed from Path A",
+    "describeChecksum": "SHA-256 {sha}…",
+    "confirmReplaceIrreversible": "{count} replaced file(s) cannot be restored.",
+    "confirmRemoveFromPathA": "{count} source file(s) will be deleted from Path A.",
+    "succeededWithWarnings": "Catalog “{name}” updated, with warnings: {warnings}"
+  },
+  "dialogs": {
+    "pushConfirm": "Confirm before pushing",
+    "pushConfirmHelp": "Shows what PUSH will do to the selected directories.",
+    "pullConfirm": "Confirm before pulling",
+    "pullConfirmHelp": "Shows where PULL will restore the catalog.",
+    "pullAfterUpdate": "Warn when pulling an updated catalog",
+    "pullAfterUpdateHelp": "PULL brings back the catalog as it is now, including every UPDATE made after the PUSH.",
+    "updateConfirm": "Confirm before applying catalog changes",
+    "updateConfirmHelp": "For changes that can be undone: renames and added files.",
+    "updateDestructive": "Confirm before catalog changes that cannot be undone",
+    "updateDestructiveHelp": "Deleting or replacing files, and removing source files from Path A.",
+    "updateDiscard": "Confirm before discarding unsaved catalog changes",
+    "updateDiscardHelp": "When the Update dialog is closed with changes or uploads not yet applied.",
+    "settingsReset": "Confirm before resetting settings",
+    "settingsResetHelp": "Reset to Defaults also switches every confirmation back on."
+  },
+  "details": {
+    "title": "Operation details",
+    "titleFor": "{type} #{id}",
+    "open": "Show details",
+    "updatedBy": "updated by {ids}",
+    "by": "by {user}",
+    "created": "Created",
+    "started": "Started",
+    "completed": "Finished",
+    "source": "Source",
+    "destination": "Destination",
+    "archive": "Archive",
+    "fileCount": "Files",
+    "error": "Error",
+    "pushHeader": "PUSH",
+    "updatesHeader": "Updates ({count})",
+    "noUpdates": "This catalog has not been updated.",
+    "pullHeader": "PULL",
+    "pullIncludedUpdates": "Restored the catalog including updates {ids}.",
+    "loadFailed": "Could not load operation details: {error}",
+    "rolledBack": "Rolled back"
   }
 }

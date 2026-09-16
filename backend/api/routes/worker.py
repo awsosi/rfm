@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -188,6 +189,40 @@ async def submit_command_response(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/{worker_id}/uploads/{upload_id}")
+async def download_upload(
+    worker_id: str,
+    upload_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    expires: int = Query(...),
+    token: str = Query(...),
+) -> FileResponse:
+    """
+    Serve an UPDATE upload to the worker executing that UPDATE (worker-side).
+
+    The URL arrives inside a ``fetch_file`` command, signed for this upload,
+    this worker and a short expiry. The worker verifies size and SHA-256 from
+    the same command after downloading.
+    """
+    from api.services.upload_service import upload_path, verify_download_token
+    from models import UpdateUpload
+
+    if not verify_download_token(settings, upload_id, worker_id, expires, token):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or expired download link")
+
+    worker = await get_worker_by_hostname(worker_id, db)
+    if not worker or worker.status != WorkerStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker is not active")
+
+    upload = await db.get(UpdateUpload, upload_id)
+    path = upload_path(settings, upload_id)
+    if not upload or upload.deleted_at is not None or not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
+
+    return FileResponse(path, media_type="application/octet-stream")
 
 
 @router.post("/{worker_id}/heartbeat")

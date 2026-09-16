@@ -79,8 +79,10 @@ RUN mkdir -p /app/backend \
     /etc/file-manager \
     /etc/ssl/file-manager \
     /etc/ssl/certs \
-    /etc/ssl/private && \
+    /etc/ssl/private \
+    /var/lib/file-manager/uploads && \
     chown -R filemanager:filemanager /app \
+    /var/lib/file-manager \
     /var/log/file-manager \
     /etc/file-manager \
     /etc/ssl/file-manager

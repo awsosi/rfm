@@ -4,6 +4,7 @@ Background tasks for maintenance and cleanup.
 Includes:
 - Worker command queue cleanup
 - Stale worker detection
+- UPDATE upload garbage collection
 - Metrics collection
 """
 
@@ -49,6 +50,7 @@ class BackgroundTaskManager:
         # Start cleanup tasks
         self._tasks.append(asyncio.create_task(self._command_cleanup_loop()))
         self._tasks.append(asyncio.create_task(self._worker_health_check_loop()))
+        self._tasks.append(asyncio.create_task(self._upload_cleanup_loop()))
 
         logger.info("Background tasks started")
 
@@ -151,6 +153,36 @@ class BackgroundTaskManager:
                 break
             except Exception as exc:
                 logger.error(f"Error in worker health check loop: {exc}")
+
+    async def _upload_cleanup_loop(self):
+        """
+        Periodic garbage collection of UPDATE uploads.
+
+        UPDATE releases its uploads itself when it finishes; this catches the
+        rest: uploads never used before their TTL, and uploads left behind by
+        an interrupted request or process. Runs shortly after start (to clear
+        whatever a restart interrupted), then every 15 minutes.
+        """
+        from api.services.upload_service import collect_garbage
+
+        interval = 15 * 60
+        delay = 60
+
+        while self._running:
+            try:
+                await asyncio.sleep(delay)
+                delay = interval
+
+                if not self._running:
+                    break
+
+                async with get_db_session() as db:
+                    await collect_garbage(db, self.settings)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Error in upload cleanup loop: {exc}")
 
 
 # Global background task manager instance

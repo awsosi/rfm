@@ -22,6 +22,7 @@ worker route. ``unwrap_worker_data()`` handles both shapes; reading
 directory.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -229,7 +230,18 @@ async def validate_directory_content(
 # UPDATE action validation
 # ----------------------------------------------------------------------
 
-_ALLOWED_ACTIONS = ("move", "rename", "delete")
+_ALLOWED_ACTIONS = ("move", "rename", "delete", "replace", "add")
+# Actions whose new content comes from Path A or an upload
+CONTENT_ACTIONS = ("replace", "add")
+
+_UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+# Extension -> the type the worker's magic-byte sniffer reports for it
+# (FileOperations.ExpectedImageType on the worker)
+_EXPECTED_TYPE = {
+    "jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif",
+    "bmp": "bmp", "tif": "tiff", "tiff": "tiff", "webp": "webp",
+}
 
 
 class UpdateActionError(ValueError):
@@ -277,6 +289,19 @@ def _safe_relative(value: str, field_name: str) -> str:
     return '/'.join(parts)
 
 
+def _safe_path_a(value: str, field_name: str) -> str:
+    """Normalise a Path A file path (``A:/dir/file.jpg``) and refuse escapes."""
+    raw = (value or "").strip().replace('\\', '/')
+    if raw[:2].upper() != 'A:':
+        raise UpdateActionError(f"{field_name} must be a Path A file (A:/...)")
+    rest = raw[2:].strip('/')
+    if not rest:
+        raise UpdateActionError(f"{field_name} must name a file, not the Path A root")
+    if ':' in rest:
+        raise UpdateActionError(f"{field_name} must not contain another drive letter")
+    return "A:/" + _safe_relative(rest, field_name)
+
+
 def validate_update_actions(actions: list) -> list:
     """
     Validate and normalise a list of UPDATE actions.
@@ -299,30 +324,58 @@ def validate_update_actions(actions: list) -> list:
                 f"expected one of {', '.join(_ALLOWED_ACTIONS)}"
             )
 
-        source = _safe_relative(action.get("source"), f"Action {index} source")
+        entry = {"action": kind}
 
-        entry = {"action": kind, "source": source}
+        if kind != "add":
+            entry["source"] = _safe_relative(action.get("source"), f"Action {index} source")
 
-        if kind in ("move", "rename"):
-            dest = _safe_relative(action.get("dest"), f"Action {index} dest")
-            if dest == source:
+        if kind in ("move", "rename", "add"):
+            entry["dest"] = _safe_relative(action.get("dest"), f"Action {index} dest")
+            if entry["dest"] == entry.get("source"):
                 raise UpdateActionError(
-                    f"Action {index} source and dest are identical ({source})"
+                    f"Action {index} source and dest are identical ({entry['dest']})"
                 )
-            entry["dest"] = dest
-        else:
+
+        if kind == "delete":
             entry["recursive"] = bool(action.get("recursive", True))
+
+        if kind in CONTENT_ACTIONS:
+            from_path = action.get("from_path")
+            upload_id = action.get("upload_id")
+            if bool(from_path) == bool(upload_id):
+                raise UpdateActionError(
+                    f"Action {index} ({kind}) needs exactly one of from_path or upload_id"
+                )
+            if from_path:
+                entry["from_path"] = _safe_path_a(from_path, f"Action {index} from_path")
+                entry["remove_source"] = bool(action.get("remove_source", False))
+            else:
+                upload_id = str(upload_id).strip().lower()
+                if not _UPLOAD_ID_RE.match(upload_id):
+                    raise UpdateActionError(f"Action {index} upload_id is malformed")
+                entry["upload_id"] = upload_id
+                if action.get("remove_source"):
+                    raise UpdateActionError(
+                        f"Action {index}: remove_source applies only to Path A files"
+                    )
+        elif action.get("from_path") or action.get("upload_id"):
+            raise UpdateActionError(
+                f"Action {index} ({kind}) does not take from_path or upload_id"
+            )
 
         normalised.append(entry)
 
-    # A catalog entry must not be both moved away and acted on twice
-    seen_sources = set()
+    # Every catalog entry may be touched by one action only: acting on a name
+    # that another action moves away or creates would depend on ordering.
+    seen = set()
     for entry in normalised:
-        if entry["source"] in seen_sources:
-            raise UpdateActionError(
-                f"{entry['source']} is targeted by more than one action"
-            )
-        seen_sources.add(entry["source"])
+        for key in ("source", "dest"):
+            name = entry.get(key)
+            if name is None:
+                continue
+            if name in seen:
+                raise UpdateActionError(f"{name} is targeted by more than one action")
+            seen.add(name)
 
     return normalised
 
@@ -334,30 +387,104 @@ def predict_files_after_actions(files: List[str], actions: list) -> List[str]:
     Only top-level basenames are tracked, matching what PIM receives and what
     the minimum-count rule counts. An action whose destination is nested drops
     the entry from the top level; one that moves a nested file up adds it.
+    A replace keeps the name, so the list is unchanged by it.
     """
     remaining = list(files)
 
     for action in actions:
-        source = action["source"]
         kind = action["action"]
+        source = action.get("source")
 
-        # Only top-level entries appear in the tracked list
-        source_is_top_level = '/' not in source
+        if kind == "replace":
+            continue
+
+        if source is not None and '/' not in source and source in remaining:
+            remaining.remove(source)
 
         if kind == "delete":
-            if source_is_top_level and source in remaining:
-                remaining.remove(source)
             continue
 
         dest = action.get("dest", "")
-        dest_is_top_level = '/' not in dest
-
-        if source_is_top_level and source in remaining:
-            remaining.remove(source)
-        if dest_is_top_level and dest not in remaining:
+        if '/' not in dest and dest not in remaining:
             remaining.append(dest)
 
     return remaining
+
+
+def invalid_files_after_actions(invalid_files: List[dict], actions: list) -> List[dict]:
+    """
+    Carry the worker's content-mismatch findings over to the post-update names.
+
+    A deleted or replaced file no longer counts against the catalog (a replaced
+    file's new content is checked separately once staged). A renamed file keeps
+    its real content: it stays invalid under its new name unless the new
+    extension matches what its bytes are, which is how a rename fixes a
+    mislabelled image. A file moved out of the top level is no longer tracked.
+    """
+    by_source = {a.get("source"): a for a in actions if a.get("source") is not None}
+    result = []
+    for item in invalid_files or []:
+        name = item.get("name")
+        action = by_source.get(name)
+        if action is None:
+            result.append(item)
+            continue
+        if action["action"] in ("delete", "replace"):
+            continue
+        dest = action.get("dest", "")
+        if '/' in dest:
+            continue
+        _, _, ext = dest.rpartition('.')
+        if _EXPECTED_TYPE.get(ext.lower()) == item.get("detected"):
+            continue
+        result.append({**item, "name": dest, "extension": ext.lower()})
+    return result
+
+
+async def inspect_staged_files(
+    worker,
+    staging_path: str,
+    expected_names: List[str],
+    worker_service,
+    db: AsyncSession,
+) -> tuple[List[str], List[dict]]:
+    """
+    Check files an UPDATE staged before they replace or join the catalog.
+
+    Returns ``(missing, invalid)``: names that are not plain files in the
+    staging directory (e.g. a Path A *folder* was picked), and worker content
+    findings for files whose bytes contradict their extension. Content is only
+    judged when validation and ``push_validation_verify_content`` are on, the
+    same switches PUSH honours; the presence check always runs.
+
+    Raises on worker/transport failure: without the listing nothing is proven.
+    """
+    config = await _get_validation_config(db)
+    enabled = _truthy(config.get('push_validation_enabled'), default=True)
+    verify_content = enabled and _truthy(config.get('push_validation_verify_content'), default=True)
+    ext_str = config.get('push_validation_allowed_extensions') or _DEFAULT_EXTENSIONS
+    allowed_extensions = [e.strip().lower().lstrip('.') for e in ext_str.split(',') if e.strip()]
+
+    response = await worker_service.send_command(
+        worker,
+        WorkerRequest(
+            command="validate_dir",
+            source_path=staging_path,
+            params={"allowed_extensions": allowed_extensions, "verify_content": verify_content},
+        ),
+        db,
+    )
+    if response.status != "success":
+        raise RuntimeError(f"Could not inspect staged files: {response.message}")
+
+    data = unwrap_worker_data(response)
+    present = {str(f) for f in (data.get("files") or [])}
+    missing = [name for name in expected_names if name not in present]
+    invalid = [
+        item for item in (data.get("invalid_files") or [])
+        if isinstance(item, dict) and item.get("name") in expected_names
+    ] if verify_content else []
+    return missing, invalid
 
 
 def count_image_files(

@@ -251,6 +251,13 @@ class Settings(BaseSettings):
     # Defaults off: the downstream archive is not in use yet.
     enable_update_archive_mirror: bool = False
 
+    # UPDATE uploads (files sent through the WebUI to replace/add catalog files)
+    # Directory on the API host holding uploads until the worker fetches them.
+    # Must be shared by every API process (a volume, not per-process /tmp).
+    update_upload_dir: str = "/var/lib/file-manager/uploads"
+    update_upload_max_mb: int = 200
+    update_upload_ttl_hours: int = 24
+
     @field_validator("database_url", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

@@ -87,6 +87,21 @@
 ### Future Work (General)
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
 
+### Follow-ups from UPDATE replace/add (2026-09-16)
+- [ ] **Worker `fetch_file` command** (Windows session): `docs/prompts/worker-fetch-file.md`.
+      Until deployed, UPDATE with uploaded files fails before changing anything.
+- [ ] Run a real UPDATE (replace from Path A, add, delete) on a dev test catalog and an
+      upload-based one once the worker is updated; configure PIM on dev (or a mock) to
+      watch the `updated` event arrive.
+- [ ] **UPDATE and PULL of the same catalog are not mutually exclusive.** UPDATE locks
+      the B: path, PULL the A: path, and `_operation_locks` is per process (4 uvicorn
+      workers), so neither lock covers the other request anyway.
+- [ ] Worker `RollbackManager` backs up the *virtual* path (`C:/…`), which on the worker
+      host is the real system drive — see the prompt's observation section.
+- [ ] Explorer console error on load when active operations exist:
+      `loadActiveOperations` -> `addOperationToQueue` expects the legacy dual-pane queue
+      element (`querySelector` of null). Pre-existing.
+
 ### Follow-ups from the 2026-09-16 integration work
 - [ ] **Confirm what `tgId` means** in the PIM `ftp_event` payload. The existing
       ROSAPI push endpoint is `/api/v1/products/tg/{folder_name}/set_image_catalog`,

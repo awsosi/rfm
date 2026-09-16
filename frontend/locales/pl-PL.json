@@ -76,7 +76,8 @@
     "confirmAction": "Potwierdź akcję",
     "cancel": "Anuluj",
     "confirm": "Potwierdź",
-    "close": "Zamknij"
+    "close": "Zamknij",
+    "dontAskAgain": "Nie pytaj ponownie"
   },
   "settings": {
     "title": "Ustawienia użytkownika",
@@ -103,7 +104,9 @@
     "settingsResetFailed": "Nie udało się przywrócić ustawień: {error}",
     "settingsLoadFailed": "Nie udało się wczytać ustawień: {error}",
     "displayPreferencesHelp": "Wygląd aplikacji i używany język.",
-    "sessionPreferencesHelp": "Co aplikacja zapamiętuje między logowaniami."
+    "sessionPreferencesHelp": "Co aplikacja zapamiętuje między logowaniami.",
+    "dialogsHeader": "Potwierdzenia",
+    "dialogsHelp": "Wybierz, które potwierdzenia mają być wyświetlane. Zaznaczenie „Nie pytaj ponownie” w oknie wyłącza je tutaj."
   },
   "operations": {
     "pushDirectory": "Wysłać katalog „{name}”?\n\nSpowoduje to:\n1. Skopiowanie do PATH_B\n2. Zarchiwizowanie w PATH_C\n\nOryginalny katalog zostanie przeniesiony do archiwum.",
@@ -132,7 +135,8 @@
     "selectOneDirectory": "Wybierz tylko jeden katalog",
     "selectDirectoryNotFile": "Wybierz katalog (nie plik)",
     "selectOperation": "Wybierz operację WYŚLIJ do cofnięcia",
-    "operationNotFound": "Wybrana operacja nie została znaleziona"
+    "operationNotFound": "Wybrana operacja nie została znaleziona",
+    "pullAfterUpdate": "Cofnąć (przywrócić) operację {id}?\n\nTen katalog został zmieniony po wypchnięciu przez UPDATE {updates}.\nPULL przywraca OBECNĄ, zaktualizowaną wersję – nie pliki w postaci, w jakiej zostały pierwotnie wypchnięte.\n\nSpowoduje to:\n1. Skopiowanie obecnego katalogu z PATH_B z powrotem do: {path}\n2. Usunięcie go z PATH_B"
   },
   "device": {
     "pageTitle": "Autoryzacja urządzenia - RFM",
@@ -189,13 +193,15 @@
       "tooFewImagesAfterUpdate": "Po tych zmianach folder zawierałby {images} plików graficznych; wymagane są co najmniej {required}.",
       "typeMismatch": "Niektóre pliki nie są w rzeczywistości obrazami mimo swojego rozszerzenia: {names}. Usuń je lub zastąp.",
       "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
-      "listFailed": "Nie udało się odczytać zawartości folderu."
+      "listFailed": "Nie udało się odczytać zawartości folderu.",
+      "stagedTypeMismatch": "Nowy plik dla {names} nie jest w rzeczywistości obrazem mimo swojego rozszerzenia. Niczego nie zmieniono.",
+      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono."
     }
   },
   "update": {
     "title": "Aktualizuj katalog",
     "openUpdate": "Aktualizuj katalog…",
-    "description": "Zmień nazwę, przenieś lub usuń pozycje wewnątrz katalogu, który został już wypchnięty.",
+    "description": "Zmień nazwę, zastąp lub usuń pliki wewnątrz katalogu, który został już wypchnięty, albo dodaj nowe.",
     "catalogLabel": "Katalog",
     "entriesHeader": "Zawartość",
     "actionRename": "Zmień nazwę",
@@ -218,6 +224,78 @@
     "confirmIrreversible": "{count} usunięć nie będzie można cofnąć.",
     "selectCatalog": "Najpierw wybierz zakończoną operację PUSH w historii.",
     "duplicateTarget": "„{name}” ma już oczekującą zmianę.",
-    "emptyActions": "Najpierw dodaj przynajmniej jedną zmianę."
+    "emptyActions": "Najpierw dodaj przynajmniej jedną zmianę.",
+    "addHeader": "Dodaj pliki",
+    "addFromPathA": "Dodaj ze ścieżki A…",
+    "addUpload": "Prześlij nowe pliki…",
+    "actionReplace": "Zastąp",
+    "fromPathA": "Ze ścieżki A…",
+    "uploadFile": "Prześlij…",
+    "removeFromPathA": "Usuń ze ścieżki A po aktualizacji",
+    "uploading": "Przesyłanie {name}… {percent}%",
+    "uploaded": "Przesłano: {name} ({size})",
+    "uploadFailed": "Przesyłanie {name} nie powiodło się: {error}",
+    "uploadFailedShort": "{name}: przesyłanie nie powiodło się lub wygasło – wybierz plik ponownie",
+    "pickerTitle": "Wybierz plik ze ścieżki A",
+    "pickerTitleMultiple": "Wybierz pliki ze ścieżki A",
+    "pickerChoose": "Wybierz",
+    "pickerChooseCount": "Wybierz pliki ({count})",
+    "pickerEmpty": "Ten folder jest pusty.",
+    "discardConfirm": "Odrzucić niezastosowane zmiany i przesłane pliki?",
+    "errorNameTaken": "„{name}” występowałby w katalogu dwukrotnie. Wybierz inną nazwę.",
+    "errorRenameEmpty": "Podaj nową nazwę dla „{name}”.",
+    "errorReplaceNoFile": "Wybierz plik zastępujący „{name}”.",
+    "errorAddEmpty": "Podaj nazwę dla każdego dodawanego pliku.",
+    "errorUploading": "Poczekaj, aż wszystkie pliki zostaną przesłane.",
+    "describeUploadedFile": "przesłany plik „{name}” ({size})",
+    "describeRename": "Zmień nazwę {source} → {dest}",
+    "describeDelete": "Usuń {source}",
+    "describeReplace": "Zastąp {source} plikiem {from}",
+    "describeAdd": "Dodaj {dest} z {from}",
+    "describeSourceRemoved": "usunięto ze ścieżki A",
+    "describeSourceNotRemoved": "NIE udało się usunąć ze ścieżki A",
+    "describeSourceWillBeRemoved": "zostanie usunięty ze ścieżki A",
+    "describeChecksum": "SHA-256 {sha}…",
+    "confirmReplaceIrreversible": "Zastąpionych plików ({count}) nie będzie można przywrócić.",
+    "confirmRemoveFromPathA": "Pliki źródłowe ({count}) zostaną usunięte ze ścieżki A.",
+    "succeededWithWarnings": "Katalog „{name}” został zaktualizowany, z ostrzeżeniami: {warnings}"
+  },
+  "dialogs": {
+    "pushConfirm": "Potwierdzaj przed wypchnięciem (PUSH)",
+    "pushConfirmHelp": "Pokazuje, co PUSH zrobi z wybranymi katalogami.",
+    "pullConfirm": "Potwierdzaj przed cofnięciem (PULL)",
+    "pullConfirmHelp": "Pokazuje, dokąd PULL przywróci katalog.",
+    "pullAfterUpdate": "Ostrzegaj przy cofaniu zaktualizowanego katalogu",
+    "pullAfterUpdateHelp": "PULL przywraca katalog w obecnej postaci, razem ze wszystkimi aktualizacjami (UPDATE) wykonanymi po PUSH.",
+    "updateConfirm": "Potwierdzaj przed zastosowaniem zmian w katalogu",
+    "updateConfirmHelp": "Dla zmian, które można cofnąć: zmian nazw i dodanych plików.",
+    "updateDestructive": "Potwierdzaj zmiany w katalogu, których nie można cofnąć",
+    "updateDestructiveHelp": "Usuwanie lub zastępowanie plików oraz usuwanie plików źródłowych ze ścieżki A.",
+    "updateDiscard": "Potwierdzaj odrzucenie niezapisanych zmian w katalogu",
+    "updateDiscardHelp": "Gdy okno aktualizacji jest zamykane ze zmianami lub przesłanymi plikami, które nie zostały jeszcze zastosowane.",
+    "settingsReset": "Potwierdzaj przywracanie ustawień domyślnych",
+    "settingsResetHelp": "Przywrócenie ustawień domyślnych włącza też z powrotem wszystkie potwierdzenia."
+  },
+  "details": {
+    "title": "Szczegóły operacji",
+    "titleFor": "{type} #{id}",
+    "open": "Pokaż szczegóły",
+    "updatedBy": "zaktualizowano w {ids}",
+    "by": "użytkownik: {user}",
+    "created": "Utworzono",
+    "started": "Rozpoczęto",
+    "completed": "Zakończono",
+    "source": "Źródło",
+    "destination": "Cel",
+    "archive": "Archiwum",
+    "fileCount": "Pliki",
+    "error": "Błąd",
+    "pushHeader": "Wypchnięcie (PUSH)",
+    "updatesHeader": "Aktualizacje ({count})",
+    "noUpdates": "Ten katalog nie był aktualizowany.",
+    "pullHeader": "Cofnięcie (PULL)",
+    "pullIncludedUpdates": "Przywrócono katalog razem z aktualizacjami {ids}.",
+    "loadFailed": "Nie udało się wczytać szczegółów operacji: {error}",
+    "rolledBack": "Wycofano"
   }
 }

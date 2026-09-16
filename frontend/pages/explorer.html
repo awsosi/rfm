@@ -114,7 +114,7 @@
                 </button>
                 <button class="btn btn-secondary btn-update" id="update-btn"
                         data-i18n-title="update.description"
-                        title="Rename, move or delete entries inside a pushed catalog" disabled>
+                        title="Rename, replace, add or delete files inside a pushed catalog" disabled>
                     <span data-i18n="update.title">Update catalog</span>
                 </button>
                 <p class="action-hint" id="action-hint" data-i18n="explorer.actionHint">
@@ -210,39 +210,28 @@
         </ul>
     </div>
 
-    <!-- Modal for confirmations and inputs -->
-    <div class="modal hidden" id="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modal-title" data-i18n="modal.confirmAction">Confirm Action</h3>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                <p id="modal-message"></p>
-                <div id="modal-input-container" class="hidden">
-                    <input type="text" id="modal-input" class="form-control">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="modal-cancel" data-i18n="modal.cancel">Cancel</button>
-                <button class="btn btn-primary" id="modal-confirm" data-i18n="modal.confirm">Confirm</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Update Catalog Modal -->
     <div class="modal hidden" id="update-modal">
         <div class="modal-content modal-wide">
             <div class="modal-header">
                 <h3 id="update-modal-title" data-i18n="update.title">Update catalog</h3>
-                <button class="modal-close" id="update-modal-close">&times;</button>
+                <button class="modal-close" id="update-modal-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" data-i18n="update.description">Rename, move or delete entries inside a catalog that has already been pushed.</p>
+                <p class="text-muted" data-i18n="update.description">Rename, replace or delete files inside a catalog that has already been pushed, or add new ones.</p>
                 <p><strong><span data-i18n="update.catalogLabel">Catalog</span>:</strong> <span id="update-catalog-name"></span></p>
 
                 <h4 data-i18n="update.entriesHeader">Contents</h4>
                 <div id="update-entries" class="update-entries"></div>
+
+                <h4 data-i18n="update.addHeader">Add files</h4>
+                <div class="update-add-controls">
+                    <button type="button" class="btn btn-secondary btn-sm" id="update-add-from-a" data-i18n="update.addFromPathA">Add from Path A…</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="update-add-upload" data-i18n="update.addUpload">Upload new files…</button>
+                    <input type="file" id="update-upload-input" multiple hidden>
+                </div>
+                <div id="update-additions" class="update-entries"></div>
 
                 <h4 data-i18n="update.pendingHeader">Pending changes</h4>
                 <div id="update-pending" class="update-pending"></div>
@@ -250,6 +239,41 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="update-modal-cancel" data-i18n="modal.cancel">Cancel</button>
                 <button class="btn btn-primary" id="update-modal-apply" data-i18n="update.apply">Apply changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Path A file picker (used by the Update modal) -->
+    <div class="modal hidden" id="path-picker-modal">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="path-picker-title" data-i18n="update.pickerTitle">Choose files from Path A</h3>
+                <button class="modal-close" id="path-picker-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="path-picker-location"><code id="path-picker-path"></code></p>
+                <div id="path-picker-list" class="update-entries path-picker-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="path-picker-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="path-picker-choose" data-i18n="update.pickerChoose" disabled>Choose</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Operation details -->
+    <div class="modal hidden" id="operation-details-modal" role="dialog" aria-modal="true"
+         aria-labelledby="operation-details-title">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="operation-details-title" data-i18n="details.title">Operation details</h3>
+                <button class="modal-close" id="operation-details-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="operation-details-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="operation-details-ok" data-i18n="modal.close">Close</button>
             </div>
         </div>
     </div>
@@ -312,12 +336,45 @@
                             </span>
                         </div>
                     </section>
+
+                    <section class="settings-section">
+                        <h4 data-i18n="settings.dialogsHeader">Confirmations</h4>
+                        <p class="settings-section-help" data-i18n="settings.dialogsHelp">
+                            Choose which confirmations are shown. Ticking "Don't ask again" in a dialog turns it off here.
+                        </p>
+                        <div id="settings-dialogs"></div>
+                    </section>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-ghost" id="settings-reset" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
                 <button class="btn btn-secondary" id="settings-cancel" data-i18n="modal.cancel">Cancel</button>
                 <button class="btn btn-primary" id="settings-save" data-i18n="settings.save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for confirmations and inputs. Last, so it stacks above the other dialogs. -->
+    <div class="modal hidden" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title" data-i18n="modal.confirmAction">Confirm Action</h3>
+                <button class="modal-close" id="modal-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <p id="modal-message"></p>
+                <div id="modal-input-container" class="hidden">
+                    <input type="text" id="modal-input" class="form-control">
+                </div>
+                <label class="modal-dont-ask hidden" id="modal-dont-ask">
+                    <input type="checkbox" id="modal-dont-ask-checkbox">
+                    <span data-i18n="modal.dontAskAgain">Don't ask again</span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm" data-i18n="modal.confirm">Confirm</button>
             </div>
         </div>
     </div>

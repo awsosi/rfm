@@ -47,36 +47,48 @@ export async function apiRequest(endpoint, options = {}) {
 
     // Handle errors
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Request failed' }));
-        let errorMessage = `Request failed with status ${response.status}`;
-        if (errorData.detail) {
-            if (Array.isArray(errorData.detail)) {
-                // Handle Pydantic validation errors (array of error objects)
-                errorMessage = errorData.detail.map(err => {
-                    const field = err.loc ? err.loc.slice(-1)[0] : 'unknown';
-                    return `${field}: ${err.msg}`;
-                }).join(', ');
-            } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
-                // Structured failures (e.g. PUSH/UPDATE validation) carry an
-                // object, not a string. Stringifying it here would produce
-                // "[object Object]" and lose the suggestions, so attach the
-                // payload to the Error for the caller to render via i18n.
-                errorMessage = errorData.detail.error || 'validation_failed';
-            } else {
-                errorMessage = errorData.detail;
-            }
-        }
-        const error = new Error(errorMessage);
-        error.status = response.status;
-        if (errorData.detail && typeof errorData.detail === 'object'
-            && !Array.isArray(errorData.detail)) {
-            error.detail = errorData.detail;
-        }
-        throw error;
+        throw await errorFromResponse(response);
+    }
+
+    if (response.status === 204) {
+        return null;
     }
 
     // Return JSON response
     return await response.json();
+}
+
+/**
+ * Build an Error from a failed API response.
+ *
+ * HTTPException bodies are {"error": detail} (the API's exception handler);
+ * request validation errors keep FastAPI's {"detail": [...]}. Structured
+ * failures (e.g. PUSH/UPDATE validation) carry an object: it is attached as
+ * error.detail for the caller to render via i18n.
+ *
+ * @param {Response} response
+ * @returns {Promise<Error>}
+ */
+async function errorFromResponse(response) {
+    const errorData = await response.json().catch(() => ({}));
+    const detail = errorData.error ?? errorData.detail;
+    let errorMessage = `Request failed with status ${response.status}`;
+    if (Array.isArray(detail)) {
+        errorMessage = detail.map(err => {
+            const field = err.loc ? err.loc.slice(-1)[0] : 'unknown';
+            return `${field}: ${err.msg}`;
+        }).join(', ');
+    } else if (detail && typeof detail === 'object') {
+        errorMessage = detail.error || 'validation_failed';
+    } else if (detail) {
+        errorMessage = detail;
+    }
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+        error.detail = detail;
+    }
+    return error;
 }
 
 /**
@@ -265,15 +277,71 @@ export async function preflightCatalog(sourcePath, workerId) {
  * @param {Array<Object>} actions - [{action:'rename'|'move'|'delete', source, dest}]
  * @returns {Promise<Object>}
  */
-export async function updateOperation(catalogPath, workerId, actions) {
+export async function updateOperation(catalogPath, workerId, pushOperationId, actions) {
     return await apiRequest('/api/operations/update', {
         method: 'POST',
         body: JSON.stringify({
             catalog_path: catalogPath,
             worker_id: workerId,
+            push_operation_id: pushOperationId,
             actions: actions
         })
     });
+}
+
+/**
+ * Upload a file for an UPDATE replace/add action.
+ * Uses XMLHttpRequest because fetch cannot report upload progress.
+ * @param {File} file
+ * @param {Function} [onProgress] - called with 0-100
+ * @returns {Promise<Object>} { id, original_filename, size_bytes, sha256, expires_at }
+ */
+export function uploadUpdateFile(file, onProgress) {
+    return new Promise((resolve, reject) => {
+        const form = new FormData();
+        form.append('file', file, file.name);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE_URL}/api/uploads`);
+        xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+        xhr.responseType = 'json';
+        if (onProgress) {
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            });
+        }
+        xhr.addEventListener('load', async () => {
+            if (xhr.status === 401) {
+                logout();
+                window.location.href = '/pages/login.html';
+                reject(new Error('Unauthorized'));
+            } else if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response);
+            } else {
+                const body = new Response(JSON.stringify(xhr.response || {}), { status: xhr.status });
+                reject(await errorFromResponse(body));
+            }
+        });
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+        xhr.send(form);
+    });
+}
+
+/**
+ * Discard an upload that was not used (best-effort; unused uploads also expire).
+ * @param {string} uploadId
+ */
+export async function discardUpload(uploadId) {
+    return await apiRequest(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: 'DELETE' });
+}
+
+/**
+ * Operation with its linked PUSH / UPDATEs / PULL, for the details view.
+ * @param {number} operationId
+ * @returns {Promise<Object>} { operation, push, updates, pull }
+ */
+export async function getOperationDetails(operationId) {
+    return await apiRequest(`/api/operations/${operationId}/details`);
 }
 
 /**

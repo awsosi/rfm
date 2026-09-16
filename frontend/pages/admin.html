@@ -509,6 +509,18 @@
                                     </div>
                                     <small><strong>Off by default.</strong> When on, in-place changes made in PATH_B are replayed against the archive copy in PATH_C. Best-effort: a mirror failure is logged but does not fail the operation.</small>
                                 </div>
+
+                                <div class="form-group">
+                                    <label for="config-update-upload-max-mb">Maximum Upload Size (MB)</label>
+                                    <input type="number" id="config-update-upload-max-mb" name="update_upload_max_mb" class="form-control" min="1" max="10240" value="200">
+                                    <small>Largest single file a user can upload to replace or add a catalog file</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-update-upload-ttl-hours">Unused Upload Lifetime (hours)</label>
+                                    <input type="number" id="config-update-upload-ttl-hours" name="update_upload_ttl_hours" class="form-control" min="1" max="720" value="24">
+                                    <small>Uploads are deleted as soon as their UPDATE finishes. Uploads never used by an UPDATE (e.g. a closed browser tab) are deleted after this long.</small>
+                                </div>
                             </div>
 
                             <!-- Worker Settings -->

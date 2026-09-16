@@ -4,6 +4,7 @@
  */
 
 import { formatFileSize, formatDate, escapeHtml, showConfirm, showPrompt, showToast } from './utils.js';
+import { t } from './i18n.js';
 
 /**
  * Render file list in pane
@@ -635,7 +636,13 @@ function createOperationTableRow(operation) {
 
     const idCell = document.createElement('td');
     idCell.className = 'col-id';
-    idCell.textContent = operation.id;
+    const idLink = document.createElement('button');
+    idLink.type = 'button';
+    idLink.className = 'link-button';
+    idLink.dataset.detailsId = operation.id;
+    idLink.textContent = operation.id;
+    idLink.title = t('details.open');
+    idCell.appendChild(idLink);
     row.appendChild(idCell);
 
     const typeCell = document.createElement('td');
@@ -660,6 +667,16 @@ function createOperationTableRow(operation) {
     const lastSegment = fullDirPath.split(/[\\/]/).filter(Boolean).pop() || fullDirPath;
     directoryCell.textContent = lastSegment;
     directoryCell.title = fullDirPath;
+    const updateIds = operation.update_operation_ids || [];
+    if (updateIds.length > 0) {
+        // The catalog was changed after this PUSH; open its history
+        const refs = document.createElement('button');
+        refs.type = 'button';
+        refs.className = 'link-button update-refs';
+        refs.dataset.detailsId = operation.id;
+        refs.textContent = t('details.updatedBy', { ids: updateIds.map(id => '#' + id).join(', ') });
+        directoryCell.appendChild(refs);
+    }
     row.appendChild(directoryCell);
 
     const userCell = document.createElement('td');

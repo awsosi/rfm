@@ -28,6 +28,47 @@ Undo is the server's job (`operation_service.py`: PUSH/PULL and UPDATE have thei
 
 ---
 
+## 2026-09-16 - UPDATE: replace/add files, uploads, history details, suppressible confirmations
+
+UPDATE could only rename or delete. It can now also **replace** a catalog file and **add** new ones. New content comes from a **Path A file** (default) or a **WebUI upload**.
+
+**Execution order** (`OperationService._execute_update_operation`), so the catalog stays recoverable until the last step:
+1. Stage new content in `B:/<catalog>/.rfm-update-<op>/`: `copy` from Path A, or the new worker command `fetch_file` for uploads.
+2. `validate_dir` on the staged files: a folder picked as a source, or bytes that contradict the extension, fail with `UpdateContentRejected` → HTTP 422 (`contentValidation.stagedTypeMismatch` / `stagedNotAFile`). Nothing in the catalog has changed at this point.
+3. Renames, then swaps (target → working folder, staged → target), each recorded and undone in reverse on any failure.
+4. Deletes (irreversible) last, then the working folder is removed.
+5. Best-effort after success, recorded as `params_json.warnings` instead of failing: working-folder cleanup, **per-file "remove from Path A"** (`remove_source`), archive mirror (now also copies replaced/added files to PATH_C).
+
+**Uploads** (`api/services/upload_service.py`, `api/routes/uploads.py`, table `update_uploads`, migration **014**):
+- `POST /api/uploads` streams to `update_upload_dir/<id>.part` while hashing (SHA-256), refuses more than `update_upload_max_mb` (default 200) early from Content-Length and again while streaming, then renames the file. `DELETE /api/uploads/{id}` discards an unused upload; the WebUI calls it when a change is removed or the dialog is closed.
+- An UPDATE claims its uploads with a conditional `UPDATE … WHERE operation_id IS NULL`, so an upload feeds exactly one operation. The worker downloads through `GET /api/workers/{host}/uploads/{id}`, an HMAC link bound to upload + worker hostname with a 1-hour expiry; the worker verifies size and SHA-256.
+- **Garbage collection:** the endpoint deletes the files as soon as its UPDATE finishes (success or failure); the row stays as the audit record (name, size, SHA-256, user, operation). A background loop (1 min after start, then every 15 min, safe across the 4 uvicorn processes) removes unused uploads past `update_upload_ttl_hours` (default 24), uploads of finished operations, uploads of operations stuck past expiry, and stray/`.part` files older than an hour. Storage is a named volume (`file-manager-uploads[-dev]`), shared by all API processes.
+- Limits are Admin Panel config (`UPDATE Behaviour`), seeded by 014, env `UPDATE_UPLOAD_MAX_MB` / `UPDATE_UPLOAD_TTL_HOURS` (optional sync).
+
+**PIM:** unchanged mechanism, now verified end to end. Every completed UPDATE (including a replace-only one, whose file list is unchanged) sends `eventType "updated"` with the predicted post-update file list. A failed or rejected UPDATE sends nothing. PULL now records `username`, so its PIM event names the user.
+
+**Content gate for UPDATE** (`run_catalog_preflight`): mismatch findings now follow their files. A deleted or replaced mismatched file no longer blocks, and a rename to the extension matching the real bytes fixes one. Before this, a catalog with one mislabelled image could not be repaired by UPDATE at all. Replace targets must exist and add targets must not (400 before anything runs). Listing failures keep their own reason instead of being overwritten.
+
+**History:**
+- UPDATE is linked to its PUSH (`params_json.push_operation_id`, resolved/validated server-side; refuses a pulled PUSH). PUSH rows carry `update_operation_ids` (history, DB search, ES search) and show "updated by #N" in the queue.
+- `GET /api/operations/{id}/details`: the operation plus its PUSH, every UPDATE (any status) and the PULL. Operation numbers and "updated by" links open a details dialog: who, when, status, paths, each action in words (uploaded file name/size/SHA-256, Path A source and whether it was removed), warnings, errors.
+- PULL records `update_operation_ids`: which UPDATEs the pulled catalog contained.
+
+**PULL after UPDATE:** unchanged mechanics. PULL already copies the current PATH_B catalog back, so it restores the updated version. A PUSH with updates now gets its own confirmation (`pull.confirmAfterUpdate`) saying the CURRENT, updated version goes back, and naming the UPDATE numbers.
+
+**Suppressible confirmations** (`frontend/js/dialogs.js`), PL + EN: push, pull, pull-after-update, update, update-destructive (delete/replace/remove from Path A), discard unsaved update changes, settings reset. The dialog has a "Don't ask again" checkbox; each key can be turned back on under **Settings → Confirmations**; Reset to Defaults turns all of them back on. Stored in `user_preferences.custom_settings.suppressed_dialogs` (merged, other custom settings kept). Validation and error popups stay mandatory, now a single Close button. The legacy dual-pane copy/move/delete confirmations are unreachable in this layout and were left as they are.
+
+**Fixed along the way:**
+- `frontend/js/api.js` read only `detail` from error bodies, but the API's `HTTPException` handler returns `{"error": …}`. Every server message reached the UI as "Request failed with status N", and the structured UPDATE validation popup could never render. Both shapes are now read.
+- Generic `#modal` came before the update modal in the DOM, so a confirmation opened from inside the update dialog stacked underneath it. It is now last.
+- UPDATE is excluded from `enable_auto_rollback`, which would have created a phantom rollback "UPDATE" operation (it reverts itself).
+
+**Tests:** `tests/test_update_actions.py` (30, no DB: action rules, predictions, execution against an in-memory worker, including rejection, revert on swap and delete failure, missing `fetch_file`, SHA mismatch, cleanup warnings). `tests/test_update_uploads.py` (9, real PostgreSQL 16 + a local HTTP server as PIM: storage, size limit, single claim, owner-only discard, GC rules, signed link, full UPDATE endpoint → history → details → PULL with the exact PIM bodies, staged rejection → 422 with no PIM event, pulled/foreign-upload refusals). Mutation-checked: removing UPDATE from PIM signalling, dropping the finished-operation GC rule, or skipping upload release each turns a test red. Full suite: 66 passed, 17 errors (pre-existing `test_auth.py` fixture). Browser: 48 Playwright checks against the dev WebUI with a mocked API (details, picker, uploads, draft validation, exact request payload, suppression and granularity, settings toggles, discard, PULL notice, Polish strings).
+
+**Dev deploy:** api-dev rebuilt, `013 -> 014` applied, config seeded, uploads volume mounted. Live in-process check: upload 201 → file on disk → discard 204 → file gone → 404; history/details served. **Not exercised live:** an actual UPDATE against the shares (dev has no pushed catalog right now), and uploads end to end, which need the worker's `fetch_file` command: `docs/prompts/worker-fetch-file.md`. Until the worker is updated, Path A replace/add works, and an upload-based UPDATE fails before touching the catalog with "worker does not support uploaded files yet".
+
+---
+
 ## 2026-09-16 - Fix: UPDATE button returned 400 before the modal opened
 
 Selecting a pushed catalog and clicking **Update** showed a 400 in the WebUI. `openUpdateModal` lists the catalog (`operation.dest_path`, e.g. `B:/subfolder`) through `GET /api/files/list`, which called `validate_path_a` and rejected every non-`A:` path. The endpoint was written for the Path A explorer; the UPDATE UI (2f5c7d8) was the first caller to list Path B.

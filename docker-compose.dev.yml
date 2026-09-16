@@ -26,6 +26,10 @@ volumes:
     driver: local
     name: file-manager-elasticsearch-data-dev
 
+  dev-uploads:
+    driver: local
+    name: file-manager-uploads-dev
+
   dev-logs:
     driver: local
     name: file-manager-logs-dev
@@ -239,6 +243,8 @@ services:
     volumes:
       - dev-logs:/var/log/file-manager
       - dev-config:/etc/file-manager
+      # UPDATE uploads waiting for a worker to fetch them (shared by all API processes)
+      - dev-uploads:/var/lib/file-manager/uploads
       - ./ssl:/etc/ssl/file-manager:ro
 
     networks:

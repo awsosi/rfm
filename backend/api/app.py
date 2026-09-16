@@ -33,7 +33,7 @@ from api.services.worker_service import (
     reactivate_offline_worker,
     unwrap_worker_data,
 )
-from api.services.operation_service import OperationService
+from api.services.operation_service import OperationService, get_update_ids_for_pushes
 from database import init_database, close_database, get_db, health_check
 from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType, OperationStatus
 
@@ -44,6 +44,7 @@ from api.routes.admin_system import router as admin_system_router
 from api.routes.preferences import router as preferences_router
 from api.routes.worker import router as worker_router
 from api.routes.path import router as path_router
+from api.routes.uploads import router as uploads_router
 
 
 async def _sync_env_config_to_db(settings: Settings) -> None:
@@ -154,6 +155,8 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
             ("ENABLE_UPDATE_ARCHIVE_MIRROR",),
             str(settings.enable_update_archive_mirror).lower(),
         ),
+        "update_upload_max_mb": (("UPDATE_UPLOAD_MAX_MB",), str(settings.update_upload_max_mb)),
+        "update_upload_ttl_hours": (("UPDATE_UPLOAD_TTL_HOURS",), str(settings.update_upload_ttl_hours)),
     }
 
     for _key, (_env_names, _value) in optional_env_configs.items():
@@ -336,6 +339,7 @@ app.include_router(admin_system_router)
 app.include_router(preferences_router)
 app.include_router(worker_router)
 app.include_router(path_router)
+app.include_router(uploads_router)
 
 
 # =============================================================================
@@ -467,6 +471,7 @@ async def run_catalog_preflight(
     from api.services.content_validation_service import (
         validate_directory_content,
         count_image_files,
+        invalid_files_after_actions,
         predict_files_after_actions,
     )
 
@@ -483,28 +488,39 @@ async def run_catalog_preflight(
         worker, path, worker_service, db
     )
 
-    # For UPDATE, re-evaluate the minimum against the post-action file list so
-    # an update can never leave a catalog below the threshold.
-    if update_actions is not None and not content_result.skipped:
-        predicted_files = predict_files_after_actions(
+    # For UPDATE, judge the state the catalog will be in after the actions:
+    # the minimum is counted on the post-action file list, and content
+    # mismatches follow their files (a deleted or replaced file no longer
+    # counts; a rename to the right extension fixes one). Worker/listing
+    # failures keep their own reason.
+    if (
+        update_actions is not None
+        and not content_result.skipped
+        and content_result.reason in (
+            None, "contentValidation.tooFewImages", "contentValidation.typeMismatch"
+        )
+    ):
+        _check_update_targets(update_actions, content_result.files)
+        content_result.files = predict_files_after_actions(
             content_result.files, update_actions
         )
-        mismatched = [f.get("name") for f in content_result.invalid_files]
-        predicted_images = count_image_files(
-            predicted_files, content_result.allowed_extensions, excluded=mismatched
+        content_result.invalid_files = invalid_files_after_actions(
+            content_result.invalid_files, update_actions
         )
-        content_result.files = predicted_files
-        content_result.image_count = predicted_images
-        content_result.total_files = len(predicted_files)
-        if predicted_images < content_result.min_required:
+        mismatched = [f.get("name") for f in content_result.invalid_files]
+        content_result.image_count = count_image_files(
+            content_result.files, content_result.allowed_extensions, excluded=mismatched
+        )
+        content_result.total_files = len(content_result.files)
+        if content_result.image_count < content_result.min_required:
             content_result.valid = False
             content_result.reason = "contentValidation.tooFewImagesAfterUpdate"
-        elif content_result.reason == "contentValidation.tooFewImages":
-            # The current state was short but the resulting state is fine
-            content_result.valid = not content_result.invalid_files
-            content_result.reason = (
-                "contentValidation.typeMismatch" if content_result.invalid_files else None
-            )
+        elif content_result.invalid_files:
+            content_result.valid = False
+            content_result.reason = "contentValidation.typeMismatch"
+        else:
+            content_result.valid = True
+            content_result.reason = None
 
     return catalog_result, content_result
 
@@ -1262,6 +1278,66 @@ async def preflight_catalog(
     )
 
 
+async def _resolve_update_push(
+    catalog_path: str, push_operation_id: Optional[int], db: AsyncSession
+) -> Operation:
+    """
+    Find the PUSH an UPDATE belongs to: completed, not yet pulled, same catalog.
+
+    With no id given, the most recent such PUSH of ``catalog_path`` is used.
+    """
+    stmt = select(Operation).where(
+        Operation.type == OperationType.PUSH,
+        Operation.status == OperationStatus.COMPLETED,
+    )
+    if push_operation_id is not None:
+        stmt = stmt.where(Operation.id == push_operation_id)
+    else:
+        stmt = stmt.where(Operation.dest_path == catalog_path).order_by(desc(Operation.id)).limit(1)
+    push = (await db.execute(stmt)).scalars().first()
+
+    if not push or push.dest_path != catalog_path:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No completed PUSH found for catalog {catalog_path}",
+        )
+
+    pulled = await db.execute(
+        select(Operation.id).where(
+            Operation.rollback_operation_id == push.id,
+            Operation.type == OperationType.PULL,
+            Operation.status == OperationStatus.COMPLETED,
+        )
+    )
+    if pulled.first():
+        raise HTTPException(
+            status_code=400,
+            detail=f"PUSH {push.id} has already been pulled; its catalog cannot be updated",
+        )
+    return push
+
+
+def _check_update_targets(actions: list, current_files: list) -> None:
+    """
+    Refuse replace/add actions that cannot succeed, before anything runs.
+
+    Only top-level files are known from the listing; nested targets are left
+    to the worker, whose failure is reverted like any other.
+    """
+    present = set(current_files)
+    for action in actions:
+        if action["action"] == "replace" and '/' not in action["source"] and action["source"] not in present:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot replace {action['source']}: no such file in the catalog",
+            )
+        if action["action"] == "add" and '/' not in action["dest"] and action["dest"] in present:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot add {action['dest']}: a file with that name already exists; replace it instead",
+            )
+
+
 @app.post("/api/operations/update", response_model=OperationResponse)
 async def update_operation(
     request_data: FileUpdateRequest,
@@ -1271,16 +1347,25 @@ async def update_operation(
     settings: Annotated[Settings, Depends(get_settings)],
 ):
     """
-    UPDATE operation: move, rename or delete entries inside a pushed catalog.
+    UPDATE operation: rename, move, replace, add or delete entries inside a
+    pushed catalog.
 
     Operates in place on the PATH_B copy and, when
     ``enable_update_archive_mirror`` is on, replays the same changes against
     the PATH_C archive. Subject to the same two gates as PUSH, with the
-    content gate judging the post-update state.
+    content gate judging the post-update state; new content is additionally
+    inspected once staged on the worker (422 if it is not what it claims).
     """
     from api.services.content_validation_service import (
         validate_update_actions,
         UpdateActionError,
+    )
+    from api.services.operation_service import UpdateContentRejected
+    from api.services.upload_service import (
+        UploadError,
+        attach_uploads,
+        load_uploads_for_update,
+        release_operation_uploads,
     )
 
     validate_path_b(request_data.catalog_path)
@@ -1292,10 +1377,32 @@ async def update_operation(
     except UpdateActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    push = await _resolve_update_push(
+        request_data.catalog_path, request_data.push_operation_id, db
+    )
+
+    upload_ids = [a["upload_id"] for a in actions if a.get("upload_id")]
+    if len(set(upload_ids)) != len(upload_ids):
+        raise HTTPException(status_code=400, detail="Each uploaded file can be used by one action only")
+    try:
+        uploads = await load_uploads_for_update(upload_ids, current_user, db)
+    except UploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    for action in actions:
+        if action.get("upload_id"):
+            upload = uploads[action["upload_id"]]
+            # Recorded on the operation: the history shows exactly what was uploaded
+            action["upload"] = {
+                "filename": upload.original_filename,
+                "size_bytes": upload.size_bytes,
+                "sha256": upload.sha256,
+            }
+
     worker_service = WorkerService(settings)
     operation_service = OperationService(settings, worker_service)
 
     async with operation_service._get_path_lock(request_data.catalog_path):
+        operation = None
         try:
             catalog_result, content_result = await run_catalog_preflight(
                 request_data.catalog_path,
@@ -1325,7 +1432,17 @@ async def update_operation(
                 db=db,
                 catalog_name=catalog_result.matched_name or catalog_result.catalog_name,
                 predicted_files=content_result.files,
+                push_operation_id=push.id,
             )
+
+            try:
+                await attach_uploads(upload_ids, operation.id, db, settings)
+            except UploadError as exc:
+                operation.status = OperationStatus.FAILED
+                operation.error_msg = str(exc)
+                operation.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+                raise HTTPException(status_code=409, detail=str(exc))
 
             await AuditLogger.log_operation(
                 user_id=current_user.id,
@@ -1334,6 +1451,7 @@ async def update_operation(
                 details={
                     "catalog_path": request_data.catalog_path,
                     "catalog_name": operation.params_json.get("catalog_name"),
+                    "push_operation_id": push.id,
                     "actions": actions,
                     "action_count": len(actions),
                     "archive_mirror": bool(operation.archive_path),
@@ -1344,7 +1462,31 @@ async def update_operation(
                 username=current_user.username,
             )
 
-            operation = await operation_service.execute_operation(operation, db)
+            try:
+                operation = await operation_service.execute_operation(operation, db)
+            except Exception as exc:
+                if isinstance(exc.__cause__, UpdateContentRejected):
+                    rejected = exc.__cause__
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "error": "validation_failed",
+                            "catalog": {"valid": True},
+                            "content": {
+                                "valid": False,
+                                "staged": True,
+                                "reason": (
+                                    "contentValidation.stagedNotAFile"
+                                    if rejected.missing and not rejected.invalid_files
+                                    else "contentValidation.stagedTypeMismatch"
+                                ),
+                                "missing": rejected.missing,
+                                "invalid_files": rejected.invalid_files,
+                                "operation_id": operation.id,
+                            },
+                        },
+                    )
+                raise
             await db.refresh(operation)
 
             try:
@@ -1373,6 +1515,16 @@ async def update_operation(
                 exc_info=True,
             )
             raise HTTPException(status_code=500, detail=str(exc))
+        finally:
+            # Uploaded bytes are only needed while the operation runs
+            if operation is not None and upload_ids:
+                try:
+                    await release_operation_uploads(operation.id, db, settings)
+                except Exception as exc:
+                    logger.warning(
+                        f"Could not release uploads of operation {operation.id} "
+                        f"(garbage collection will retry): {exc}"
+                    )
 
 
 @app.get("/api/operations/history", response_model=List[OperationResponse])
@@ -1405,6 +1557,10 @@ async def get_operations_history(
         result = await db.execute(query)
         rows = result.all()
 
+        update_ids = await get_update_ids_for_pushes(
+            db, [op.id for op, _ in rows if op.type == OperationType.PUSH]
+        )
+
         # Build response with username and check if PUSH operations have been pulled
         responses = []
         for operation, user in rows:
@@ -1425,7 +1581,8 @@ async def get_operations_history(
             # Use model_copy to update immutable Pydantic model
             op_response = op_response.model_copy(update={
                 "user_name": user.username,
-                "has_been_pulled": has_been_pulled
+                "has_been_pulled": has_been_pulled,
+                "update_operation_ids": update_ids.get(operation.id, []),
             })
             responses.append(op_response)
 
@@ -1433,6 +1590,73 @@ async def get_operations_history(
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/operations/{operation_id}/details", response_model=OperationDetailsResponse)
+async def get_operation_details(
+    operation_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    One operation plus the operations linked to its catalog.
+
+    Drives the history details view: for a PUSH, every UPDATE of its catalog
+    (who, when, what, outcome) and its PULL; for an UPDATE or PULL, the PUSH it
+    belongs to.
+    """
+    async def load(stmt) -> list:
+        rows = (await db.execute(stmt.join(User, Operation.user_id == User.id))).all()
+        return [
+            OperationResponse.model_validate(op).model_copy(update={"user_name": user.username})
+            for op, user in rows
+        ]
+
+    base = select(Operation, User)
+    found = await load(base.where(Operation.id == operation_id))
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id} not found")
+    operation = found[0]
+
+    if operation.type == OperationType.PUSH:
+        push_id = operation.id
+    elif operation.type == OperationType.PULL:
+        push_id = operation.rollback_operation_id
+    else:
+        push_id = (operation.params_json or {}).get("push_operation_id")
+
+    push = updates = pull = None
+    if push_id is not None:
+        pushes = await load(base.where(Operation.id == push_id, Operation.type == OperationType.PUSH))
+        push = pushes[0] if pushes else None
+        updates = await load(
+            base.where(
+                Operation.type == OperationType.UPDATE,
+                Operation.params_json["push_operation_id"].as_integer() == push_id,
+            ).order_by(Operation.id)
+        )
+        pulls = await load(
+            base.where(
+                Operation.type == OperationType.PULL,
+                Operation.rollback_operation_id == push_id,
+            ).order_by(desc(Operation.id))
+        )
+        pull = next((p for p in pulls if p.status == OperationStatus.COMPLETED), pulls[0] if pulls else None)
+
+    if push is not None:
+        push = push.model_copy(update={
+            "has_been_pulled": bool(pull and pull.status == OperationStatus.COMPLETED),
+            "update_operation_ids": [u.id for u in updates if u.status == OperationStatus.COMPLETED],
+        })
+        if operation.type == OperationType.PUSH:
+            operation = push
+
+    return OperationDetailsResponse(
+        operation=operation,
+        push=push if operation.type != OperationType.PUSH else None,
+        updates=updates or [],
+        pull=pull,
+    )
 
 
 @app.get("/api/operations/search", response_model=Dict[str, Any])
@@ -1493,6 +1717,8 @@ async def search_operations(
                 pull_result = await db.execute(pull_check)
                 pulled_ids = {row[0] for row in pull_result.fetchall()}
 
+            update_ids = await get_update_ids_for_pushes(db, push_completed_ids)
+
             operations = []
             for hit in result["hits"]:
                 op_id = hit["operation_id"]
@@ -1516,6 +1742,7 @@ async def search_operations(
                     "created_at": hit["created_at"],
                     "_score": hit.get("_score"),
                     "has_been_pulled": has_been_pulled,
+                    "update_operation_ids": update_ids.get(op_id, []),
                 })
 
             return {
@@ -1566,6 +1793,8 @@ async def search_operations(
                 pull_result_db = await db.execute(pull_check_db)
                 pulled_ids_db = {row[0] for row in pull_result_db.fetchall()}
 
+            update_ids_db = await get_update_ids_for_pushes(db, push_completed_ids_db)
+
             # Build response
             operations = []
             for operation, user in rows:
@@ -1575,6 +1804,7 @@ async def search_operations(
                 op_response = op_response.model_copy(update={
                     "user_name": user.username,
                     "has_been_pulled": has_been_pulled_db,
+                    "update_operation_ids": update_ids_db.get(operation.id, []),
                 })
                 operations.append(op_response.model_dump())
 
