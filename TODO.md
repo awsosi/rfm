@@ -40,7 +40,38 @@
 
 ## ACTIVE BUGS
 
-None currently.
+- [ ] **SECURITY - worker identity is not verified.** A worker is identified only by
+      the hostname in the URL. `public_key` (the worker actually sends its full
+      client certificate PEM) is stored on register and never checked; no
+      client-certificate or signature verification exists anywhere. Traefik routers
+      `api-dev.ff.vitkac.local` / `api.ff.vitkac.local` are plain `tls = true` with
+      no client auth, and the API ports are published on `0.0.0.0:58080` / `:48080`,
+      so Traefik can be bypassed entirely. Verified 2026-09-16: an unauthenticated
+      `curl` polled `DELA-5420-AW`'s command queue and got 200. Anyone who can reach
+      the API can take a worker's commands (poll marks them SENT), post forged
+      results (e.g. a `validate_dir` result that passes content validation and feeds
+      PIM), or re-register a hostname with their own key while it stays ACTIVE.
+      Proposed fix (pending sign-off): dedicated worker hostname with Traefik
+      `RequireAnyClientCert` + `passTLSClientCert`, API ports bound to 127.0.0.1,
+      header stripped on the other routers, backend pins the presented certificate
+      against the stored one; a changed certificate on register -> PENDING + audit.
+- [ ] **SECURITY - the worker accepts any server certificate**
+      (`ApiClient.cs`: `ServerCertificateValidationCallback = ... => true`, commented
+      "for testing - remove in production"). Anyone who can intercept worker traffic
+      can impersonate the API and send it commands. Needs a worker change.
+- [ ] **Audit IPs are spoofable:** `get_client_ip` trusts the leftmost
+      `X-Forwarded-For` from any client, and the API is reachable without Traefik.
+- [ ] **`wait_for_command_completion` can mark a delivered command TIMEOUT.** It sets
+      `TIMEOUT` unconditionally; a poll that marked the command SENT after the
+      waiter's last refresh is overwritten, the worker still executes it, and its
+      late response flips the command/operation to COMPLETED after the caller
+      reported a timeout. Make the TIMEOUT update conditional on `status='PENDING'`
+      and decide what a late response to a TIMEOUT command should do.
+- [ ] **`tests/test_auth.py` cannot run:** 17 tests request a `db_session` fixture
+      that exists nowhere (no `conftest.py`).
+- [ ] **`Base.metadata.create_all` fails:** `WorkerCommand.created_at` has
+      `index=True` *and* an explicit `Index("ix_worker_commands_created_at")`.
+      Harmless for Alembic deployments; blocks metadata-built test schemas.
 
 ---
 
