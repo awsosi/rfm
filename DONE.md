@@ -6,6 +6,31 @@
 
 ---
 
+## 2026-09-16 - Fix: worker reconnect path and Event Viewer noise
+
+**Reconnect (worker side).** After the dev host rebooted, the approved worker came back and was refused forever with `403 (status: SUSPENDED)`.
+- **Root cause is server-side:** the health check (`background_tasks.py`) and the admin suspend action both write `SUSPENDED`, and nothing ever moves a worker back to ACTIVE except manual approval. The worker cannot and must not activate itself. Server fix handed off as `docs/prompts/server-worker-auto-reactivation.md`.
+- Worker-side defects in the same path, fixed:
+  - registration logged "status is PENDING - awaiting admin approval" unconditionally; it now logs the status the server returned;
+  - every 403 was logged as "certificate has been revoked" and triggered a re-registration (rewriting the stored key every 30s); the worker now reads the real status from the 403 body, keeps its registration, and re-registers only on 404;
+  - an empty poll answers `200` with `command_id: null`, which the worker treated as a command (failing it and posting a response for command 0). It was masked because the poll's server timeout (30s) equalled `HttpClient.Timeout` (30s), so idle polls normally ended in a swallowed client timeout. The worker now asks for `timeout=25` and ignores null commands;
+  - connectivity problems (502 during a redeploy, refused connections) were logged per retry; they are now logged once, with a matching recovery entry.
+
+**Event Viewer.** Every Info line went to the Windows Application log: 3,146 entries in a few hours of one worker on dev. Multi-line banners also wrote one event per line (a failed registration was ~15 Error events).
+- NLog now sends only Warn and above to Event Viewer, plus a dedicated `Lifecycle` logger for started / stopped / ACTIVE again / API reachable again. Everything else stays on the console (`/debug`).
+- Banners collapsed into single entries (registration, missing certificate, missing API URL, network-share credentials, impersonation failure).
+- Recurring conditions log on state change, not per retry.
+
+**Verified.**
+- Scripted fake API driving SUSPENDED → 502 outage → ACTIVE → 404 → PENDING → ACTIVE, through a harness hosting `WorkerService` Start/Stop like Topshelf: 2 registrations (startup and after 404, none on 403); exactly 30.0s backoff while SUSPENDED and PENDING; heartbeats continued while suspended; the command after recovery ran and returned 9 items; no response for the empty poll; **exactly 10 Event Viewer entries for the whole run**, all Warn or Lifecycle, in the expected order.
+- Live on dev: 3 Event Viewer entries on startup (deprecated App.config API URL, SUSPENDED, started).
+- `validate_dir` suite 15/15.
+- The `UnauthorizedRetrySeconds` branch from the polling-loop fix below is now measured: 403 retries at exactly 30s, live on dev and in the harness.
+
+**Not done:** Info-level detail now exists only on the console; a service install has no Info log at all. Add an NLog file target if that is needed for troubleshooting.
+
+---
+
 ## 2026-09-16 - Fix: validate_dir result was dropped, rejecting valid catalogs
 
 A catalog with 4 genuine images was refused with "0 of 2 required image files - 0 files in total", while the worker had correctly logged `7 file(s), 4 image(s), 1 non-image, 2 mismatched` for the same directory.
@@ -36,7 +61,7 @@ Found while building `dev-vf` and pairing a worker with the dev stack.
 
 **Verified (approved worker, 90s sample against the dev stack):** 1 registration, 0 spins, 20 commands executed (`list`/`ping`/`get_status`); log 17.6 KB vs 174.6 KB in 15s before the fix. Idle polls settle to a steady ~5.1s, matching `PollingIntervalSeconds`, and a queued backlog still drains back-to-back (0.1s between two commands), confirming the `continue`.
 
-**Not separately re-measured:** the `UnauthorizedRetrySeconds` branch. The worker was approved on the dev stack before the fixed build existed, so the post-fix `PENDING` path could not be observed without suspending it. The 94-registrations-in-15s figure is the *pre-fix* `PENDING` measurement. Both branches are the same `Task.Delay`, differing only in the constant.
+**Not separately re-measured at the time (since measured, see the reconnect entry above):** the `UnauthorizedRetrySeconds` branch. The worker was approved on the dev stack before the fixed build existed, so the post-fix `PENDING` path could not be observed without suspending it. The 94-registrations-in-15s figure is the *pre-fix* `PENDING` measurement. Both branches are the same `Task.Delay`, differing only in the constant.
 
 ---
 

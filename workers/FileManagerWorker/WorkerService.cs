@@ -17,6 +17,13 @@ namespace FileManagerWorker
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+        /// <summary>
+        /// Service lifecycle and connectivity state changes (started, stopped, active
+        /// again, API reachable again). App.config routes this logger's Info entries to
+        /// the Windows Event Log, which otherwise only receives warnings and above.
+        /// </summary>
+        internal static readonly Logger Lifecycle = LogManager.GetLogger("Lifecycle");
+
         private CertificateManager _certManager;
         private ApiClient _apiClient;
         private FileOperations _fileOps;
@@ -26,10 +33,10 @@ namespace FileManagerWorker
 
         /// <summary>
         /// How long to wait before polling again while the API is rejecting this
-        /// worker (registered, not yet approved). Deliberately much longer than the
-        /// normal polling interval: nothing can happen until an admin acts.
+        /// worker (PENDING approval, SUSPENDED). Deliberately much longer than the
+        /// normal polling interval: nothing changes until the server-side status does.
         /// </summary>
-        private const int UnauthorizedRetrySeconds = 30;
+        internal const int UnauthorizedRetrySeconds = 30;
 
         private CancellationTokenSource _cancellationTokenSource;
         private Task _pollingTask;
@@ -73,21 +80,9 @@ namespace FileManagerWorker
                 var certificate = _certManager.GetCertificateReadOnly();
                 if (certificate == null)
                 {
-                    Logger.Error("========================================================================");
-                    Logger.Error("CRITICAL: mTLS certificate not found!");
-                    Logger.Error("========================================================================");
-                    Logger.Error("The service cannot start without an mTLS certificate.");
-                    Logger.Error("");
-                    Logger.Error("DIAGNOSIS:");
-                    Logger.Error("  - Certificate not found in {0} certificate store", _certManager.StoreMode);
-                    Logger.Error("  - Certificate must be generated during /config setup");
-                    Logger.Error("");
-                    Logger.Error("SOLUTION:");
-                    Logger.Error("  1. Run as Administrator: FileManagerWorker.exe /config");
-                    Logger.Error("  2. Complete the configuration wizard");
-                    Logger.Error("  3. Certificate will be generated and stored");
-                    Logger.Error("  4. Then install/restart the service");
-                    Logger.Error("========================================================================");
+                    Logger.Error("Cannot start: no mTLS certificate in the {0} certificate store. " +
+                                 "Run 'FileManagerWorker.exe /config' as Administrator to generate it, then start the service again.",
+                                 _certManager.StoreMode);
                     return false;
                 }
 
@@ -111,7 +106,8 @@ namespace FileManagerWorker
 
                 if (!registrationTask.Result)
                 {
-                    Logger.Warn("Worker registration failed, will retry during operation");
+                    // RegisterWorkerAsync has already logged why; polling retries it.
+                    Logger.Debug("Initial registration did not succeed, will retry while polling");
                 }
 
                 // Start background tasks
@@ -121,7 +117,7 @@ namespace FileManagerWorker
                 _heartbeatTask = Task.Run(() => HeartbeatLoop(_cancellationTokenSource.Token));
                 _cleanupTask = Task.Run(() => CleanupLoop(_cancellationTokenSource.Token));
 
-                Logger.Info("FileManagerWorker service started successfully");
+                Lifecycle.Info("FileManagerWorker started (worker {0}, API {1})", Environment.MachineName, config.ApiUrl);
                 return true;
             }
             catch (Exception ex)
@@ -148,7 +144,7 @@ namespace FileManagerWorker
                 // Dispose resources
                 _apiClient?.Dispose();
 
-                Logger.Info("FileManagerWorker service stopped");
+                Lifecycle.Info("FileManagerWorker stopped");
                 return true;
             }
             catch (Exception ex)
@@ -193,9 +189,9 @@ namespace FileManagerWorker
                     // without this delay the loop - and the re-registration it
                     // triggers - runs flat out against the API.
                     await Task.Delay(
-                        _apiClient.IsRegistered
-                            ? TimeSpan.FromSeconds(_config.PollingIntervalSeconds)
-                            : TimeSpan.FromSeconds(UnauthorizedRetrySeconds),
+                        _apiClient.IsRejected
+                            ? TimeSpan.FromSeconds(UnauthorizedRetrySeconds)
+                            : TimeSpan.FromSeconds(_config.PollingIntervalSeconds),
                         cancellationToken);
                 }
                 catch (OperationCanceledException)
@@ -291,7 +287,7 @@ namespace FileManagerWorker
                     }
                     else
                     {
-                        Logger.Warn("Configuration not found in secure storage, falling back to App.config");
+                        Logger.Info("Configuration not found in secure storage, falling back to App.config");
                     }
                 }
                 catch (Exception ex)
@@ -309,23 +305,9 @@ namespace FileManagerWorker
                 // Validate API URL is configured (CRITICAL: don't use defaults that will fail silently)
                 if (string.IsNullOrEmpty(apiUrl))
                 {
-                    Logger.Error("========================================================================");
-                    Logger.Error("CRITICAL: API URL not configured!");
-                    Logger.Error("========================================================================");
-                    Logger.Error("The service cannot start without a valid API URL.");
-                    Logger.Error("");
-                    Logger.Error("DIAGNOSIS:");
-                    Logger.Error("  - API URL not found in secure storage: {0}", SecureConfigStorage.GetConfigFilePath());
-                    Logger.Error("  - API URL not found in App.config");
-                    Logger.Error("");
-                    Logger.Error("POSSIBLE CAUSES:");
-                    Logger.Error("  1. Configuration wizard was not run: FileManagerWorker.exe /config");
-                    Logger.Error("  2. Configuration file doesn't exist or is corrupted");
-                    Logger.Error("");
-                    Logger.Error("SOLUTION:");
-                    Logger.Error("  Run as Administrator: FileManagerWorker.exe /config");
-                    Logger.Error("  Then restart service: net stop FileManagerWorker && net start FileManagerWorker");
-                    Logger.Error("========================================================================");
+                    Logger.Error("Cannot start: API URL is not configured in secure storage ({0}) or App.config. " +
+                                 "Run 'FileManagerWorker.exe /config' as Administrator, then restart the service.",
+                                 SecureConfigStorage.GetConfigFilePath());
                     return null;
                 }
 

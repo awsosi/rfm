@@ -6,6 +6,50 @@
 
 ---
 
+## Worker Status: Don't Let "Offline" and "Suspended by an Admin" Share a Value
+
+**Problem:** A worker host rebooted for a Windows update. The worker came back, registered and heartbeated normally, and was refused every command indefinitely with `403 (status: SUSPENDED)`. Only an administrator could fix it.
+
+**Root Cause:** The heartbeat health check and the administrator's suspend action both wrote `SUSPENDED`. Once two causes share one status, the server can never undo the automatic one without also undoing the deliberate one, so neither gets undone. Meanwhile the heartbeat endpoint kept recording fresh heartbeats from the "suspended" worker and threw that evidence away.
+
+**Why it was invisible:** The worker misreported it. It logged "Worker status is PENDING - awaiting admin approval" after every registration regardless of the real status, and "certificate has been revoked" on every 403. Both messages pointed away from the actual state.
+
+**Rules:**
+1. Model *why* a resource is unavailable, not just *that* it is. An automatic, self-healing condition needs a status (or reason) that an automatic process is allowed to clear.
+2. Log the state the server reported, never an assumed one. A hardcoded "PENDING" in a log line is a bug that looks like documentation.
+3. A rejection is not a reason to re-register. Re-registering on 403 rewrote the stored public key every 30 seconds and changed nothing.
+
+---
+
+## Windows Event Log: One Line Is One Event
+
+**Problem:** One worker wrote 3,146 entries to the Windows Application log in a few hours. A single failed registration produced about 15 separate Error events.
+
+**Root Cause:**
+- NLog's `eventlog` target received everything from Info up, including every command and every registration.
+- Diagnostic "banners" were written as a dozen consecutive `Logger.Error(...)` calls (separator, title, blank line, each bullet). In a console that reads as one block; in Event Viewer each call is its own event, with its own timestamp and level, interleaved with everything else.
+- Retry loops logged the same warning on every attempt (every 5s during an API redeploy).
+
+**Rules:**
+1. Event Viewer gets Warn and above, plus a small, named lifecycle stream (started, stopped, recovered). Route it with a dedicated logger, not by raising Info to Warn.
+2. One condition, one log call. Put the diagnosis and the fix in the same message.
+3. In a retry loop, log on state change: one entry when it breaks, one when it recovers.
+4. Measure it: count the events a realistic scenario produces (`Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='...'; StartTime=...}`) and assert the exact sequence.
+
+---
+
+## Long Polls: Server Timeout Must Be Shorter Than the Client's
+
+**Problem:** An empty poll response (`200`, `command_id: null`) was treated as a real command, failed with "Command ID is missing", and posted a response for command 0.
+
+**Why it was invisible:** It almost never happened. The worker requested a 30s long poll with a 30s `HttpClient.Timeout`, so on an idle queue the client gave up first, and the resulting `TaskCanceledException` was swallowed as a "normal cancellation". The bug only fired when the server won the race.
+
+**Rules:**
+1. Ask the server to hold the poll for less than the client timeout (here 25s vs 30s), so an idle poll ends in a real answer, not an exception.
+2. Handle the empty answer explicitly. A swallowed timeout can hide a broken code path that only runs when timing shifts.
+
+---
+
 ## Generic Data Channels: Unwrap Once, In One Place
 
 **Problem:** A catalog holding 4 valid images was rejected with "0 of 2 required image files - 0 files in total". The worker log for the very same directory read `7 file(s), 4 image(s), 1 non-image, 2 mismatched`. Nothing errored anywhere; the command round trip reported `success`.

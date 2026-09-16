@@ -55,9 +55,7 @@ namespace FileManagerWorker
 					return existingCert;
 				}
 
-				Logger.Error("No certificate found in certificate store");
-				Logger.Error("Certificate must be generated during setup (/config) as Administrator");
-				Logger.Error("Please run: FileManagerWorker.exe /config");
+				Logger.Error("No certificate found in the {0} certificate store; generate it with 'FileManagerWorker.exe /config' as Administrator", StoreMode);
 				return null;
 			}
 			catch (Exception ex)
