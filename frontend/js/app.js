@@ -28,6 +28,8 @@ import {
     uploadUpdateFile,
     discardUpload,
     getOperationDetails,
+    retryPimDelivery,
+    recheckRemoteSync,
     getOperationHistory,
     searchOperations,
     listActiveWorkers
@@ -58,6 +60,9 @@ import {
     setCurrentPath,
     renderOperationQueue,
     updateOperationInQueueTable,
+    formatOperationStatus,
+    formatPimDelivery,
+    formatRemoteSync,
     getSelectedOperationId,
     showQueueLoading,
     hideQueueLoading,
@@ -1346,6 +1351,13 @@ function handleWebSocketEvent(data) {
             case 'operation_completed':
                 // Legacy event types, handle same as operation_update
                 handleVFOperationUpdate(data);
+                break;
+
+            case 'operation_integration_update':
+                // PIM delivery or image host sync changed; the operation itself did not
+                loadOperationHistory(false).catch(err => {
+                    console.error('Failed to refresh operation history:', err);
+                });
                 break;
 
             case 'file_list_changed':
@@ -2748,15 +2760,95 @@ async function handleUpdateOperation() {
 // Operation details
 // =========================================================================
 
-function formatOperationStatus(status) {
-    const keys = {
-        PENDING: 'explorer.pending',
-        IN_PROGRESS: 'explorer.inProgress',
-        COMPLETED: 'explorer.completed',
-        FAILED: 'explorer.failed',
-        ROLLED_BACK: 'details.rolledBack'
+// Operation whose details dialog is open, so integration actions can refresh it
+let detailsOperationId = null;
+
+/**
+ * PIM delivery and image host sync for one operation, with the actions a
+ * user can take: send the PIM event again, check the image host again.
+ */
+function buildIntegrationDetails(operation) {
+    const pim = operation.pim_delivery;
+    const sync = operation.remote_sync;
+    const block = document.createElement('div');
+    block.className = 'integration-details';
+    if (!pim && !sync) return block;
+
+    const when = value => (value ? new Date(value).toLocaleString() : null);
+    const facts = document.createElement('dl');
+    facts.className = 'operation-facts';
+    const fact = (labelKey, value) => {
+        if (value === null || value === undefined || value === '') return;
+        const dt = document.createElement('dt');
+        dt.textContent = t(labelKey);
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        facts.append(dt, dd);
     };
-    return keys[status] ? t(keys[status]) : status;
+    const actionButton = (labelKey, run) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-secondary btn-sm';
+        button.textContent = t(labelKey);
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+                await run();
+                showSuccess(t(labelKey + 'Done'));
+            } catch (error) {
+                showError(t('integration.actionFailed', { error: error.message }));
+            }
+            loadOperationHistory(false).catch(() => {});
+            if (detailsOperationId !== null) openOperationDetails(detailsOperationId);
+        });
+        return button;
+    };
+
+    if (pim) {
+        fact('integration.pimLabel', formatPimDelivery(pim));
+        fact('integration.eventType', pim.event_type);
+        fact('integration.tgId', pim.tg_id);
+        fact('integration.attemptsLabel', String(pim.attempts));
+        fact('integration.deliveredLabel', when(pim.delivered_at));
+        if (pim.status === 'PENDING' && pim.attempts > 0) {
+            fact('integration.nextAttemptLabel', when(pim.next_attempt_at));
+        }
+        if (pim.status !== 'DELIVERED') fact('integration.lastErrorLabel', pim.last_error);
+    }
+    if (sync) {
+        fact('integration.syncLabel', formatRemoteSync(sync));
+        fact('integration.syncStarted', when(sync.started_at));
+        fact('integration.lastCheckedLabel', when(sync.last_checked_at));
+        if (sync.status === 'CHECKING') fact('integration.nextCheckLabel', when(sync.next_check_at));
+        fact('integration.syncCompleted', when(sync.completed_at));
+        fact('integration.lastErrorLabel', sync.last_error);
+    }
+    block.appendChild(facts);
+
+    if (sync && sync.status !== 'WAITING' && (sync.files || []).length > 0) {
+        const list = document.createElement('ul');
+        list.className = 'sync-files';
+        sync.files.forEach(file => {
+            const item = document.createElement('li');
+            item.className = file.synced ? 'synced' : 'missing';
+            item.textContent = (file.synced ? '✓ ' : '✗ ') + file.name
+                + (!file.synced && file.status_code ? ` (HTTP ${file.status_code})` : '');
+            list.appendChild(item);
+        });
+        block.appendChild(list);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'integration-actions';
+    if (pim && pim.status !== 'DELIVERED') {
+        actions.appendChild(actionButton('integration.retryPim', () => retryPimDelivery(operation.id)));
+    }
+    if (sync && ['CHECKING', 'TIMEOUT', 'SYNCED'].includes(sync.status)) {
+        actions.appendChild(actionButton('integration.recheckSync', () => recheckRemoteSync(operation.id)));
+    }
+    if (actions.children.length > 0) block.appendChild(actions);
+
+    return block;
 }
 
 /**
@@ -2802,6 +2894,7 @@ function buildOperationSummary(operation) {
     if (operation.type !== 'UPDATE') fact('details.fileCount', operation.file_count);
     fact('details.error', operation.error_msg);
     block.appendChild(facts);
+    block.appendChild(buildIntegrationDetails(operation));
 
     const params = operation.params_json || {};
     if (operation.type === 'UPDATE' && Array.isArray(params.actions)) {
@@ -2840,6 +2933,7 @@ async function openOperationDetails(operationId) {
         return;
     }
 
+    detailsOperationId = operationId;
     const modal = document.getElementById('operation-details-modal');
     const body = document.getElementById('operation-details-body');
     body.textContent = '';
@@ -2878,6 +2972,7 @@ async function openOperationDetails(operationId) {
         document.getElementById('operation-details-ok')
     ];
     const close = () => {
+        detailsOperationId = null;
         modal.classList.add('hidden');
         closeButtons.forEach(button => button.removeEventListener('click', close));
     };

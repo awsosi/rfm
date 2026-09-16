@@ -33,7 +33,11 @@ from api.services.worker_service import (
     reactivate_offline_worker,
     unwrap_worker_data,
 )
-from api.services.operation_service import OperationService, get_update_ids_for_pushes
+from api.services.operation_service import (
+    OperationService,
+    get_integration_status,
+    get_update_ids_for_pushes,
+)
 from database import init_database, close_database, get_db, health_check
 from models import User, Worker, Operation, Config, AuditLog, WorkerStatus, OperationType, OperationStatus
 
@@ -122,7 +126,45 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "pim_update_enabled": (("PIM_UPDATE_ENABLED",), str(settings.pim_update_enabled).lower()),
         "pim_update_event_type": (("PIM_UPDATE_EVENT_TYPE",), settings.pim_update_event_type or "updated"),
         "pim_payload_template": (("PIM_PAYLOAD_TEMPLATE",), settings.pim_payload_template or ""),
-        "pim_tg_id": (("PIM_TG_ID",), ""),
+        "pim_retry_base_seconds": (("PIM_RETRY_BASE_SECONDS",), str(settings.pim_retry_base_seconds)),
+        "pim_retry_max_delay_seconds": (
+            ("PIM_RETRY_MAX_DELAY_SECONDS",),
+            str(settings.pim_retry_max_delay_seconds),
+        ),
+        "pim_retry_max_hours": (("PIM_RETRY_MAX_HOURS",), str(settings.pim_retry_max_hours)),
+        # Image host synchronization verification
+        "remote_sync_check_enabled": (
+            ("ENABLE_REMOTE_SYNC_CHECK", "REMOTE_SYNC_CHECK_ENABLED"),
+            str(settings.remote_sync_check_enabled).lower(),
+        ),
+        "remote_sync_check_url_template": (
+            ("REMOTE_SYNC_CHECK_URL_TEMPLATE",),
+            settings.remote_sync_check_url_template,
+        ),
+        "remote_sync_check_wait_for_pim": (
+            ("REMOTE_SYNC_CHECK_WAIT_FOR_PIM",),
+            str(settings.remote_sync_check_wait_for_pim).lower(),
+        ),
+        "remote_sync_check_initial_delay_seconds": (
+            ("REMOTE_SYNC_CHECK_INITIAL_DELAY_SECONDS",),
+            str(settings.remote_sync_check_initial_delay_seconds),
+        ),
+        "remote_sync_check_interval_seconds": (
+            ("REMOTE_SYNC_CHECK_INTERVAL_SECONDS",),
+            str(settings.remote_sync_check_interval_seconds),
+        ),
+        "remote_sync_check_timeout_minutes": (
+            ("REMOTE_SYNC_CHECK_TIMEOUT_MINUTES",),
+            str(settings.remote_sync_check_timeout_minutes),
+        ),
+        "remote_sync_check_request_timeout": (
+            ("REMOTE_SYNC_CHECK_REQUEST_TIMEOUT",),
+            str(settings.remote_sync_check_request_timeout),
+        ),
+        "remote_sync_check_cache_bust": (
+            ("REMOTE_SYNC_CHECK_CACHE_BUST",),
+            str(settings.remote_sync_check_cache_bust).lower(),
+        ),
         # PolkaSQL catalog name validation
         "catalog_validation_enabled": (
             ("ENABLE_CATALOG_VALIDATION", "CATALOG_VALIDATION_ENABLED"),
@@ -968,6 +1010,7 @@ async def push_operation(
                 **(operation.params_json or {}),
                 "files": content_result.files,
                 "catalog_name": catalog_result.matched_name or catalog_result.catalog_name,
+                "tg_id": catalog_result.tg_id,
                 "username": current_user.username,
             }
             await db.commit()
@@ -1108,6 +1151,7 @@ async def push_operation_batch(
                     "catalog_name": (
                         catalog_result.matched_name or catalog_result.catalog_name
                     ),
+                    "tg_id": catalog_result.tg_id,
                     "username": current_user.username,
                 }
                 await db.commit()
@@ -1433,6 +1477,7 @@ async def update_operation(
                 catalog_name=catalog_result.matched_name or catalog_result.catalog_name,
                 predicted_files=content_result.files,
                 push_operation_id=push.id,
+                tg_id=catalog_result.tg_id or (push.params_json or {}).get("tg_id"),
             )
 
             try:
@@ -1560,6 +1605,7 @@ async def get_operations_history(
         update_ids = await get_update_ids_for_pushes(
             db, [op.id for op, _ in rows if op.type == OperationType.PUSH]
         )
+        integration = await get_integration_status(db, [op.id for op, _ in rows])
 
         # Build response with username and check if PUSH operations have been pulled
         responses = []
@@ -1583,6 +1629,7 @@ async def get_operations_history(
                 "user_name": user.username,
                 "has_been_pulled": has_been_pulled,
                 "update_operation_ids": update_ids.get(operation.id, []),
+                **integration.get(operation.id, {}),
             })
             responses.append(op_response)
 
@@ -1607,8 +1654,12 @@ async def get_operation_details(
     """
     async def load(stmt) -> list:
         rows = (await db.execute(stmt.join(User, Operation.user_id == User.id))).all()
+        integration = await get_integration_status(db, [op.id for op, _ in rows])
         return [
-            OperationResponse.model_validate(op).model_copy(update={"user_name": user.username})
+            OperationResponse.model_validate(op).model_copy(update={
+                "user_name": user.username,
+                **integration.get(op.id, {}),
+            })
             for op, user in rows
         ]
 
@@ -1657,6 +1708,59 @@ async def get_operation_details(
         updates=updates or [],
         pull=pull,
     )
+
+
+@app.post("/api/operations/{operation_id}/pim/retry", response_model=PimDeliveryResponse)
+async def retry_pim_delivery(
+    operation_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Send an operation's PIM event again now: a FAILED event gets a fresh retry
+    window, a PENDING one skips the rest of its backoff delay.
+    """
+    from api.services.pim_service import kick_delivery, retry_event
+
+    event = await retry_event(operation_id, db)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id} has no PIM event")
+    if event.status != "DELIVERED":
+        await AuditLogger.log_operation(
+            user_id=current_user.id,
+            operation_id=operation_id,
+            action="pim_retry",
+            details={"attempts": event.attempts, "catalog_name": event.catalog_name},
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            username=current_user.username,
+        )
+        kick_delivery()
+    status_map = await get_integration_status(db, [operation_id])
+    return status_map[operation_id]["pim_delivery"]
+
+
+@app.post("/api/operations/{operation_id}/remote-sync/recheck", response_model=RemoteSyncResponse)
+async def recheck_remote_sync(
+    operation_id: int,
+    current_user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Check a PUSH's images on the image host again now, with a fresh timeout."""
+    from api.services.remote_sync_service import get_sync_config, is_enabled, recheck
+
+    if not is_enabled(await get_sync_config(db)):
+        raise HTTPException(status_code=409, detail="Remote sync verification is disabled")
+    check = await recheck(operation_id, db)
+    if check is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id} has no remote sync check")
+    logger.info(
+        f"Remote sync check of PUSH {operation_id} restarted by '{current_user.username}' "
+        f"(status {check.status})"
+    )
+    status_map = await get_integration_status(db, [operation_id])
+    return status_map[operation_id]["remote_sync"]
 
 
 @app.get("/api/operations/search", response_model=Dict[str, Any])
@@ -1718,6 +1822,9 @@ async def search_operations(
                 pulled_ids = {row[0] for row in pull_result.fetchall()}
 
             update_ids = await get_update_ids_for_pushes(db, push_completed_ids)
+            integration = await get_integration_status(
+                db, [hit["operation_id"] for hit in result["hits"]]
+            )
 
             operations = []
             for hit in result["hits"]:
@@ -1743,6 +1850,7 @@ async def search_operations(
                     "_score": hit.get("_score"),
                     "has_been_pulled": has_been_pulled,
                     "update_operation_ids": update_ids.get(op_id, []),
+                    **integration.get(op_id, {}),
                 })
 
             return {
@@ -1794,6 +1902,7 @@ async def search_operations(
                 pulled_ids_db = {row[0] for row in pull_result_db.fetchall()}
 
             update_ids_db = await get_update_ids_for_pushes(db, push_completed_ids_db)
+            integration_db = await get_integration_status(db, [op.id for op, _ in rows])
 
             # Build response
             operations = []
@@ -1805,6 +1914,7 @@ async def search_operations(
                     "user_name": user.username,
                     "has_been_pulled": has_been_pulled_db,
                     "update_operation_ids": update_ids_db.get(operation.id, []),
+                    **integration_db.get(operation.id, {}),
                 })
                 operations.append(op_response.model_dump())
 

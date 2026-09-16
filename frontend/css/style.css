@@ -2628,3 +2628,52 @@ body[data-theme="dark"] .operation-status.rolled_back {
     padding-left: 1.25rem;
     word-break: break-all;
 }
+
+/* PIM delivery and image host sync badges (operation queue, details) */
+.integration-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    margin-top: 3px;
+}
+
+.integration-badge {
+    display: inline-block;
+    padding: 0 6px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: help;
+}
+
+.integration-badge.pim-delivered,
+.integration-badge.sync-synced    { background-color: var(--success-soft); color: var(--success-color); }
+.integration-badge.pim-pending,
+.integration-badge.sync-waiting,
+.integration-badge.sync-checking  { background-color: var(--info-soft);    color: var(--info-color); }
+.integration-badge.retrying,
+.integration-badge.sync-timeout   { background-color: var(--warning-soft); color: var(--warning-color); }
+.integration-badge.pim-failed     { background-color: var(--danger-soft);  color: var(--danger-color); }
+
+body[data-theme="dark"] .integration-badge {
+    background-color: var(--bg-tertiary);
+}
+
+.integration-details .sync-files {
+    margin: 4px 0;
+    padding-left: 1.25rem;
+    font-size: 0.9em;
+    word-break: break-all;
+}
+
+.integration-details .sync-files .synced  { color: var(--success-color); }
+.integration-details .sync-files .missing { color: var(--text-secondary); }
+
+.integration-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 4px 0;
+}

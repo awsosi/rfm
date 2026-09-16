@@ -297,5 +297,43 @@
     "pullIncludedUpdates": "Przywrócono katalog razem z aktualizacjami {ids}.",
     "loadFailed": "Nie udało się wczytać szczegółów operacji: {error}",
     "rolledBack": "Wycofano"
+  },
+  "integration": {
+    "pim": {
+      "PENDING": "PIM: wysyłanie",
+      "RETRYING": "PIM: ponawianie ({attempts})",
+      "DELIVERED": "PIM: powiadomiono",
+      "FAILED": "PIM: błąd"
+    },
+    "sync": {
+      "WAITING": "Synchronizacja: czeka na PIM",
+      "CHECKING": "Synchronizacja: {synced}/{total}",
+      "SYNCED": "Zsynchronizowano {synced}/{total}",
+      "TIMEOUT": "Synchronizacja: przekroczono czas {synced}/{total}",
+      "CANCELLED": "Synchronizacja: anulowano"
+    },
+    "attempts": "Próby: {attempts}",
+    "deliveredAt": "Dostarczono: {time}",
+    "nextAttempt": "Następna próba: {time}",
+    "lastError": "Ostatni błąd: {error}",
+    "missingFiles": "Jeszcze niedostępne: {files}",
+    "lastChecked": "Ostatnie sprawdzenie: {time}",
+    "pimLabel": "Powiadomienie PIM",
+    "eventType": "eventType",
+    "tgId": "tgId",
+    "attemptsLabel": "Próby dostarczenia",
+    "deliveredLabel": "Dostarczono",
+    "nextAttemptLabel": "Następna próba",
+    "lastErrorLabel": "Ostatni błąd",
+    "syncLabel": "Synchronizacja z serwerem zdjęć",
+    "syncStarted": "Sprawdzanie od",
+    "lastCheckedLabel": "Ostatnie sprawdzenie",
+    "nextCheckLabel": "Następne sprawdzenie",
+    "syncCompleted": "Zakończono synchronizację",
+    "retryPim": "Wyślij ponownie do PIM",
+    "retryPimDone": "Powiadomienie PIM zostanie wysłane ponownie.",
+    "recheckSync": "Sprawdź ponownie serwer zdjęć",
+    "recheckSyncDone": "Serwer zdjęć zostanie sprawdzony ponownie.",
+    "actionFailed": "Nie udało się wykonać akcji: {error}"
   }
 }

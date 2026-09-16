@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-09-16 - PIM: tgId from PolkaSQL, reliable delivery; image host sync verification
+
+**tgId.** Confirmed from `Polka27.elementy`: `tgId` is `grup_nazwe` of the product row, `imageCatalog` is `grup_nazwe_kolor` (`TORBA HB0788 FA0542` / `TORBA HB0788 FA0542-910 SILVER`, `OZDOBA PS261403 0` / `OZDOBA PS261403 0-BRASS`). `RFM_sp_ValidateProductName` already matches `grup_nazwe_kolor`, so it now also returns `tg_id` from the matched row (`docs/polkasql/RFM_ValidateProductName.sql`, ALTER PROCEDURE only). No second procedure/web service. The suggestions for a miss are unchanged.
+- PUSH/UPDATE store `tg_id` on the operation (`params_json`); PULL uses its PUSH's.
+- When it was not captured (the validation gate is off, or the operation predates this), delivery looks it up through the same web service (`lookup_tg_id`, independent of `catalog_validation_enabled`, needs URL + key). An unresolvable tgId is a failed attempt and is retried. The event is never sent without it.
+- Default template is now `{"tgId": "{tg_id}", "imageCatalog": "{catalog_name}", "eventType": "{event_type}", "files": {files}}`. Migration 015 switches a DB still holding the old default, leaves an edited template alone, and removes the static `pim_tg_id` setting (a single value for every product was never right).
+
+**Reliable PIM delivery** (`api/services/pim_service.py`, table `pim_events`). The old fire-and-forget `asyncio.create_task` lost the event on any PIM/network error or restart.
+- Transactional outbox: the event (event type, files, catalog, tgId, user) is stored when the operation completes, then delivered right away (`kick_delivery`) and by a 5 s loop in every API process.
+- Claimed with `FOR UPDATE SKIP LOCKED` + a lease (`pim_timeout + 120 s`), so 4 uvicorn processes never double-send, and a process that dies mid-attempt only delays the event.
+- Any failure (connect error, timeout, non-2xx, missing URL/token, invalid template, unresolved tgId) -> retry after `pim_retry_base_seconds` doubling up to `pim_retry_max_delay_seconds`, ±20% jitter. After `pim_retry_max_hours` (default 72, 0 = never) it becomes FAILED.
+- Per-catalog ordering: an event waits while an older event of the same catalog is pending, so PIM never gets `updated` before `created`.
+- URL, token and template are read per attempt, so fixing the configuration also fixes queued events. While `pim_enabled` is off nothing is queued, and already-queued events are held.
+- `POST /api/operations/{id}/pim/retry` (details dialog, audit-logged): FAILED gets a fresh window, PENDING skips its remaining delay.
+- Trade-off: a timeout after PIM processed the request re-sends it (at-least-once).
+
+**Image host sync verification** (`api/services/remote_sync_service.py`, table `remote_sync_checks`). Optional, **off by default**, Admin Panel -> Configuration -> Image Host Sync Verification.
+- One check per PUSH over the catalog's top-level image files (image extensions from content validation). It polls `remote_sync_check_url_template` (default `https://img.vitkac.com/uploads/product_thumb/{catalog_name}/up/{file}`, placeholders URL-encoded).
+- WAITING until the PUSH's PIM event is delivered (`remote_sync_check_wait_for_pim`), then CHECKING: first check after `initial_delay`, then only files not yet served every `interval`. It ends SYNCED, or TIMEOUT after `timeout_minutes`. `POST /api/operations/{id}/remote-sync/recheck` starts the clock again.
+- UPDATE re-targets the check to the new file list, re-checks files it added/replaced/renamed, and waits for the UPDATE's PIM event. PULL cancels an active check.
+- **Served = HTTP 200 + `image/*` + non-empty body, fetched with a unique `rfm_sync` query parameter.** Measured on img.vitkac.com (Cloudflare): `.../TORBA HB0788 FA0542-910 SILVER/up/1.jpg` returns a cached `200 image/jpeg` with a 0-byte body, but 404 from the origin. 404s are cached with `max-age=3600`. A plain status check would report a missing file as synced, and a freshly synced file as missing for up to an hour.
+- Same claim/lease pattern as PIM, 10 s loop.
+
+**UI.** The operation history shows translated badges under the status: `PIM: notified / sending / retrying (n) / failed` and `Sync: waiting for PIM / n/m / Synced n/m / timed out n/m / cancelled` (tooltips: attempts, tgId, next attempt, last error, files not served yet). The details dialog lists the same facts plus per-file results, with "Send to PIM again" and "Check image host again". The queue's operation status is now translated too (it was English-only). PL + EN, 299 keys each. History, DB search, ES search and details all carry `pim_delivery` / `remote_sync` (shared `get_integration_status`). Admin Panel: Delivery & Retries under PIM, the new sync section, TG Identifier field removed.
+
+**Tests:** `tests/test_pim_delivery_and_sync.py`, 14 tests on real PostgreSQL 16 with one local server playing PIM, `RFM_ValidateProductName` and the image host:
+- backoff timings over 503/502/200 with identical bodies
+- connect error, and missing token fixed by config
+- give-up plus manual retry, per-catalog order, 4 concurrent passes send each event exactly once, disabled PIM holds events
+- tgId from validation, lookup at delivery, old procedure without `tg_id` retried
+- sync WAITING -> CHECKING (clock = delivery time) -> partial -> SYNCED without re-requesting served files, URL encoding and cache-busting
+- empty 200 and `text/html` 200 not counted -> TIMEOUT -> recheck -> SYNCED
+- the full PUSH -> UPDATE -> PULL through the real endpoints with the exact PIM bodies
+
+`test_update_uploads.py` pins the legacy template, since tgId is covered here. Mutation-checked: removing the per-catalog ordering, or counting an empty body as served, each turns a test red. Full suite: 80 passed, 17 errors (pre-existing `test_auth.py` fixture). Browser: 39 Playwright checks against the dev WebUI with a mocked API (badges and tooltips for every state in en-US and pl-PL, details facts and file list, both action buttons post, no missing translations, Admin Panel loads/saves the new keys, TG field gone).
+
+**Dev deploy:** api-dev rebuilt, `014 -> 015` applied (template switched, `pim_tg_id` removed, 11 keys seeded, PIM and sync still off on dev). From inside the container, the real probe against img.vitkac.com: TORBA `1.png`/`3.png` and OZDOBA `1.png` served, `99.png` 404, `1.jpg` 404 with cache-busting (empty body without it). **Not exercised live:** real PIM delivery (PIM is disabled on dev) and the updated procedure (not deployed in PolkaSQL yet, see TODO). No worker change was needed.
+
+---
+
 ## 2026-09-16 - Worker: `fetch_file` for uploaded UPDATE files; worker-side backups removed
 
 **`fetch_file`** (`CommandHandler.HandleFetchFileAsync`) downloads a WebUI upload from the API and places it at `dest_path`:

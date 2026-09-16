@@ -6,6 +6,29 @@
 
 ---
 
+## Verifying Publication Through a CDN: Status Codes Lie
+
+**Problem:** A sync check for pushed images needs "is `https://img.vitkac.com/uploads/product_thumb/<catalog>/up/1.jpg` served yet?".
+
+**What the CDN actually did (measured 2026-09-16):** Cloudflare served a cached `200 image/jpeg` with a **0-byte body** for a file the origin answers 404 for, and cached real 404s with `max-age=3600`.
+
+**Why it is invisible:** A `status == 200` check reports the missing file as synced, and a newly published file as missing for up to an hour. Both look like plausible sync timing.
+
+**Rules:**
+1. Bypass the cache for verification (unique query parameter), unless the host rejects it.
+2. Count a resource as present only with the right content type **and** a non-empty body; read one chunk, not the whole file.
+3. Before designing a check against a third-party host, probe both an existing and a missing resource, with and without cache-busting.
+
+---
+
+## Pydantic: `model_copy(update=...)` Does Not Validate
+
+**Problem:** Operation history rows got `pim_delivery` merged in with `op.model_copy(update={"pim_delivery": {...}})`. The field is typed `Optional[PimDeliveryResponse]`, but the row held a plain `dict`: `row.pim_delivery.status` raised `AttributeError`. Serialization only emitted a warning, so the HTTP response looked fine.
+
+**Rule:** Pass model instances (not dicts) to `model_copy(update=...)`, or rebuild with `model_validate`. Test the Python object, not just the JSON.
+
+---
+
 ## API Errors: Client and Exception Handler Must Agree on the Body Shape
 
 **Problem:** The UPDATE button showed only "Request failed with status 400". The server had sent a precise message, and a structured 422 that the WebUI had code to render as a localised popup.

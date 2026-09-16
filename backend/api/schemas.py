@@ -375,6 +375,8 @@ class CatalogValidationResponse(BaseModel):
     catalog_name: str
     matched_name: Optional[str] = None
     product_id: Optional[int] = None
+    # Polka27.elementy.grup_nazwe of the matched product, sent to PIM as tgId
+    tg_id: Optional[str] = None
     suggestions: list[str] = Field(default_factory=list)
     reason: Optional[str] = Field(
         None, description="i18n key describing why validation failed"
@@ -462,6 +464,41 @@ class OperationCreate(BaseModel):
     params: Optional[dict[str, Any]] = None
 
 
+class PimDeliveryResponse(BaseModel):
+    """Delivery state of an operation's PIM event (see pim_service)."""
+
+    status: str  # PENDING | DELIVERED | FAILED
+    event_type: str
+    tg_id: Optional[str] = None
+    attempts: int = 0
+    last_error: Optional[str] = None
+    last_status_code: Optional[int] = None
+    next_attempt_at: Optional[datetime] = None
+    last_attempt_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+
+
+class RemoteSyncFileResponse(BaseModel):
+    name: str
+    synced: bool = False
+    status_code: Optional[int] = None
+
+
+class RemoteSyncResponse(BaseModel):
+    """Image host verification of a PUSH (see remote_sync_service)."""
+
+    status: str  # WAITING | CHECKING | SYNCED | TIMEOUT | CANCELLED
+    total_files: int = 0
+    synced_files: int = 0
+    files: list[RemoteSyncFileResponse] = Field(default_factory=list)
+    attempts: int = 0
+    started_at: Optional[datetime] = None
+    last_checked_at: Optional[datetime] = None
+    next_check_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+
 class OperationResponse(BaseModel):
     """Operation response schema."""
 
@@ -486,6 +523,10 @@ class OperationResponse(BaseModel):
     has_been_pulled: bool = False  # True if this PUSH has been successfully pulled/reverted
     # PUSH only: completed UPDATE operations that changed this catalog, oldest first
     update_operation_ids: list[int] = Field(default_factory=list)
+    # PUSH/PULL/UPDATE: PIM notification state, when PIM was signalled
+    pim_delivery: Optional[PimDeliveryResponse] = None
+    # PUSH only: image host verification, when enabled
+    remote_sync: Optional[RemoteSyncResponse] = None
     created_at: datetime
 
 

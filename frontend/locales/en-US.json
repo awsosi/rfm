@@ -297,5 +297,43 @@
     "pullIncludedUpdates": "Restored the catalog including updates {ids}.",
     "loadFailed": "Could not load operation details: {error}",
     "rolledBack": "Rolled back"
+  },
+  "integration": {
+    "pim": {
+      "PENDING": "PIM: sending",
+      "RETRYING": "PIM: retrying ({attempts})",
+      "DELIVERED": "PIM: notified",
+      "FAILED": "PIM: failed"
+    },
+    "sync": {
+      "WAITING": "Sync: waiting for PIM",
+      "CHECKING": "Sync: {synced}/{total}",
+      "SYNCED": "Synced {synced}/{total}",
+      "TIMEOUT": "Sync: timed out {synced}/{total}",
+      "CANCELLED": "Sync: cancelled"
+    },
+    "attempts": "Attempts: {attempts}",
+    "deliveredAt": "Delivered: {time}",
+    "nextAttempt": "Next attempt: {time}",
+    "lastError": "Last error: {error}",
+    "missingFiles": "Not served yet: {files}",
+    "lastChecked": "Last checked: {time}",
+    "pimLabel": "PIM notification",
+    "eventType": "eventType",
+    "tgId": "tgId",
+    "attemptsLabel": "Delivery attempts",
+    "deliveredLabel": "Delivered",
+    "nextAttemptLabel": "Next attempt",
+    "lastErrorLabel": "Last error",
+    "syncLabel": "Image host sync",
+    "syncStarted": "Checking since",
+    "lastCheckedLabel": "Last checked",
+    "nextCheckLabel": "Next check",
+    "syncCompleted": "Sync finished",
+    "retryPim": "Send to PIM again",
+    "retryPimDone": "The PIM notification will be sent again.",
+    "recheckSync": "Check image host again",
+    "recheckSyncDone": "The image host will be checked again.",
+    "actionFailed": "Action failed: {error}"
   }
 }

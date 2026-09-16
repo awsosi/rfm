@@ -87,27 +87,29 @@
 ### Future Work (General)
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
 
+### Follow-ups from PIM delivery / tgId / image host sync (2026-09-16)
+- [ ] **DBA: deploy the updated `RFM_sp_ValidateProductName`** (`docs/polkasql/RFM_ValidateProductName.sql`,
+      ALTER PROCEDURE only; the web service is unchanged). Until then the procedure returns no
+      `tg_id`, and with PIM enabled every event whose template uses `{tg_id}` waits in retry
+      with "returned no tg_id" instead of being sent without it.
+- [ ] Turn on PIM (with a real or mock endpoint) and `remote_sync_check_enabled` on dev and
+      watch a real PUSH go WAITING -> CHECKING -> SYNCED in the history.
+- [ ] An UPDATE that *replaces* a file cannot be verified on the image host by existence:
+      the old image already answers 200. Comparing `Last-Modified`/`ETag` to the UPDATE time
+      would work if the host changes them.
+- [ ] WebSocket `operation_integration_update` reaches only clients of the API process
+      that made the change (4 uvicorn processes, no shared pub/sub); the 10 s history
+      polling covers the rest. Same limitation as every other broadcast.
+
 ### Follow-ups from UPDATE replace/add (2026-09-16)
-- [ ] **Worker `fetch_file` command** (Windows session): `docs/prompts/worker-fetch-file.md`.
-      Until deployed, UPDATE with uploaded files fails before changing anything.
-- [ ] Run a real UPDATE (replace from Path A, add, delete) on a dev test catalog and an
-      upload-based one once the worker is updated; configure PIM on dev (or a mock) to
-      watch the `updated` event arrive.
 - [ ] **UPDATE and PULL of the same catalog are not mutually exclusive.** UPDATE locks
       the B: path, PULL the A: path, and `_operation_locks` is per process (4 uvicorn
       workers), so neither lock covers the other request anyway.
-- [ ] Worker `RollbackManager` backs up the *virtual* path (`C:/…`), which on the worker
-      host is the real system drive — see the prompt's observation section.
 - [ ] Explorer console error on load when active operations exist:
       `loadActiveOperations` -> `addOperationToQueue` expects the legacy dual-pane queue
       element (`querySelector` of null). Pre-existing.
 
 ### Follow-ups from the 2026-09-16 integration work
-- [ ] **Confirm what `tgId` means** in the PIM `ftp_event` payload. The existing
-      ROSAPI push endpoint is `/api/v1/products/tg/{folder_name}/set_image_catalog`,
-      so "tg" is already the product identifier keyed by folder name — but in the
-      sample payload `tgId` and `imageCatalog` are different products. Until this
-      is settled the field stays out of the default template.
 - [ ] **Ask the DBA whether `RFM_sp_Auth`'s second API key slot is free for dev.**
       Dev and prod currently share every secret, including `POLKA_AUTH_API_KEY`;
       a JWT minted by dev validates against prod.

@@ -657,8 +657,12 @@ function createOperationTableRow(operation) {
     statusCell.className = 'col-status';
     const statusBadge = document.createElement('span');
     statusBadge.className = 'operation-status ' + operation.status.toLowerCase().replace('_', '-');
-    statusBadge.textContent = formatStatus(operation.status);
+    statusBadge.textContent = formatOperationStatus(operation.status);
     statusCell.appendChild(statusBadge);
+    const integration = buildIntegrationBadges(operation);
+    if (integration) {
+        statusCell.appendChild(integration);
+    }
     row.appendChild(statusCell);
 
     const directoryCell = document.createElement('td');
@@ -702,9 +706,85 @@ function getOperationDirectory(operation) {
     return operation.source_path || 'N/A';
 }
 
-function formatStatus(status) {
-    return status.replace('_', ' ').toLowerCase()
-        .replace(/\b\w/g, char => char.toUpperCase());
+export function formatOperationStatus(status) {
+    const keys = {
+        PENDING: 'explorer.pending',
+        IN_PROGRESS: 'explorer.inProgress',
+        COMPLETED: 'explorer.completed',
+        FAILED: 'explorer.failed',
+        ROLLED_BACK: 'details.rolledBack'
+    };
+    return keys[status] ? t(keys[status]) : status;
+}
+
+function formatDateTime(value) {
+    return value ? new Date(value).toLocaleString() : '';
+}
+
+/**
+ * Short label for an operation's PIM delivery state.
+ */
+export function formatPimDelivery(pim) {
+    if (pim.status === 'PENDING' && pim.attempts > 0) {
+        return t('integration.pim.RETRYING', { attempts: pim.attempts });
+    }
+    return t('integration.pim.' + pim.status);
+}
+
+/**
+ * Short label for a PUSH's image host synchronization state.
+ */
+export function formatRemoteSync(sync) {
+    return t('integration.sync.' + sync.status, {
+        synced: sync.synced_files,
+        total: sync.total_files
+    });
+}
+
+/**
+ * Badges for PIM delivery and image host sync, or null when neither applies.
+ * The tooltip carries the details (attempts, last error, missing files).
+ */
+export function buildIntegrationBadges(operation) {
+    const pim = operation.pim_delivery;
+    const sync = operation.remote_sync;
+    if (!pim && !sync) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'integration-badges';
+
+    if (pim) {
+        const badge = document.createElement('span');
+        badge.className = 'integration-badge pim-' + pim.status.toLowerCase()
+            + (pim.status === 'PENDING' && pim.attempts > 0 ? ' retrying' : '');
+        badge.textContent = formatPimDelivery(pim);
+        const tip = [t('integration.attempts', { attempts: pim.attempts })];
+        if (pim.tg_id) tip.push('tgId: ' + pim.tg_id);
+        if (pim.delivered_at) tip.push(t('integration.deliveredAt', { time: formatDateTime(pim.delivered_at) }));
+        if (pim.status === 'PENDING' && pim.attempts > 0 && pim.next_attempt_at) {
+            tip.push(t('integration.nextAttempt', { time: formatDateTime(pim.next_attempt_at) }));
+        }
+        if (pim.last_error && pim.status !== 'DELIVERED') tip.push(t('integration.lastError', { error: pim.last_error }));
+        badge.title = tip.join('\n');
+        wrap.appendChild(badge);
+    }
+
+    if (sync) {
+        const badge = document.createElement('span');
+        badge.className = 'integration-badge sync-' + sync.status.toLowerCase();
+        badge.textContent = formatRemoteSync(sync);
+        const missing = (sync.files || []).filter(f => !f.synced).map(f => f.name);
+        const tip = [];
+        if (missing.length > 0 && sync.status !== 'WAITING') {
+            tip.push(t('integration.missingFiles', { files: missing.join(', ') }));
+        }
+        if (sync.last_checked_at) tip.push(t('integration.lastChecked', { time: formatDateTime(sync.last_checked_at) }));
+        if (sync.last_error) tip.push(t('integration.lastError', { error: sync.last_error }));
+        badge.title = tip.join('\n');
+        wrap.appendChild(badge);
+    }
+
+    return wrap;
 }
 
 function formatTimestamp(timestamp) {

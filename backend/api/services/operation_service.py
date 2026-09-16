@@ -94,6 +94,52 @@ async def get_update_ids_for_pushes(
     return mapping
 
 
+async def get_integration_status(
+    db: AsyncSession, operation_ids: List[int]
+) -> dict[int, dict]:
+    """
+    Map operation id -> ``{"pim_delivery": ..., "remote_sync": ...}`` for the
+    operations that have either, as response models ready to merge into an
+    OperationResponse (``model_copy(update=...)`` does not validate dicts).
+    """
+    if not operation_ids:
+        return {}
+    from api.schemas import PimDeliveryResponse, RemoteSyncResponse
+    from models import PimEvent, RemoteSyncCheck
+
+    status: dict[int, dict] = {}
+    events = await db.execute(select(PimEvent).where(PimEvent.operation_id.in_(operation_ids)))
+    for event in events.scalars():
+        status.setdefault(event.operation_id, {})["pim_delivery"] = PimDeliveryResponse(
+            status=event.status,
+            event_type=event.event_type,
+            tg_id=event.tg_id,
+            attempts=event.attempts,
+            last_error=event.last_error,
+            last_status_code=event.last_status_code,
+            next_attempt_at=event.next_attempt_at,
+            last_attempt_at=event.last_attempt_at,
+            delivered_at=event.delivered_at,
+        )
+    checks = await db.execute(
+        select(RemoteSyncCheck).where(RemoteSyncCheck.operation_id.in_(operation_ids))
+    )
+    for check in checks.scalars():
+        status.setdefault(check.operation_id, {})["remote_sync"] = RemoteSyncResponse(
+            status=check.status,
+            total_files=check.total_files,
+            synced_files=check.synced_files,
+            files=check.files or [],
+            attempts=check.attempts,
+            started_at=check.started_at,
+            last_checked_at=check.last_checked_at,
+            next_check_at=check.next_check_at,
+            completed_at=check.completed_at,
+            last_error=check.last_error,
+        )
+    return status
+
+
 class OperationService:
     """
     Service for orchestrating file operations across workers.
@@ -396,22 +442,17 @@ class OperationService:
                 OperationType.PULL,
                 OperationType.UPDATE,
             ):
-                from api.services.pim_service import signal_pim_event_bg
+                from api.services.pim_service import enqueue_pim_event, kick_delivery
+                from api.services.remote_sync_service import track_operation
 
-                # File list and catalog name were captured during validation and
-                # stored on the operation, so PIM needs no extra worker round-trip.
-                params = operation.params_json or {}
-                asyncio.create_task(
-                    signal_pim_event_bg(
-                        operation_id=operation.id,
-                        operation_type=operation.type.value,
-                        source_path=operation.source_path,
-                        dest_path=operation.dest_path,
-                        files=params.get("files") or [],
-                        username=params.get("username") or "",
-                        catalog_name=params.get("catalog_name"),
-                    )
-                )
+                # File list, catalog name and tgId were captured during
+                # validation and stored on the operation, so PIM needs no extra
+                # worker round-trip. The event is stored first and delivered
+                # with retries; neither step can fail the operation.
+                pim_event_id = await enqueue_pim_event(operation)
+                await track_operation(operation, pim_event_id)
+                if pim_event_id is not None:
+                    kick_delivery()
 
             return operation
 
@@ -1403,6 +1444,7 @@ class OperationService:
         catalog_name: Optional[str] = None,
         predicted_files: Optional[list] = None,
         push_operation_id: Optional[int] = None,
+        tg_id: Optional[str] = None,
     ) -> Operation:
         """
         Create an UPDATE operation against an already-pushed catalog.
@@ -1452,6 +1494,7 @@ class OperationService:
             params_json={
                 "actions": actions,
                 "catalog_name": resolved_name,
+                "tg_id": tg_id,
                 "files": predicted_files or [],
                 "username": user.username,
                 "archive_mirror": mirror_enabled,

@@ -5,6 +5,8 @@ Includes:
 - Worker command queue cleanup
 - Stale worker detection
 - UPDATE upload garbage collection
+- PIM event delivery with retries
+- Image host synchronization checks
 - Metrics collection
 """
 
@@ -51,6 +53,8 @@ class BackgroundTaskManager:
         self._tasks.append(asyncio.create_task(self._command_cleanup_loop()))
         self._tasks.append(asyncio.create_task(self._worker_health_check_loop()))
         self._tasks.append(asyncio.create_task(self._upload_cleanup_loop()))
+        self._tasks.append(asyncio.create_task(self._pim_delivery_loop()))
+        self._tasks.append(asyncio.create_task(self._remote_sync_loop()))
 
         logger.info("Background tasks started")
 
@@ -183,6 +187,40 @@ class BackgroundTaskManager:
                 break
             except Exception as exc:
                 logger.error(f"Error in upload cleanup loop: {exc}")
+
+    async def _pim_delivery_loop(self):
+        """
+        Deliver due PIM events: retries after backoff, events queued by a
+        process that died, and events held back while PIM was disabled.
+        Every API process runs this; rows are claimed with SKIP LOCKED.
+        """
+        from api.services.pim_service import deliver_due_events
+
+        while self._running:
+            try:
+                await asyncio.sleep(5)
+                if not self._running:
+                    break
+                await deliver_due_events()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Error in PIM delivery loop: {exc}")
+
+    async def _remote_sync_loop(self):
+        """Advance due image host synchronization checks (see remote_sync_service)."""
+        from api.services.remote_sync_service import process_due_checks
+
+        while self._running:
+            try:
+                await asyncio.sleep(10)
+                if not self._running:
+                    break
+                await process_due_checks()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Error in remote sync loop: {exc}")
 
 
 # Global background task manager instance

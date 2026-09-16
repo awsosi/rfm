@@ -181,13 +181,38 @@ class Settings(BaseSettings):
     #   {files}        -> JSON array of top-level basenames (unquoted, raw JSON)
     #   {catalog_name} -> catalog/folder name being signalled
     #   {event_type}   -> resolved eventType for this operation
-    #   {tg_id}        -> optional TG identifier (empty unless configured)
+    #   {tg_id}        -> product tgId (Polka27.elementy.grup_nazwe), from
+    #                     RFM_ValidateProductName
     #   {operation_id}, {username}, {source_path}, {dest_path}
-    # tgId is intentionally absent from the default body; add it to the
-    # template in the Admin Panel once its meaning is confirmed.
     pim_payload_template: str = (
-        '{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}'
+        '{"tgId": "{tg_id}", "imageCatalog": "{catalog_name}", '
+        '"eventType": "{event_type}", "files": {files}}'
     )
+
+    # Delivery retries: base delay doubling per failed attempt up to the max
+    # delay; give up after pim_retry_max_hours (0 = keep retrying)
+    pim_retry_base_seconds: int = 10
+    pim_retry_max_delay_seconds: int = 600
+    pim_retry_max_hours: int = 72
+
+    # ------------------------------------------------------------------
+    # Image host synchronization verification (off by default)
+    # ------------------------------------------------------------------
+    remote_sync_check_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices('enable_remote_sync_check', 'remote_sync_check_enabled'),
+    )
+    # Placeholders (URL-encoded): {catalog_name} {file} {tg_id}
+    remote_sync_check_url_template: str = (
+        "https://img.vitkac.com/uploads/product_thumb/{catalog_name}/up/{file}"
+    )
+    remote_sync_check_wait_for_pim: bool = True
+    remote_sync_check_initial_delay_seconds: int = 60
+    remote_sync_check_interval_seconds: int = 120
+    remote_sync_check_timeout_minutes: int = 180
+    remote_sync_check_request_timeout: int = 15
+    # Bypass CDN caches, which were seen serving stale 404s and empty 200s
+    remote_sync_check_cache_bust: bool = True
 
     # ------------------------------------------------------------------
     # Catalog name validation (PolkaSQL RFM_ValidateProductName)

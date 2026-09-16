@@ -18,11 +18,17 @@ Expected response shape from RFM_ValidateProductName:
       "catalog_name": "TORBA HB0788 FA0542-910 SILVER",
       "matched_name": "TORBA HB0788 FA0542-910 SILVER",
       "product_id": 2473757,
+      "tg_id": "TORBA HB0788 FA0542",
       "suggestions": []
     }
 
-On a miss, ``valid`` is false, ``matched_name`` is null and ``suggestions``
-carries the closest names ranked by similarity.
+On a miss, ``valid`` is false, ``matched_name`` and ``tg_id`` are null and
+``suggestions`` carries the closest names ranked by similarity.
+
+``tg_id`` is ``Polka27.elementy.grup_nazwe`` of the matched row: the product
+identifier PIM expects as ``tgId`` next to the catalog name (``imageCatalog``,
+``grup_nazwe_kolor``). ``lookup_tg_id()`` resolves it for PIM delivery even
+when the validation gate itself is switched off.
 
 Enforcement is fail-closed: if validation is enabled and the service cannot
 be reached, the operation is refused. Set ``catalog_validation_fail_open`` to
@@ -57,6 +63,7 @@ class CatalogValidationResult:
     catalog_name: str
     matched_name: Optional[str] = None
     product_id: Optional[int] = None
+    tg_id: Optional[str] = None
     suggestions: List[str] = field(default_factory=list)
     # i18n key the frontend resolves; never a user-facing English string
     reason: Optional[str] = None
@@ -70,6 +77,7 @@ class CatalogValidationResult:
             "catalog_name": self.catalog_name,
             "matched_name": self.matched_name,
             "product_id": self.product_id,
+            "tg_id": self.tg_id,
             "suggestions": self.suggestions,
             "reason": self.reason,
             "error_detail": self.error_detail,
@@ -87,6 +95,62 @@ def _truthy(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in ('true', '1', 'yes')
+
+
+def _clean_tg_id(value) -> Optional[str]:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+async def lookup_tg_id(catalog_name: str, db: AsyncSession) -> tuple:
+    """
+    Resolve the tgId of a catalog through RFM_ValidateProductName.
+
+    Independent of ``catalog_validation_enabled``: that switch controls the
+    PUSH/UPDATE gate, while PIM needs the tgId whenever its payload uses it.
+    Only the URL and API key must be configured.
+
+    Returns ``(tg_id, None)`` on success, ``(None, reason)`` otherwise. The
+    reason is operator-facing English for the delivery log; the caller retries.
+    """
+    name = (catalog_name or "").strip()
+    config = await _get_validation_config(db)
+    url = (config.get('catalog_validation_url') or '').strip()
+    api_key = (config.get('catalog_validation_api_key') or '').strip()
+    if not name:
+        return None, "catalog name is empty"
+    if not url or not api_key:
+        return None, "catalog_validation_url or catalog_validation_api_key is not configured"
+
+    try:
+        timeout = int(config.get('catalog_validation_timeout', '5'))
+    except (TypeError, ValueError):
+        timeout = 5
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                url,
+                params={"ApiKey": api_key, "CatalogName": name, "MaxSuggestions": 1},
+                headers={"Accept": "application/json"},
+            )
+        if response.status_code != 200:
+            return None, f"RFM_ValidateProductName returned HTTP {response.status_code}"
+        data = response.json()
+    except Exception as exc:
+        return None, f"RFM_ValidateProductName unreachable: {type(exc).__name__}: {exc}"
+
+    if not data.get("success"):
+        return None, f"RFM_ValidateProductName error: {data.get('error') or 'unknown error'}"
+    if not data.get("valid"):
+        return None, f"no product matches catalog {name!r}"
+    tg_id = _clean_tg_id(data.get("tg_id"))
+    if not tg_id:
+        return None, (
+            "RFM_ValidateProductName returned no tg_id; deploy the current "
+            "docs/polkasql/RFM_ValidateProductName.sql"
+        )
+    return tg_id, None
 
 
 async def validate_catalog_name(
@@ -192,6 +256,7 @@ async def validate_catalog_name(
                 catalog_name=name,
                 matched_name=data.get("matched_name") or name,
                 product_id=data.get("product_id"),
+                tg_id=_clean_tg_id(data.get("tg_id")),
             )
 
         logger.warning(

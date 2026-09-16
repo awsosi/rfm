@@ -2,8 +2,13 @@
 -- RFM_ValidateProductName - PolkaSQL / SQL Anywhere 17.0.11.7908 (Watcom-SQL)
 -- =============================================================================
 -- Validates that a catalog (folder) name pushed from RFM corresponds to a real
--- product, matching Polka27.elementy.grup_nazwe_kolor. On a miss it returns the
--- closest names ranked by similarity so the operator can correct the folder.
+-- product, matching Polka27.elementy.grup_nazwe_kolor. On a match it also returns
+-- the product's tgId (Polka27.elementy.grup_nazwe of the matched row), which RFM
+-- sends to PIM. On a miss it returns the closest names ranked by similarity so
+-- the operator can correct the folder.
+--
+--   grup_nazwe_kolor (catalog / imageCatalog) : 'TORBA HB0788 FA0542-910 SILVER'
+--   grup_nazwe       (tgId)                   : 'TORBA HB0788 FA0542'
 --
 -- AAA follows the same simplified pattern as RFM_sp_Auth: a hardcoded API key
 -- allow-list, explicit input validation, and a single JSON result column.
@@ -27,6 +32,7 @@ RESULT (json_response LONG VARCHAR)
 BEGIN
   DECLARE v_name            VARCHAR(200);
   DECLARE v_matched         VARCHAR(200);
+  DECLARE v_tg_id           VARCHAR(200);
   DECLARE v_product_id      INT;
   DECLARE v_max             INT;
   DECLARE v_count           INT;
@@ -38,6 +44,7 @@ BEGIN
   SET v_suggestions = '';
   SET v_product_id  = NULL;
   SET v_matched     = NULL;
+  SET v_tg_id       = NULL;
 
   -- ---------------------------------------------------------------------------
   -- API KEY VALIDATION
@@ -74,8 +81,10 @@ BEGIN
   -- ---------------------------------------------------------------------------
   -- Comparison follows the database collation, which is case-insensitive on
   -- this instance, matching the case-insensitive behaviour of RFM_sp_Auth.
-  SELECT FIRST e.Indeks, e.grup_nazwe_kolor
-    INTO v_product_id, v_matched
+  -- Every size row of a product shares grup_nazwe_kolor and grup_nazwe, so
+  -- the first row by Indeks is as good as any.
+  SELECT FIRST e.Indeks, e.grup_nazwe_kolor, e.grup_nazwe
+    INTO v_product_id, v_matched, v_tg_id
     FROM Polka27.elementy e
    WHERE e.grup_nazwe_kolor = v_name
    ORDER BY e.Indeks;
@@ -89,6 +98,10 @@ BEGIN
         '"catalog_name": "' || REPLACE(REPLACE(v_name, '\', '\\'), '"', '\"') || '",' ||
         '"matched_name": "' || REPLACE(REPLACE(v_matched, '\', '\\'), '"', '\"') || '",' ||
         '"product_id": ' || CAST(v_product_id AS VARCHAR) || ',' ||
+        '"tg_id": ' ||
+          IF v_tg_id IS NULL OR TRIM(v_tg_id) = '' THEN 'null'
+          ELSE '"' || REPLACE(REPLACE(TRIM(v_tg_id), '\', '\\'), '"', '\"') || '"'
+          ENDIF || ',' ||
         '"suggestions": []' ||
       '}';
     SELECT json_result AS json_response;
@@ -146,6 +159,7 @@ BEGIN
       '"catalog_name": "' || REPLACE(REPLACE(v_name, '\', '\\'), '"', '\"') || '",' ||
       '"matched_name": null,' ||
       '"product_id": null,' ||
+      '"tg_id": null,' ||
       '"suggestions": [' || v_suggestions || ']' ||
     '}';
 
@@ -175,6 +189,7 @@ END;
 --                  Zwraca JSON: {"success": true/false, "valid": true/false,
 --                  "error": null/"message", "catalog_name": "...",
 --                  "matched_name": null/"...", "product_id": null/123,
+--                  "tg_id": null/"..." (grup_nazwe),
 --                  "suggestions": ["...", "..."]}
 --                  Porownanie jest case-insensitive.
 
@@ -189,8 +204,11 @@ CREATE SERVICE "RFM_ValidateProductName"
 -- -----------------------------------------------------------------------------
 -- Verification
 -- -----------------------------------------------------------------------------
--- Exact match (expect valid: true, product_id 2473757):
+-- Exact match (expect valid: true, product_id 2473757, tg_id "TORBA HB0788 FA0542"):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'TORBA HB0788 FA0542-910 SILVER', 5);
+--
+-- Exact match (expect tg_id "OZDOBA PS261403 0"):
+--   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'OZDOBA PS261403 0-BRASS', 5);
 --
 -- Near miss (expect valid: false with suggestions):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'TORBA HB0788 FA0542-910 SILVR', 5);

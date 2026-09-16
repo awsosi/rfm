@@ -79,7 +79,7 @@ async def db_manager(migrated_database, monkeypatch):
         await s.execute(text("SET LOCAL lock_timeout = '10s'"))
         await s.execute(text(
             "TRUNCATE users, workers, operations, operation_workers, worker_commands, "
-            "update_uploads, audit_logs, config RESTART IDENTITY CASCADE"
+            "update_uploads, pim_events, remote_sync_checks, audit_logs, config RESTART IDENTITY CASCADE"
         ))
     yield DatabaseManager
     await DatabaseManager.close()
@@ -360,6 +360,8 @@ async def update_setup(session, settings, pim, monkeypatch):
         session,
         pim_enabled="true", pim_base_url=pim.url, pim_endpoint="/api/v1/image_catalog/ftp_event",
         pim_api_token="pim-token", push_validation_min_files="2",
+        # Without {tg_id}: tgId resolution is covered by test_pim_delivery_and_sync.py
+        pim_payload_template='{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}',
     )
 
     fake = FakeWorkerService(CATALOG_FILES, settings)

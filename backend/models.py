@@ -610,6 +610,120 @@ class UpdateUpload(Base):
         return f"<UpdateUpload(id={self.id}, filename={self.original_filename!r})>"
 
 
+class PimEventStatus:
+    """``pim_events.status`` values (plain strings, so adding one needs no enum migration)."""
+    PENDING = "PENDING"      # waiting for its first or next delivery attempt
+    DELIVERED = "DELIVERED"  # PIM answered 2xx
+    FAILED = "FAILED"        # gave up after pim_retry_max_hours; can be retried by hand
+
+
+class PimEvent(Base):
+    """
+    Outbox row for one PIM ``ftp_event`` notification.
+
+    Written in the same moment an operation completes and delivered by a
+    background loop with exponential backoff, so a PIM or network outage, an
+    API restart or a crash between completion and delivery loses nothing.
+    Events of the same catalog are delivered in order.
+
+    The event keeps what was true when the operation finished (event type,
+    files, catalog, user). URL, token and payload template are read when each
+    attempt is made, so fixing the configuration also fixes pending events.
+    ``payload`` records the body last sent.
+    """
+    __tablename__ = "pim_events"
+
+    id = Column(Integer, primary_key=True)
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    operation_type = Column(String(16), nullable=False)
+    event_type = Column(String(64), nullable=False)
+    catalog_name = Column(Text, nullable=False, index=True)
+    tg_id = Column(Text, nullable=True)
+    files = Column(JSON, nullable=False, default=list)
+    username = Column(Text, nullable=True)
+    source_path = Column(Text, nullable=True)
+    dest_path = Column(Text, nullable=True)
+
+    status = Column(String(16), nullable=False, default=PimEventStatus.PENDING)
+    attempts = Column(Integer, nullable=False, default=0)
+    # Start of the retry window; reset by a manual retry
+    queued_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    last_status_code = Column(Integer, nullable=True)
+    last_error = Column(Text, nullable=True)
+    payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_pim_events_status_next_attempt", "status", "next_attempt_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<PimEvent(id={self.id}, operation_id={self.operation_id}, status={self.status})>"
+
+
+class RemoteSyncStatus:
+    """``remote_sync_checks.status`` values."""
+    WAITING = "WAITING"      # PIM has not been told yet
+    CHECKING = "CHECKING"    # polling the image URLs
+    SYNCED = "SYNCED"        # every image is served
+    TIMEOUT = "TIMEOUT"      # gave up after remote_sync_check_timeout_minutes
+    CANCELLED = "CANCELLED"  # the catalog was pulled before it synced
+
+    ACTIVE = (WAITING, CHECKING)
+
+
+class RemoteSyncCheck(Base):
+    """
+    Verification that a pushed catalog's images reached the public image host.
+
+    One row per PUSH. An UPDATE of the catalog re-targets the row to the new
+    file list; a PULL cancels it while it is still active. ``files`` holds
+    ``{"name", "synced", "status_code"}`` per image file.
+    """
+    __tablename__ = "remote_sync_checks"
+
+    id = Column(Integer, primary_key=True)
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    catalog_name = Column(Text, nullable=False)
+    status = Column(String(16), nullable=False, default=RemoteSyncStatus.CHECKING)
+    files = Column(JSON, nullable=False, default=list)
+    total_files = Column(Integer, nullable=False, default=0)
+    synced_files = Column(Integer, nullable=False, default=0)
+    # PIM event whose delivery starts the clock (the PUSH's, or the latest UPDATE's)
+    wait_event_id = Column(
+        Integer,
+        ForeignKey("pim_events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    attempts = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    next_check_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_remote_sync_checks_status_next_check", "status", "next_check_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<RemoteSyncCheck(operation_id={self.operation_id}, status={self.status})>"
+
+
 class DeviceAuthorizationRequest(Base):
     """
     Device authorization requests for OAuth device flow (RFC 8628).

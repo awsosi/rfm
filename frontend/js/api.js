@@ -345,6 +345,24 @@ export async function getOperationDetails(operationId) {
 }
 
 /**
+ * Send an operation's PIM event again now (failed, or waiting for a retry)
+ * @param {number} operationId - Operation ID
+ * @returns {Promise<Object>} PIM delivery state
+ */
+export async function retryPimDelivery(operationId) {
+    return await apiRequest(`/api/operations/${operationId}/pim/retry`, { method: 'POST' });
+}
+
+/**
+ * Check a PUSH's images on the image host again now
+ * @param {number} operationId - PUSH operation ID
+ * @returns {Promise<Object>} Remote sync state
+ */
+export async function recheckRemoteSync(operationId) {
+    return await apiRequest(`/api/operations/${operationId}/remote-sync/recheck`, { method: 'POST' });
+}
+
+/**
  * Get operation status
  * @param {string} operationId - Operation ID
  * @returns {Promise<Object>}

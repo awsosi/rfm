@@ -320,7 +320,7 @@
                             <!-- PIM Settings -->
                             <div class="config-section" id="pim-settings">
                                 <h3>PIM - Product Information Manager Signalling</h3>
-                                <p class="text-muted">Second, independent signalling target alongside ROSAPI. Authenticates with a static <code>X-API-TOKEN</code> header. Fires on PUSH, PULL and UPDATE.</p>
+                                <p class="text-muted">Second, independent signalling target alongside ROSAPI. Authenticates with a static <code>X-API-TOKEN</code> header. Fires on PUSH, PULL and UPDATE. Every notification is queued and retried until PIM accepts it; its state shows next to the operation in the history.</p>
 
                                 <div class="form-group">
                                     <div class="custom-control custom-switch">
@@ -404,7 +404,8 @@
                                 <p class="text-muted small">
                                     Request body sent to PIM. Placeholders:
                                     <code>{files}</code> (raw JSON array of top-level filenames),
-                                    <code>{catalog_name}</code>, <code>{event_type}</code>, <code>{tg_id}</code>,
+                                    <code>{catalog_name}</code>, <code>{event_type}</code>,
+                                    <code>{tg_id}</code> (product tgId, <code>Polka27.elementy.grup_nazwe</code>),
                                     <code>{operation_id}</code>, <code>{username}</code>,
                                     <code>{source_path}</code>, <code>{dest_path}</code>.
                                     Every placeholder except <code>{files}</code> and <code>{operation_id}</code> is JSON-escaped.
@@ -412,14 +413,27 @@
 
                                 <div class="form-group">
                                     <label for="config-pim-payload-template">JSON Payload Template</label>
-                                    <textarea id="config-pim-payload-template" name="pim_payload_template" class="form-control" rows="6" placeholder='{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}'></textarea>
-                                    <small><code>tgId</code> is omitted by default. To send it, add <code>"tgId": "{tg_id}"</code> to the template and set the TG Identifier below.</small>
+                                    <textarea id="config-pim-payload-template" name="pim_payload_template" class="form-control" rows="6" placeholder='{"tgId": "{tg_id}", "imageCatalog": "{catalog_name}", "eventType": "{event_type}", "files": {files}}'></textarea>
+                                    <small><code>{tg_id}</code> comes from <code>RFM_ValidateProductName</code> for the pushed catalog (e.g. <code>TORBA HB0788 FA0542-910 SILVER</code> &rarr; <code>TORBA HB0788 FA0542</code>). It needs the web service URL and API key under Catalog &amp; Content Validation, even while that gate is switched off. An event whose tgId cannot be resolved is retried, not sent without it.</small>
+                                </div>
+
+                                <h4 class="mt-4">Delivery &amp; Retries</h4>
+                                <p class="text-muted small">A failed attempt (network error, timeout, non-2xx answer, missing setting) is retried with exponential backoff: the base delay doubles after every failure up to the maximum delay. Notifications of one catalog are delivered in order. Settings changed here also apply to notifications already waiting.</p>
+
+                                <div class="form-group">
+                                    <label for="config-pim-retry-base-seconds">First Retry Delay (seconds)</label>
+                                    <input type="number" id="config-pim-retry-base-seconds" name="pim_retry_base_seconds" class="form-control" min="1" max="3600" value="10">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="config-pim-tg-id">TG Identifier (optional)</label>
-                                    <input type="text" id="config-pim-tg-id" name="pim_tg_id" class="form-control" placeholder="">
-                                    <small>Value substituted for <code>{tg_id}</code>. Leave empty unless the template uses it.</small>
+                                    <label for="config-pim-retry-max-delay-seconds">Maximum Retry Delay (seconds)</label>
+                                    <input type="number" id="config-pim-retry-max-delay-seconds" name="pim_retry_max_delay_seconds" class="form-control" min="1" max="86400" value="600">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-pim-retry-max-hours">Give Up After (hours)</label>
+                                    <input type="number" id="config-pim-retry-max-hours" name="pim_retry_max_hours" class="form-control" min="0" max="8760" value="72">
+                                    <small>The notification is then marked failed; users can send it again from the operation details. <code>0</code> retries forever.</small>
                                 </div>
                             </div>
 
@@ -429,7 +443,7 @@
                                 <p class="text-muted">Gates applied before every PUSH and UPDATE. Both are hard blocks: a failing catalog cannot be pushed.</p>
 
                                 <h4 class="mt-4">Catalog Name Validation (PolkaSQL)</h4>
-                                <p class="text-muted small">Checks the folder name against <code>Polka27.elementy.grup_nazwe_kolor</code> via the <code>RFM_ValidateProductName</code> web service, and offers the closest matches on a miss.</p>
+                                <p class="text-muted small">Checks the folder name against <code>Polka27.elementy.grup_nazwe_kolor</code> via the <code>RFM_ValidateProductName</code> web service, and offers the closest matches on a miss. The same service returns the product's tgId (<code>grup_nazwe</code>) for PIM, so its URL and API key are needed whenever PIM sends <code>{tg_id}</code>.</p>
 
                                 <div class="form-group">
                                     <div class="custom-control custom-switch">
@@ -520,6 +534,64 @@
                                     <label for="config-update-upload-ttl-hours">Unused Upload Lifetime (hours)</label>
                                     <input type="number" id="config-update-upload-ttl-hours" name="update_upload_ttl_hours" class="form-control" min="1" max="720" value="24">
                                     <small>Uploads are deleted as soon as their UPDATE finishes. Uploads never used by an UPDATE (e.g. a closed browser tab) are deleted after this long.</small>
+                                </div>
+                            </div>
+
+                            <!-- Image host synchronization verification -->
+                            <div class="config-section" id="remote-sync-settings">
+                                <h3>Image Host Sync Verification</h3>
+                                <p class="text-muted">After a PUSH, checks one URL per image file until the image host serves every image. Progress shows next to the PUSH in the operation history (waiting for PIM, n of m served, synced, timed out, cancelled by PULL). An UPDATE re-checks the files it added, replaced or renamed. A file counts as served on HTTP 200 with an image content type and a non-empty body.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-remote-sync-check-enabled" name="remote_sync_check_enabled">
+                                        <label class="custom-control-label" for="config-remote-sync-check-enabled">Enable Sync Verification</label>
+                                    </div>
+                                    <small><strong>Off by default.</strong> Applies to PUSH operations completed while it is on.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-remote-sync-check-url-template">Image URL Template</label>
+                                    <input type="text" id="config-remote-sync-check-url-template" name="remote_sync_check_url_template" class="form-control" placeholder="https://img.vitkac.com/uploads/product_thumb/{catalog_name}/up/{file}">
+                                    <small>Placeholders, URL-encoded: <code>{catalog_name}</code>, <code>{file}</code> (e.g. <code>1.png</code>), <code>{tg_id}</code>. Files checked are the catalog's top-level files with an image extension (Allowed Image Extensions above).</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-remote-sync-check-wait-for-pim" name="remote_sync_check_wait_for_pim">
+                                        <label class="custom-control-label" for="config-remote-sync-check-wait-for-pim">Start after PIM has been notified</label>
+                                    </div>
+                                    <small>When PIM signalling is on, the clock starts when PIM accepts the notification, so a PIM outage is not reported as a sync timeout.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-remote-sync-check-initial-delay-seconds">First Check After (seconds)</label>
+                                    <input type="number" id="config-remote-sync-check-initial-delay-seconds" name="remote_sync_check_initial_delay_seconds" class="form-control" min="0" max="86400" value="60">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-remote-sync-check-interval-seconds">Check Interval (seconds)</label>
+                                    <input type="number" id="config-remote-sync-check-interval-seconds" name="remote_sync_check_interval_seconds" class="form-control" min="10" max="86400" value="120">
+                                    <small>Only files not yet served are requested again</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-remote-sync-check-timeout-minutes">Timeout (minutes)</label>
+                                    <input type="number" id="config-remote-sync-check-timeout-minutes" name="remote_sync_check_timeout_minutes" class="form-control" min="1" max="10080" value="180">
+                                    <small>Images still missing after this long are reported as timed out. Users can start checking again from the operation details.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-remote-sync-check-request-timeout">Request Timeout (seconds)</label>
+                                    <input type="number" id="config-remote-sync-check-request-timeout" name="remote_sync_check_request_timeout" class="form-control" min="1" max="120" value="15">
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-remote-sync-check-cache-bust" name="remote_sync_check_cache_bust">
+                                        <label class="custom-control-label" for="config-remote-sync-check-cache-bust">Bypass CDN cache</label>
+                                    </div>
+                                    <small>Adds a unique <code>rfm_sync</code> query parameter to every request. The image CDN caches 404 answers for an hour and was seen serving an empty cached 200 for a missing file; keep on unless the host rejects query parameters.</small>
                                 </div>
                             </div>
 

@@ -269,8 +269,13 @@ $(printf '\033[1;32mPromotion complete.\033[0m')
 Remaining manual steps:
   1. Push the merged branch:   git -C $PROD_DIR push origin vf
   2. Configure the new integrations in the Admin Panel -> Configuration:
-       - PIM: base URL, endpoint, API token, then enable
-       - Catalog Validation: RFM_ValidateProductName URL + API key, then enable
+       - PIM: base URL, endpoint, API token, then enable. Delivery is queued and
+         retried (Delivery & Retries); the default payload now sends tgId.
+       - Catalog Validation: RFM_ValidateProductName URL + API key, then enable.
+         The URL + key are also what resolves tgId for PIM, so set them even if
+         the gate itself stays off. The procedure must be the current
+         docs/polkasql/RFM_ValidateProductName.sql (returns tg_id).
+       - Image Host Sync Verification: optional, off by default
      Production .env was not modified. Because the new keys sync from .env only
      when the variable is present, leaving them unset keeps the Admin Panel
      authoritative across restarts.
