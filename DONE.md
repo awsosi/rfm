@@ -6,6 +6,12 @@
 
 ---
 
+## 2026-09-16 - Worker docs: README-INSTALLER.md matches the real deployment
+
+`workers/README-INSTALLER.md` described the unused `workers/Installer/` project (`/install /url /user /pass`, `worker.config`, `C:\Program Files\FileManager\Worker`). Rewritten from `Program.cs`, `WorkerService.cs`, `CertificateManager.cs` and `/api/workers/register`: `/config` then `install`, `config.dat` (DPAPI) plus a `LocalMachine\My` certificate, Network Service, and step-by-step fresh install, update, reconfigure, reinstall and removal. Also documents hostname-based identity, worker statuses (OFFLINE returns to ACTIVE on its own, SUSPENDED doesn't), the Samba impersonation model, and that `/debug` looks in `CurrentUser\My`, which `/config` doesn't populate.
+
+---
+
 ## 2026-09-16 - PIM: tgId from PolkaSQL, reliable delivery; image host sync verification
 
 **tgId.** Confirmed from `Polka27.elementy`: `tgId` is `grup_nazwe` of the product row, `imageCatalog` is `grup_nazwe_kolor` (`TORBA HB0788 FA0542` / `TORBA HB0788 FA0542-910 SILVER`, `OZDOBA PS261403 0` / `OZDOBA PS261403 0-BRASS`). `RFM_sp_ValidateProductName` already matches `grup_nazwe_kolor`, so it now also returns `tg_id` from the matched row (`docs/polkasql/RFM_ValidateProductName.sql`, ALTER PROCEDURE only). No second procedure/web service. The suggestions for a miss are unchanged.
