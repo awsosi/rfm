@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-02-09
+> **Last Updated:** 2026-09-16
 
 ---
 
@@ -55,6 +55,21 @@ None currently.
 
 ### Future Work (General)
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
+
+### Follow-ups from the 2026-09-16 integration work
+- [ ] **Confirm what `tgId` means** in the PIM `ftp_event` payload. The existing
+      ROSAPI push endpoint is `/api/v1/products/tg/{folder_name}/set_image_catalog`,
+      so "tg" is already the product identifier keyed by folder name — but in the
+      sample payload `tgId` and `imageCatalog` are different products. Until this
+      is settled the field stays out of the default template.
+- [ ] **Ask the DBA whether `RFM_sp_Auth`'s second API key slot is free for dev.**
+      Dev and prod currently share every secret, including `POLKA_AUTH_API_KEY`;
+      a JWT minted by dev validates against prod.
+- [ ] Decide whether existing ROSAPI config keys should stop being overwritten by
+      `_sync_env_config_to_db()` on every restart, as the new PIM keys now are.
+      Today an Admin Panel edit to any ROSAPI key is silently reverted on restart.
+- [ ] Admin Panel markup has no `data-i18n` attributes at all (explorer has 70),
+      so the panel is English-only. New sections follow that existing convention.
 
 ---
 

@@ -2,7 +2,55 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-02-09
+> **Last Updated:** 2026-09-16
+
+---
+
+## 2026-09-16 - Feature: UPDATE operation, PIM signalling, catalog & content validation
+
+Implemented on `dev-vf` and verified against the dev stack.
+
+### 1. UPDATE operation (third operation type)
+- `OperationType.UPDATE` — in-place move/rename/delete inside a catalog already pushed to PATH_B.
+- Orchestrated server-side like PUSH/PULL; the worker only gained one new read-only command.
+- **Ordering guarantee:** reversible actions (move/rename) run first; irreversible deletes run only after they all succeed. A mid-flight failure unwinds the applied moves in reverse order, leaving the catalog as found.
+- Optional PATH_C archive mirror (`enable_update_archive_mirror`), **off by default**, best-effort: PATH_B is the live copy and is already correct by then, so a stale archive never fails the operation.
+- Action paths are catalog-relative. Absolute, UNC, drive-prefixed (`B:/…`) and `..`-traversing paths are refused by `_safe_relative()`.
+- Entry point in the WebUI is the operation queue (same as Pull), because this layout has a single file pane and the catalog is identified by the PUSH that created it.
+
+### 2. Catalog name validation (PolkaSQL `RFM_ValidateProductName`)
+- Hard block: a catalog whose folder name matches no product in `Polka27.elementy.grup_nazwe_kolor` cannot be pushed or updated.
+- Returns ranked suggestions on a miss (SQL Anywhere `SIMILAR()`, first-token prefilter to avoid scanning all of `elementy`).
+- **Fail-closed** when PolkaSQL is unreachable. `catalog_validation_fail_open` inverts this for an outage.
+- Procedure + web service definition: `docs/polkasql/RFM_ValidateProductName.sql`.
+
+### 3. PIM signalling (second, independent target alongside ROSAPI)
+- `POST {base}/api/v1/image_catalog/ftp_event` with a static `X-API-TOKEN` header (no JWT flow).
+- PUSH → `created`, PULL → `updated`, UPDATE → `updated`; each separately toggleable with its own configurable eventType.
+- Payload body is a template editable in the Admin Panel. `{files}` is substituted as a raw JSON array; every other placeholder is JSON-escaped, so a quote in a catalog name cannot inject keys.
+- `tgId` is absent from the default template pending confirmation of its meaning; adding `"tgId": "{tg_id}"` plus `pim_tg_id` is all that is needed.
+- The file list is captured during validation and carried on the operation, so signalling needs no extra worker round-trip.
+
+### 4. Directory content validation
+- At least `push_validation_min_files` (default 2) genuine image files, else the operation is refused.
+- New `validate_dir` worker command sniffs magic bytes (JPEG/PNG/GIF/BMP/TIFF/WebP), so a renamed `.txt` cannot pass as a `.png`. A mismatch is a hard failure.
+- Non-image files do not count toward the minimum but **are** reported and **are** still sent to PIM.
+- For UPDATE the gate judges the post-action state, so an update can neither leave a catalog short nor be blocked by one it repairs.
+- Messages are i18n keys resolved client-side; full en-US/pl-PL parity (181 keys each).
+
+### 5. Logging
+- Username is recorded on every operation, audit entry and outbound signal, so a bad catalog can be traced to whoever pushed it.
+
+### Bugs found and fixed during implementation
+- `_safe_relative()` accepted `/etc/passwd`: the leading-slash test ran *after* separators were stripped, so it never fired.
+- The PUSH endpoint's blanket `except Exception` turned every 422 validation rejection into a 500, hiding the suggestions from the UI.
+- `/api/operations/push/batch` — the endpoint the WebUI actually calls — was initially left ungated while only the single-push endpoint enforced the gates.
+- `apiRequest()` stringified structured 422 bodies to `[object Object]`, losing the suggestions.
+
+### Notes / deviations
+- **TODO.md rule 3 (consolidated migrations):** 001 is already applied on live databases, so the enum value and config seeds had to arrive as their own revision (`012`). Seeds use `ON CONFLICT DO NOTHING` and never clobber an operator's value.
+- **`_sync_env_config_to_db()` overwrites the DB on every boot**, which silently reverts Admin Panel edits. The new PIM/validation keys sync **only when their env var is present**, so the panel stays authoritative. Existing ROSAPI keys were left on the old behaviour — changing them is a separate decision.
+- Promotion script: `scripts/promote-dev-to-prod.sh` (backup, merge, rebuild, verify, `--rollback`, `--dry-run`).
 
 ---
 
