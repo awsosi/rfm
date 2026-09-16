@@ -1057,6 +1057,8 @@ class OperationService:
         Returns:
             WorkerCommandResponse from worker
         """
+        from api.services.content_validation_service import DEFAULT_IGNORE_MASKS, parse_ignore_masks
+
         # Read push settings from DB (runtime source of truth)
         push_config_keys = ['enable_push_flatten', 'enable_push_archive', 'push_ignore_file_masks']
         stmt = select(Config).where(Config.key.in_(push_config_keys))
@@ -1065,8 +1067,9 @@ class OperationService:
 
         flatten = push_config.get("enable_push_flatten", "false").lower() == "true"
         archive = push_config.get("enable_push_archive", "false").lower() == "true"
-        ignore_masks_str = push_config.get("push_ignore_file_masks", "Thumbs.db")
-        ignore_masks = [m.strip() for m in ignore_masks_str.split(",") if m.strip()]
+        ignore_masks = parse_ignore_masks(
+            push_config.get("push_ignore_file_masks", DEFAULT_IGNORE_MASKS)
+        )
 
         logger.info(
             f"Executing PUSH operation {operation.id}: "

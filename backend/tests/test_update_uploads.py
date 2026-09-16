@@ -360,6 +360,8 @@ async def update_setup(session, settings, pim, monkeypatch):
         session,
         pim_enabled="true", pim_base_url=pim.url, pim_endpoint="/api/v1/image_catalog/ftp_event",
         pim_api_token="pim-token", push_validation_min_files="2",
+        # a.jpg/b.jpg: the PIM file name rule is covered by test_pim_delivery_and_sync.py
+        push_validation_file_names="false",
         # Without {tg_id}: tgId resolution is covered by test_pim_delivery_and_sync.py
         pim_payload_template='{"files": {files}, "imageCatalog": "{catalog_name}", "eventType": "{event_type}"}',
     )

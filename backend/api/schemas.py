@@ -395,6 +395,10 @@ class ContentValidationResponse(BaseModel):
     files: list[str] = Field(default_factory=list)
     non_image_files: list[str] = Field(default_factory=list)
     invalid_files: list[dict[str, Any]] = Field(default_factory=list)
+    invalid_names: list[str] = Field(
+        default_factory=list,
+        description='Files not named "<number>.<extension>", the only form PIM accepts',
+    )
     min_required: int = 0
     allowed_extensions: list[str] = Field(default_factory=list)
     reason: Optional[str] = Field(

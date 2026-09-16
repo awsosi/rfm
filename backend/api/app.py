@@ -192,6 +192,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
             ("PUSH_VALIDATION_VERIFY_CONTENT",),
             str(settings.push_validation_verify_content).lower(),
         ),
+        "push_validation_file_names": (
+            ("ENABLE_PUSH_VALIDATION_FILE_NAMES", "PUSH_VALIDATION_FILE_NAMES"),
+            str(settings.push_validation_file_names).lower(),
+        ),
         # UPDATE behaviour
         "enable_update_archive_mirror": (
             ("ENABLE_UPDATE_ARCHIVE_MIRROR",),
@@ -497,7 +501,8 @@ async def run_catalog_preflight(
 
     1. The catalog name must match a real product in PolkaSQL.
     2. The directory must hold at least the configured number of genuine
-       image files.
+       image files and, while ``push_validation_file_names`` is on, only files
+       named ``<number>.<extension>`` (the form PIM accepts).
 
     Returns ``(catalog_result, content_result)``. Both gates are evaluated even
     when the first fails, so the user sees every problem at once instead of
@@ -513,6 +518,7 @@ async def run_catalog_preflight(
     from api.services.content_validation_service import (
         validate_directory_content,
         count_image_files,
+        invalid_file_names,
         invalid_files_after_actions,
         predict_files_after_actions,
     )
@@ -533,13 +539,17 @@ async def run_catalog_preflight(
     # For UPDATE, judge the state the catalog will be in after the actions:
     # the minimum is counted on the post-action file list, and content
     # mismatches follow their files (a deleted or replaced file no longer
-    # counts; a rename to the right extension fixes one). Worker/listing
-    # failures keep their own reason.
+    # counts; a rename to the right extension fixes one), and so do names (a
+    # rename to "3.png" fixes one, an added "front.jpg" breaks the catalog).
+    # Worker/listing failures keep their own reason.
     if (
         update_actions is not None
         and not content_result.skipped
         and content_result.reason in (
-            None, "contentValidation.tooFewImages", "contentValidation.typeMismatch"
+            None,
+            "contentValidation.tooFewImages",
+            "contentValidation.typeMismatch",
+            "contentValidation.invalidFileNames",
         )
     ):
         _check_update_targets(update_actions, content_result.files)
@@ -554,12 +564,17 @@ async def run_catalog_preflight(
             content_result.files, content_result.allowed_extensions, excluded=mismatched
         )
         content_result.total_files = len(content_result.files)
+        if content_result.check_file_names:
+            content_result.invalid_names = invalid_file_names(content_result.files)
         if content_result.image_count < content_result.min_required:
             content_result.valid = False
             content_result.reason = "contentValidation.tooFewImagesAfterUpdate"
         elif content_result.invalid_files:
             content_result.valid = False
             content_result.reason = "contentValidation.typeMismatch"
+        elif content_result.invalid_names:
+            content_result.valid = False
+            content_result.reason = "contentValidation.invalidFileNames"
         else:
             content_result.valid = True
             content_result.reason = None

@@ -237,6 +237,11 @@ class Settings(BaseSettings):
     push_validation_allowed_extensions: str = "jpg,jpeg,png,gif,bmp,tif,tiff,webp"
     # Verify real file type from magic bytes, not just the extension
     push_validation_verify_content: bool = True
+    # Require "<number>.<extension>" file names (e.g. "3.png"), the only form PIM accepts
+    push_validation_file_names: bool = Field(
+        default=True,
+        validation_alias=AliasChoices('enable_push_validation_file_names', 'push_validation_file_names'),
+    )
 
     # Logging
     log_level: str = "INFO"

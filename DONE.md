@@ -2,10 +2,29 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-09-16
+> **Last Updated:** 2026-09-17
 
 ---
 
+## 2026-09-17 - PIM 422 on `Thumbs.db`; PIM file name rule in preflight
+
+**Bug.** PUSH #9 (`A:/olek/TORBA HB0788 FA0542-910 SILVER`, 7 files) completed, but PIM answered `HTTP 422 ... "files[7]": Nazwa pliku musi mieć format "<numer>.<rozszerzenie>"` on every retry. The event's `files` were `["1.png", ..., "7.png", "Thumbs.db"]`.
+- **Root cause:** preflight `validate_dir` lists *every* top-level file, and that list was stored on the operation for PIM. The copy then skips `push_ignore_file_masks` (`Thumbs.db`), so PIM was told about a file that never reached Path B, with a name PIM rejects. Retries resend the stored list, so they cannot succeed.
+- **Fix:** `validate_directory_content` drops files matching `push_ignore_file_masks` from `files`, `non_image_files`, `invalid_files` and the counts. Matching is the worker's `MatchesIgnoreMask` (case-insensitive, exact or `*`/`?` glob): `matches_ignore_mask`, `parse_ignore_masks` (also used by PUSH execution now). Applies to PUSH and UPDATE (a `Thumbs.db` in a Path B catalog stays out of PIM too).
+
+**PIM file name rule** (`push_validation_file_names`, **on by default**, env `ENABLE_PUSH_VALIDATION_FILE_NAMES`, Admin Panel -> Content Validation -> Require PIM File Names).
+- Every (non-ignored) file must fullmatch `[0-9]+\.[A-Za-z0-9]+` (ASCII digits only, e.g. `3.png`); otherwise preflight fails with `contentValidation.invalidFileNames` and `invalid_names`, before anything is copied: single PUSH and UPDATE -> 422, batch PUSH -> per-directory `validation_failed`, `/api/operations/preflight` -> `ok: false`.
+- `invalid_names` is filled even when another rule fails first (e.g. too few images), and the WebUI shows both messages at once. A rejected name is left out of the "non-image files will still be sent to PIM" note.
+- UPDATE judges the names after its actions: renaming `front.png` -> `2.png` fixes a catalog pushed before the rule, adding `back.png` is refused.
+- The rule needs the listing, so it is off while `push_validation_enabled` is off.
+- Migration `016` seeds the key (`ON CONFLICT DO NOTHING`). `ContentValidationResponse` gains `invalid_names`. EN + PL message (300 keys each).
+
+**Tests.** 96 passed, 17 errors (pre-existing `test_auth.py` `db_session` fixture), on a disposable PostgreSQL 16:
+- `test_content_validation.py`: mask matching like the worker (case, globs, regex metacharacters), the name regex (incl. `1.png.bak`, `1 .png`, Arabic-Indic digit), ignored files and counts, rule default-on / off, names reported alongside `tooFewImages`.
+- `test_pim_delivery_and_sync.py`, through the real endpoints with the fake worker and a mock PIM: the PUSH -> UPDATE -> PULL flow now has a `Thumbs.db` in the source (not copied, not in either PIM body); a bad name refuses preflight, PUSH and batch PUSH with no worker command but `validate_dir`, no operation, no PIM call, then passes once renamed; the rule switched off; UPDATE judged after its actions.
+- `update_fakes.FakeWorkerService` now honours `ignore_masks` on copy and reports non-images by extension, like the worker.
+- Mutation-checked: removing the mask filter fails 6 tests; removing the UPDATE re-judgement fails the UPDATE test.
+- WebUI message rendering checked with Node against both locale files.
 ## 2026-09-16 - Worker docs: README-INSTALLER.md matches the real deployment
 
 `workers/README-INSTALLER.md` described the unused `workers/Installer/` project (`/install /url /user /pass`, `worker.config`, `C:\Program Files\FileManager\Worker`). Rewritten from `Program.cs`, `WorkerService.cs`, `CertificateManager.cs` and `/api/workers/register`: `/config` then `install`, `config.dat` (DPAPI) plus a `LocalMachine\My` certificate, Network Service, and step-by-step fresh install, update, reconfigure, reinstall and removal. Also documents hostname-based identity, worker statuses (OFFLINE returns to ACTIVE on its own, SUSPENDED doesn't), the Samba impersonation model, and that `/debug` looks in `CurrentUser\My`, which `/config` doesn't populate.

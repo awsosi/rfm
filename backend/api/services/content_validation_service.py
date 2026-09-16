@@ -11,6 +11,14 @@ Enforces the minimum-content rules before a catalog may be PUSHed or UPDATEd:
 Anything that is not an image ("garbage") does not count toward the minimum
 but is still reported, and is still included in the file list handed to PIM.
 
+Files matching ``push_ignore_file_masks`` (default ``Thumbs.db``) are dropped
+from the listing: PUSH does not copy them, so they must neither count nor be
+announced to PIM.
+
+When ``push_validation_file_names`` is on (default), every remaining file must
+be named ``<number>.<extension>`` (e.g. ``3.png``), the only form PIM accepts.
+Otherwise PIM answers 422 after the files were already copied.
+
 The listing happens once, on the worker, via the ``validate_dir`` command, and
 its result feeds both this validation and the PIM ``files`` array.
 
@@ -39,9 +47,15 @@ _CONFIG_KEYS = [
     'push_validation_min_files',
     'push_validation_allowed_extensions',
     'push_validation_verify_content',
+    'push_validation_file_names',
+    'push_ignore_file_masks',
 ]
 
 _DEFAULT_EXTENSIONS = "jpg,jpeg,png,gif,bmp,tif,tiff,webp"
+DEFAULT_IGNORE_MASKS = "Thumbs.db"
+
+# The file name form PIM accepts: "<number>.<extension>", e.g. "3.png"
+_PIM_FILE_NAME_RE = re.compile(r"[0-9]+\.[A-Za-z0-9]+")
 
 
 @dataclass
@@ -57,12 +71,16 @@ class ContentValidationResult:
     non_image_files: List[str] = field(default_factory=list)
     # Files whose extension disagrees with their real content
     invalid_files: List[dict] = field(default_factory=list)
+    # Files not named "<number>.<extension>" (only filled while the rule is on)
+    invalid_names: List[str] = field(default_factory=list)
     min_required: int = 0
     allowed_extensions: List[str] = field(default_factory=list)
     # i18n key resolved by the frontend, never a user-facing English string
     reason: Optional[str] = None
     error_detail: Optional[str] = None
     skipped: bool = False
+    # Whether push_validation_file_names applies; lets UPDATE re-judge names
+    check_file_names: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -73,6 +91,7 @@ class ContentValidationResult:
             "files": self.files,
             "non_image_files": self.non_image_files,
             "invalid_files": self.invalid_files,
+            "invalid_names": self.invalid_names,
             "min_required": self.min_required,
             "allowed_extensions": self.allowed_extensions,
             "reason": self.reason,
@@ -91,6 +110,31 @@ def _truthy(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in ('true', '1', 'yes')
+
+
+def parse_ignore_masks(value: Optional[str]) -> List[str]:
+    """Split the ``push_ignore_file_masks`` setting into its masks."""
+    return [m.strip() for m in (value or "").split(",") if m.strip()]
+
+
+def matches_ignore_mask(name: str, masks: List[str]) -> bool:
+    """
+    Same matching as the worker's ``MatchesIgnoreMask``: case-insensitive,
+    exact, or a glob where only ``*`` and ``?`` are wildcards.
+    """
+    for mask in masks:
+        if '*' in mask or '?' in mask:
+            pattern = re.escape(mask).replace(r'\*', '.*').replace(r'\?', '.')
+            if re.fullmatch(pattern, name, re.IGNORECASE):
+                return True
+        elif name.lower() == mask.lower():
+            return True
+    return False
+
+
+def invalid_file_names(files: List[str]) -> List[str]:
+    """Names PIM rejects: anything not ``<number>.<extension>``."""
+    return [name for name in files if not _PIM_FILE_NAME_RE.fullmatch(name)]
 
 
 async def validate_directory_content(
@@ -118,6 +162,8 @@ async def validate_directory_content(
         e.strip().lower().lstrip('.') for e in ext_str.split(',') if e.strip()
     ]
     verify_content = _truthy(config.get('push_validation_verify_content'), default=True)
+    check_file_names = _truthy(config.get('push_validation_file_names'), default=True)
+    ignore_masks = parse_ignore_masks(config.get('push_ignore_file_masks', DEFAULT_IGNORE_MASKS))
 
     if not _truthy(config.get('push_validation_enabled'), default=True):
         logger.debug("Directory content validation is disabled, skipping")
@@ -185,6 +231,17 @@ async def validate_directory_content(
     except (TypeError, ValueError):
         total_files = len(files)
 
+    # Ignored files are never copied, so they neither count nor reach PIM
+    ignored = [name for name in files if matches_ignore_mask(name, ignore_masks)]
+    if ignored:
+        invalid_ignored = [f.get("name") for f in invalid_files if f.get("name") in ignored]
+        image_count -= count_image_files(ignored, allowed_extensions, excluded=invalid_ignored)
+        total_files -= len(ignored)
+        files = [name for name in files if name not in ignored]
+        non_image_files = [name for name in non_image_files if name not in ignored]
+        invalid_files = [f for f in invalid_files if f.get("name") not in ignored]
+        logger.info(f"Content validation of {path!r} ignores {ignored} (push_ignore_file_masks)")
+
     result = ContentValidationResult(
         valid=True,
         path=path,
@@ -195,7 +252,11 @@ async def validate_directory_content(
         invalid_files=invalid_files,
         min_required=min_files,
         allowed_extensions=allowed_extensions,
+        check_file_names=check_file_names,
     )
+    if check_file_names:
+        # Filled even when another rule fails, so the user sees every problem
+        result.invalid_names = invalid_file_names(files)
 
     if image_count < min_files:
         result.valid = False
@@ -216,6 +277,16 @@ async def validate_directory_content(
             f"Content validation failed for {path!r}: "
             f"{len(invalid_files)} file(s) whose content does not match their extension: "
             f"{[f.get('name') for f in invalid_files][:10]}"
+        )
+        return result
+
+    if result.invalid_names:
+        result.valid = False
+        result.reason = "contentValidation.invalidFileNames"
+        logger.warning(
+            f"Content validation failed for {path!r}: "
+            f"{len(result.invalid_names)} file(s) not named <number>.<extension>: "
+            f"{result.invalid_names[:10]}"
         )
         return result
 

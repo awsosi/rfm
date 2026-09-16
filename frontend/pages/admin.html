@@ -514,6 +514,14 @@
                                     <small>Check magic bytes as well as the extension, so a renamed file cannot pass as an image. A mismatch blocks the operation.</small>
                                 </div>
 
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-push-validation-file-names" name="push_validation_file_names">
+                                        <label class="custom-control-label" for="config-push-validation-file-names">Require PIM File Names</label>
+                                    </div>
+                                    <small>Every file must be named &lt;number&gt;.&lt;extension&gt; (e.g. 3.png), the only form PIM accepts. Any other name blocks the operation. Files matching Ignored File Masks are not checked.</small>
+                                </div>
+
                                 <h4 class="mt-4">UPDATE Behaviour</h4>
 
                                 <div class="form-group">

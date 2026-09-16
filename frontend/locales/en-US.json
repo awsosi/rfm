@@ -192,6 +192,7 @@
       "tooFewImages": "This folder holds {images} image file(s); at least {required} are required.",
       "tooFewImagesAfterUpdate": "After these changes the folder would hold {images} image file(s); at least {required} are required.",
       "typeMismatch": "Some files are not really images despite their extension: {names}. Remove or replace them.",
+      "invalidFileNames": "PIM accepts only files named <number>.<extension>, e.g. 3.png. Rename or remove: {names}.",
       "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
       "listFailed": "The folder contents could not be read.",
       "stagedTypeMismatch": "The new file for {names} is not really an image despite its extension. Nothing was changed.",

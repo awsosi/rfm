@@ -2,9 +2,20 @@
 
 > **Critical patterns and anti-patterns discovered during development**
 > **Purpose:** Prevent recurring bugs and document invisible failure modes
-> **Last Updated:** 2026-09-16
+> **Last Updated:** 2026-09-17
 
 ---
+
+## What You Validate Must Be What You Ship
+
+**Problem:** PUSH stored the preflight listing (`validate_dir`, every file) as the PIM `files` array, but the copy skips `push_ignore_file_masks`. `Thumbs.db` was announced to PIM without ever reaching Path B, and PIM rejected its name with 422, after the operation had already completed.
+
+**Why it is invisible:** The operation succeeds and shows the right file count (the copy's). The mismatch only shows up in a downstream system, asynchronously, and retries resend the same stored payload, so they look like a PIM outage.
+
+**Rules:**
+1. Apply every filter the operation applies (ignore masks, flatten, ...) to the list you validate and hand downstream, in one place.
+2. Check a downstream system's input rules (here PIM's `<number>.<extension>`) in preflight, before anything irreversible, not after.
+3. A test that pins the payload must include the files real users have (`Thumbs.db`), not only the happy set.
 
 ## Verifying Publication Through a CDN: Status Codes Lie
 

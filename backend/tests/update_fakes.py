@@ -5,8 +5,10 @@ Mirrors the worker semantics UPDATE relies on:
 - ``move`` fails when the destination exists (File.Move) or the source is missing
 - ``copy`` overwrites (File.Copy(..., true)) and creates parent folders
 - ``delete`` fails for a missing path ("Path not found")
-- ``validate_dir`` lists top-level files; content starting with ``b"FAKE"`` is
-  reported as not an image when content verification is on
+- ``validate_dir`` lists top-level files; a file whose extension is not in
+  ``allowed_extensions`` is a non-image, and content starting with ``b"FAKE"``
+  is reported as not an image when content verification is on
+- ``copy`` of a folder skips files matching ``ignore_masks``, as PUSH asks
 - ``fetch_file`` downloads through the real signed-link check and verifies
   size and SHA-256, like the worker is specified to
 - an unknown command fails with "Unknown command: ..."
@@ -75,15 +77,17 @@ class FakeWorkerService:
                 self._fail(f"Directory not found: {source}")
             prefix = source.rstrip("/") + "/"
             names = sorted(p[len(prefix):] for p in self.files if p.startswith(prefix) and "/" not in p[len(prefix):])
+            allowed = params.get("allowed_extensions") or []
+            non_image = [n for n in names if n.rsplit(".", 1)[-1].lower() not in allowed]
             invalid = []
             if params.get("verify_content"):
                 invalid = [
                     {"name": n, "extension": n.rsplit(".", 1)[-1], "detected": "unknown", "reason": "not_an_image"}
-                    for n in names if self.files[prefix + n].startswith(b"FAKE")
+                    for n in names if n not in non_image and self.files[prefix + n].startswith(b"FAKE")
                 ]
-            bad = {i["name"] for i in invalid}
             return self._ok(path=source, files=names, total_files=len(names),
-                            image_count=len(names) - len(bad), non_image_files=[], invalid_files=invalid)
+                            image_count=len(names) - len(non_image) - len(invalid),
+                            non_image_files=non_image, invalid_files=invalid)
 
         if name == "move":
             if not self._exists(source):
@@ -100,8 +104,10 @@ class FakeWorkerService:
             if source in self.files:
                 self.files[dest] = self.files[source]
             elif self._is_dir(source):
+                from api.services.content_validation_service import matches_ignore_mask
+                masks = (params or {}).get("ignore_masks") or []
                 for p, c in list(self.files.items()):
-                    if p.startswith(source.rstrip("/") + "/"):
+                    if p.startswith(source.rstrip("/") + "/") and not matches_ignore_mask(p.rsplit("/", 1)[-1], masks):
                         self.files[dest + p[len(source):]] = c
             else:
                 self._fail(f"Source not found: {source}")

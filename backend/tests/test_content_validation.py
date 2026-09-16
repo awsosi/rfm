@@ -181,3 +181,97 @@ async def test_command_sent_matches_the_worker_contract():
     assert sent.source_path == "A:/TEST CATALOG"
     assert sent.params["verify_content"] is True
     assert "jpg" in sent.params["allowed_extensions"]
+
+
+# ---------------------------------------------------------------------------
+# Ignored files and the PIM file name rule
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace
+
+from api.services.content_validation_service import invalid_file_names, matches_ignore_mask
+
+
+class _ConfigDb:
+    def __init__(self, **values):
+        self._rows = [SimpleNamespace(key=k, value=v) for k, v in values.items()]
+
+    async def execute(self, stmt):
+        return _FakeResult(self._rows)
+
+
+# What the worker reported for operation #9 on dev, plus a mislabelled Thumbs
+# image, so the counts of an ignored image are exercised too
+NUMBERED_PAYLOAD = {
+    "files": ["1.png", "2.jpg", "3.png", "Thumbs.db", "thumb.JPG"],
+    "total_files": 5,
+    "image_count": 4,
+    "non_image_files": ["Thumbs.db"],
+    "invalid_files": [],
+}
+
+
+async def _validate_with(payload, **config):
+    return await validate_directory_content(
+        worker=object(), path="A:/CAT", worker_service=_FakeWorkerService(payload), db=_ConfigDb(**config),
+    )
+
+
+@pytest.mark.parametrize("name, masks, expected", [
+    ("Thumbs.db", ["Thumbs.db"], True),
+    ("THUMBS.DB", ["thumbs.db"], True),
+    ("Thumbs.db.bak", ["Thumbs.db"], False),
+    ("~lock.TMP", ["*.tmp"], True),
+    ("a.tmpx", ["*.tmp"], False),
+    ("x1.db", ["x?.db"], True),
+    ("a+b.db", ["a+b.db"], True),       # regex metacharacters are literal
+    ("1.png", [], False),
+])
+def test_ignore_masks_match_like_the_worker(name, masks, expected):
+    assert matches_ignore_mask(name, masks) is expected
+
+
+def test_pim_file_name_rule():
+    ok = ["1.png", "03.JPG", "12.jpeg", "7.webp"]
+    bad = ["Thumbs.db", "front.jpg", "1.png.bak", "1", ".png", "1 .png", "1_2.png", "\u0663.png", "1.pn g", "-1.png"]
+    assert invalid_file_names(ok + bad) == bad
+
+
+@pytest.mark.asyncio
+async def test_ignored_files_are_dropped_from_the_listing():
+    result = await _validate_with(NUMBERED_PAYLOAD, push_ignore_file_masks="Thumbs.db,thumb.*")
+
+    assert result.files == ["1.png", "2.jpg", "3.png"]
+    assert (result.total_files, result.image_count) == (3, 3)
+    assert result.non_image_files == []
+    assert result.valid is True and result.invalid_names == []
+
+
+@pytest.mark.asyncio
+async def test_name_rule_is_on_by_default_and_ignores_masked_files():
+    payload = {**NUMBERED_PAYLOAD, "files": ["1.png", "front.jpg", "Thumbs.db"], "total_files": 3,
+               "image_count": 2}
+    result = await _validate_with(payload)  # no config rows: defaults
+
+    assert result.valid is False
+    assert result.reason == "contentValidation.invalidFileNames"
+    assert result.invalid_names == ["front.jpg"]
+    assert result.to_dict()["invalid_names"] == ["front.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_name_rule_can_be_switched_off():
+    payload = {**NUMBERED_PAYLOAD, "files": ["1.png", "front.jpg"], "total_files": 2, "image_count": 2,
+               "non_image_files": []}
+    result = await _validate_with(payload, push_validation_file_names="false")
+
+    assert result.valid is True and result.invalid_names == []
+
+
+@pytest.mark.asyncio
+async def test_bad_names_are_reported_alongside_another_failure():
+    payload = {"files": ["front.jpg"], "total_files": 1, "image_count": 1, "non_image_files": [], "invalid_files": []}
+    result = await _validate_with(payload)
+
+    assert result.reason == "contentValidation.tooFewImages"
+    assert result.invalid_names == ["front.jpg"]

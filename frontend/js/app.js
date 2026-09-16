@@ -3024,15 +3024,21 @@ function formatValidationFailure(validation) {
     if (content.valid === false) {
         if (lines.length > 0) lines.push('');
         lines.push(t('validation.contentTitle'));
+        const badNames = content.invalid_names || [];
+        const nameRule = 'contentValidation.invalidFileNames';
         if (content.reason) {
-            const names = (content.invalid_files || [])
-                .map(f => f.name)
-                .join(', ');
+            const names = content.reason === nameRule
+                ? badNames.join(', ')
+                : (content.invalid_files || []).map(f => f.name).join(', ');
             lines.push(t(`validation.${content.reason}`, {
                 images: content.image_count ?? 0,
                 required: content.min_required ?? 0,
                 names: names
             }));
+        }
+        if (content.reason !== nameRule && badNames.length > 0) {
+            // Reported alongside another failure, so the user can fix both at once
+            lines.push(t(`validation.${nameRule}`, { names: badNames.join(', ') }));
         }
         lines.push('');
         lines.push(t('validation.summary', {
@@ -3040,7 +3046,8 @@ function formatValidationFailure(validation) {
             required: content.min_required ?? 0,
             total: content.total_files ?? 0
         }));
-        const garbage = content.non_image_files || [];
+        // A file already listed as a bad name will not be sent anywhere
+        const garbage = (content.non_image_files || []).filter(name => !badNames.includes(name));
         if (garbage.length > 0) {
             lines.push(t('validation.garbageNote', {
                 count: garbage.length,

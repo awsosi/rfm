@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-09-16
+> **Last Updated:** 2026-09-17
 
 ---
 
@@ -101,6 +101,13 @@
       that made the change (4 uvicorn processes, no shared pub/sub); the 10 s history
       polling covers the rest. Same limitation as every other broadcast.
 
+### Follow-ups from the PIM file name rule (2026-09-17)
+- [ ] With `enable_push_flatten` on, nested files are copied flat into Path B, but the PIM
+      list and the name rule only see top-level files, so PIM is not told about them.
+- [ ] PIM events queued before the fix keep their stored `files` (dev: event 1 / operation 9
+      still lists `Thumbs.db` and keeps failing with 422). Remove the name from
+      `pim_events.files` and use "Send to PIM again", or let it reach FAILED.
+
 ### Follow-ups from UPDATE replace/add (2026-09-16)
 - [ ] **UPDATE and PULL of the same catalog are not mutually exclusive.** UPDATE locks
       the B: path, PULL the A: path, and `_operation_locks` is per process (4 uvicorn
@@ -116,6 +123,8 @@
 - [ ] Decide whether existing ROSAPI config keys should stop being overwritten by
       `_sync_env_config_to_db()` on every restart, as the new PIM keys now are.
       Today an Admin Panel edit to any ROSAPI key is silently reverted on restart.
+      `push_ignore_file_masks`, `enable_push_flatten` and `enable_push_archive` are in the
+      same always-synced block, so a mask added in the Admin Panel is lost on restart.
 - [ ] Admin Panel markup has no `data-i18n` attributes at all (explorer has 70),
       so the panel is English-only. New sections follow that existing convention.
 

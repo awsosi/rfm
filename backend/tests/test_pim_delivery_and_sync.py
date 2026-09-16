@@ -493,19 +493,22 @@ async def test_push_update_pull_through_the_endpoints(session, db_manager, setti
     worker.path_b_prefix = "\\\\server\\b"
     await session.commit()
     fake = FakeWorkerService({
-        f"A:/{TORBA}/1.png": PNG, f"A:/{TORBA}/2.png": PNG, f"A:/{TORBA}/opis.txt": b"text",
+        # Thumbs.db is what Windows leaves in an image folder (operation #9 on dev)
+        f"A:/{TORBA}/1.png": PNG, f"A:/{TORBA}/2.png": PNG, f"A:/{TORBA}/Thumbs.db": b"cache",
         "A:/incoming/3.png": PNG,
     }, settings)
     monkeypatch.setattr(app_module, "WorkerService", lambda _settings: fake)
 
-    # PUSH: validation captures tgId; PIM hears "created" with it; sync starts after delivery
+    # PUSH: validation captures tgId; PIM hears "created" with it; sync starts after delivery.
+    # Thumbs.db is not copied, so PIM is not told about it (it would answer 422).
     push = await push_operation(FilePushRequest(source_path=f"A:/{TORBA}", worker_id=worker.id),
                                 fake_request(), user, session, settings)
     assert push.status == OperationStatus.COMPLETED
     assert push.params_json["tg_id"] == TORBA_TG
+    assert f"B:/{TORBA}/Thumbs.db" not in fake.files and f"B:/{TORBA}/1.png" in fake.files
     received = await remote.wait_for_pim(1)
     assert received[0]["body"] == {"tgId": TORBA_TG, "imageCatalog": TORBA, "eventType": "created",
-                                   "files": ["1.png", "2.png", "opis.txt"]}
+                                   "files": ["1.png", "2.png"]}
 
     for name in ("1.png", "2.png"):
         remote.images[(TORBA, name)] = (200, "image/png", PNG)
@@ -528,7 +531,7 @@ async def test_push_update_pull_through_the_endpoints(session, db_manager, setti
     assert update.status == OperationStatus.COMPLETED and update.params_json["tg_id"] == TORBA_TG
     received = await remote.wait_for_pim(2)
     assert received[1]["body"] == {"tgId": TORBA_TG, "imageCatalog": TORBA, "eventType": "updated",
-                                   "files": ["1.png", "2.png", "opis.txt", "3.png"]}
+                                   "files": ["1.png", "2.png", "3.png"]}
     check = await check_of(db_manager, push.id)
     assert check.status in ("WAITING", "CHECKING") and (check.synced_files, check.total_files) == (2, 3)
 
@@ -575,3 +578,143 @@ async def test_pull_cancels_an_active_check(session, db_manager, remote, configu
 
     check = await check_of(db_manager, push.id)
     assert check.status == "CANCELLED" and check.completed_at is not None
+
+
+# ---------------------------------------------------------------------------
+# PIM file name rule: only "<number>.<extension>" reaches PIM
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+async def name_rule_setup(session, settings, remote, configured, monkeypatch):
+    """Catalog validation on, the fake worker wired in; each test fills the shares."""
+    import api.app as app_module
+    from tests.update_fakes import FakeWorkerService
+
+    await set_config(session, catalog_validation_enabled="true", push_validation_min_files="2",
+                     push_validation_file_names="true", push_ignore_file_masks="Thumbs.db,*.tmp")
+    user = await add_user(session)
+    worker = await add_worker(session)
+    worker.path_b_prefix = "\\\\server\\b"
+    await session.commit()
+    fake = FakeWorkerService({}, settings)
+    monkeypatch.setattr(app_module, "WorkerService", lambda _settings: fake)
+    return {"user": user, "worker": worker, "fake": fake}
+
+
+async def operation_count(db_manager) -> tuple:
+    async with db_manager.session() as s:
+        operations = len((await s.execute(select(Operation.id))).all())
+        events = len((await s.execute(select(PimEvent.id))).all())
+    return operations, events
+
+
+async def test_name_rule_refuses_push_before_anything_is_copied(
+    session, db_manager, settings, remote, name_rule_setup
+):
+    from api.app import preflight_catalog, push_operation, push_operation_batch
+    from api.schemas import FilePushBatchRequest, FilePushRequest
+
+    user, worker, fake = name_rule_setup["user"], name_rule_setup["worker"], name_rule_setup["fake"]
+    source = f"A:/{TORBA}"
+    fake.files.update({
+        f"{source}/1.png": PNG, f"{source}/front.png": PNG, f"{source}/notes.txt": b"text",
+        f"{source}/Thumbs.db": b"cache", f"{source}/~lock.TMP": b"x",
+    })
+    request = FilePushRequest(source_path=source, worker_id=worker.id)
+
+    # Preflight names every offender; ignored files are not among them
+    preflight = await preflight_catalog(request, user, session, settings)
+    assert preflight.ok is False
+    assert preflight.content.reason == "contentValidation.invalidFileNames"
+    assert preflight.content.invalid_names == ["front.png", "notes.txt"]
+    assert preflight.content.files == ["1.png", "front.png", "notes.txt"]
+    assert (preflight.content.total_files, preflight.content.image_count) == (3, 2)
+    assert preflight.content.non_image_files == ["notes.txt"]
+
+    # Single PUSH: 422 with the same detail, nothing copied, nothing recorded, PIM not called
+    with pytest.raises(HTTPException) as refused:
+        await push_operation(request, fake_request(), user, session, settings)
+    assert refused.value.status_code == 422
+    content = refused.value.detail["content"]
+    assert content["reason"] == "contentValidation.invalidFileNames"
+    assert content["invalid_names"] == ["front.png", "notes.txt"]
+
+    # Batch PUSH (what the WebUI calls): refused per directory the same way
+    batch = await push_operation_batch(FilePushBatchRequest(source_paths=[source], worker_id=worker.id),
+                                       fake_request(), user, session, settings)
+    result = batch.results[0]
+    assert result.success is False and result.error == "validation_failed"
+    assert result.validation["content"]["invalid_names"] == ["front.png", "notes.txt"]
+
+    assert [c for c in fake.commands if c[0] != "validate_dir"] == []
+    assert not any(p.startswith("B:/") for p in fake.files)
+    assert await operation_count(db_manager) == (0, 0)
+    assert remote.pim_received == []
+
+    # Fixed names pass; PIM receives exactly the renamed files
+    fake.files[f"{source}/2.png"] = fake.files.pop(f"{source}/front.png")
+    del fake.files[f"{source}/notes.txt"]
+    push = await push_operation(request, fake_request(), user, session, settings)
+    assert push.status == OperationStatus.COMPLETED
+    received = await remote.wait_for_pim(1)
+    assert received[0]["body"]["files"] == ["1.png", "2.png"]
+    assert sorted(p for p in fake.files if p.startswith("B:/")) == [f"B:/{TORBA}/1.png", f"B:/{TORBA}/2.png"]
+
+
+async def test_name_rule_can_be_switched_off(session, db_manager, settings, remote, name_rule_setup):
+    from api.app import push_operation
+    from api.schemas import FilePushRequest
+
+    user, worker, fake = name_rule_setup["user"], name_rule_setup["worker"], name_rule_setup["fake"]
+    await set_config_value(session, push_validation_file_names="false")
+    fake.files.update({f"A:/{TORBA}/front.png": PNG, f"A:/{TORBA}/back.png": PNG,
+                       f"A:/{TORBA}/Thumbs.db": b"cache"})
+
+    push = await push_operation(FilePushRequest(source_path=f"A:/{TORBA}", worker_id=worker.id),
+                                fake_request(), user, session, settings)
+
+    assert push.status == OperationStatus.COMPLETED
+    received = await remote.wait_for_pim(1)
+    # Ignored files stay out of PIM whether or not the name rule is on
+    assert received[0]["body"]["files"] == ["back.png", "front.png"]
+
+
+async def test_name_rule_judges_update_after_its_actions(session, db_manager, settings, remote, name_rule_setup):
+    from api.app import update_operation
+    from api.schemas import FileUpdateRequest
+
+    user, worker, fake = name_rule_setup["user"], name_rule_setup["worker"], name_rule_setup["fake"]
+    catalog = f"B:/{TORBA}"
+    # Pushed before the rule existed: front.png is already in the catalog, and
+    # Windows has since left a Thumbs.db there
+    fake.files.update({f"{catalog}/1.png": PNG, f"{catalog}/front.png": PNG, f"{catalog}/Thumbs.db": b"cache",
+                       "A:/incoming/3.png": PNG, "A:/incoming/back.png": PNG})
+    push = await completed_operation(session, user, tg_id=TORBA_TG)
+    before = dict(fake.files)
+
+    async def update(actions):
+        return await update_operation(
+            FileUpdateRequest(catalog_path=catalog, worker_id=worker.id, push_operation_id=push.id, actions=actions),
+            fake_request(), user, session, settings,
+        )
+
+    # Leaving the bad name in place, or adding another one, is refused and changes nothing
+    for actions, names in (
+        ([{"action": "add", "dest": "3.png", "from_path": "A:/incoming/3.png"}], ["front.png"]),
+        ([{"action": "rename", "source": "front.png", "dest": "2.png"},
+          {"action": "add", "dest": "back.png", "from_path": "A:/incoming/back.png"}], ["back.png"]),
+    ):
+        with pytest.raises(HTTPException) as refused:
+            await update(actions)
+        assert refused.value.status_code == 422
+        assert refused.value.detail["content"]["reason"] == "contentValidation.invalidFileNames"
+        assert refused.value.detail["content"]["invalid_names"] == names
+        assert fake.files == before
+
+    # Renaming the offender fixes the catalog; PIM hears the corrected list, without Thumbs.db
+    done = await update([{"action": "rename", "source": "front.png", "dest": "2.png"}])
+    assert done.status == OperationStatus.COMPLETED
+    assert done.params_json["files"] == ["1.png", "2.png"]
+    received = await remote.wait_for_pim(1)
+    assert received[0]["body"]["files"] == ["1.png", "2.png"]
+    assert received[0]["body"]["eventType"] == "updated"
