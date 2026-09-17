@@ -6,6 +6,28 @@
 
 ---
 
+## 2026-09-17 - Secret rotation script; promotion script brought up to date
+
+**Why.** Internal secrets (`.env`) and external API keys (`config` table) are plain text readable by anyone with shell/docker access on the host, which includes AI coding tools. Encrypting them cannot keep out a user in the `docker`/`sudo` groups, so secrets are rotated after such sessions instead.
+
+**`scripts/rotate-secrets.sh`** (`dev`, `prod`, or both; `--dry-run`, `--force`): new random `POSTGRES_PASSWORD`, `REDIS_PASSWORD` (256-bit hex) and `SECRET_KEY`, one ENTER to confirm.
+- Preflight: required keys present, `DATABASE_URL`/`REDIS_URL` either reference `${POSTGRES_PASSWORD}`/`${REDIS_PASSWORD}` or contain the literal password (rewritten), compose services exist, containers running, no PENDING/IN_PROGRESS operations.
+- Values move only through files and pipes, never argv or output. The role password goes to PostgreSQL as a SCRAM-SHA-256 verifier computed locally (no plain text in server logs). `.env` is replaced atomically and set to 600; the backup is removed on success.
+- `docker compose up -d --no-build` for postgres/redis/api, then checks each container really restarted and `/health` reports `database` and `redis` true.
+- On failure, prints the state per stage and how to recover (rerunning is always safe: the DB socket inside the container needs no password).
+- Lists external keys still set in `.env` and the `config` table, and active users that still accept `admin123`/`INITIAL_ADMIN_PASSWORD`.
+
+**`scripts/promote-dev-to-prod.sh`** had fallen behind (migrations 014-020):
+- Preflight checks the backup directory is writable (`/opt/docker/rfm-vf-backups` is owned by root, so the first real promotion would have failed after the confirmation) and that local `vf` matches `origin/vf`.
+- Backups are created 700; `pg_dump --clean --if-exists` so the printed restore command works on the existing database.
+- Verifies the database is at the Alembic head of the promoted tree instead of only printing the version.
+- Rollback note covers 012-020 (all additive); rollback command runs the dev copy of the script (the rollback resets the prod tree); `die` after the backup also prints it.
+- Post-promotion notes list the behaviour changes since `vf`: 5-day sessions and admin password confirmation, OS metadata files ignored and destroyed on PUSH, `<number>.<ext>` file names.
+
+**Verified.** SCRAM verifier against a throwaway role over the Docker network (right password accepted, wrong rejected); `.env` rewrite on a fake file (quotes, literal and `${}` URLs, mismatch and duplicate keys refused); full rotation of dev (40 s, API healthy on new passwords, backup removed, `.env` 600); promotion `--dry-run` up to the dirty-tree check.
+
+---
+
 ## 2026-09-17 - Explorer: right-click "Push", button states, Polish dates and numbers
 
 Found while writing the Polish user guide (`docs/instructions/`).

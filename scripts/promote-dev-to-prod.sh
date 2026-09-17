@@ -34,7 +34,11 @@ ASSUME_YES=0
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m  !!\033[0m %s\n' "$*"; }
-die()  { printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2; exit 1; }
+die()  {
+    printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2
+    [ -n "${ROLLBACK_CMD:-}" ] && printf 'Roll back with:\n  %s\n' "$ROLLBACK_CMD" >&2
+    exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Rollback
@@ -69,14 +73,16 @@ do_rollback() {
     ( cd "$PROD_DIR" && docker compose -f "$PROD_COMPOSE" up -d --force-recreate api webui )
 
     warn "Database was NOT restored automatically."
-    warn "Migrations 012 and 013 only ADD enum values and config rows, so the"
-    warn "previous code runs against the newer schema and a DB rollback is usually"
-    warn "unnecessary. One exception: code older than 013 cannot load workers in"
-    warn "the OFFLINE status. Move them to SUSPENDED (an administrator reactivates"
-    warn "them) before using the rolled-back admin panel:"
+    warn "Migrations 012-020 only ADD tables, nullable or defaulted columns, enum"
+    warn "values and config rows, so the previous code runs against the newer schema"
+    warn "and a DB rollback is usually unnecessary. One exception: code older than 013"
+    warn "cannot load workers in the OFFLINE status. Move them to SUSPENDED (an"
+    warn "administrator reactivates them) before using the rolled-back admin panel:"
     warn "  docker exec $PROD_DB_CONTAINER psql -U filemanager -d filemanager -c \"UPDATE workers SET status='SUSPENDED' WHERE status='OFFLINE';\""
-    warn "If you do need a full DB restore:"
-    warn "  gunzip -c $backup_dir/prod-db.sql.gz | docker exec -i $PROD_DB_CONTAINER psql -U filemanager -d filemanager"
+    warn "If you do need a full DB restore (the dump drops and recreates every object):"
+    warn "  docker stop $PROD_API_CONTAINER"
+    warn "  gunzip -c $backup_dir/prod-db.sql.gz | docker exec -i $PROD_DB_CONTAINER psql -v ON_ERROR_STOP=1 -U filemanager -d filemanager"
+    warn "  docker start $PROD_API_CONTAINER"
     ok "Rollback complete"
     exit 0
 }
@@ -108,6 +114,14 @@ dev_branch="$(git -C "$DEV_DIR" rev-parse --abbrev-ref HEAD)"
 [ "$dev_branch" = "dev-vf" ]  || die "Dev is on '$dev_branch', expected 'dev-vf'"
 ok "branches: prod=vf dev=dev-vf"
 
+# Backups hold a database dump and .env, so the directory must be ours and private
+if [ ! -d "$BACKUP_ROOT" ]; then
+    mkdir -m 700 "$BACKUP_ROOT" 2>/dev/null || die "Cannot create $BACKUP_ROOT. Run once: sudo install -d -o $(id -un) -g $(id -gn) -m 700 $BACKUP_ROOT"
+fi
+[ -w "$BACKUP_ROOT" ] \
+    || die "$BACKUP_ROOT is not writable by $(id -un). Run once: sudo chown $(id -un):$(id -gn) $BACKUP_ROOT && sudo chmod 700 $BACKUP_ROOT"
+ok "backup directory writable: $BACKUP_ROOT"
+
 [ -z "$(git -C "$PROD_DIR" status --porcelain)" ] \
     || die "Production working tree has uncommitted changes. Commit or discard them first."
 ok "production working tree clean"
@@ -118,6 +132,10 @@ ok "dev working tree clean"
 
 log "Fetching from origin"
 git -C "$PROD_DIR" fetch --quiet origin || die "Could not fetch origin"
+
+[ "$(git -C "$PROD_DIR" rev-parse vf)" = "$(git -C "$PROD_DIR" rev-parse origin/vf)" ] \
+    || die "Local vf differs from origin/vf. Pull or push vf in $PROD_DIR first."
+ok "vf matches origin/vf"
 
 git -C "$PROD_DIR" rev-parse --verify --quiet origin/dev-vf >/dev/null \
     || die "origin/dev-vf does not exist - push dev-vf before promoting"
@@ -161,7 +179,7 @@ fi
 STAMP="$(date +%Y-%m-%d_%H%M%S)"
 BACKUP_DIR="$BACKUP_ROOT/$STAMP"
 log "Backing up to $BACKUP_DIR"
-mkdir -p "$BACKUP_DIR"
+mkdir -m 700 "$BACKUP_DIR"
 
 vf_commit="$(git -C "$PROD_DIR" rev-parse vf)"
 
@@ -169,7 +187,7 @@ tar czf "$BACKUP_DIR/prod-tree.tgz" -C "$(dirname "$PROD_DIR")" \
     --exclude='.git' "$(basename "$PROD_DIR")"
 ok "source tree -> prod-tree.tgz"
 
-docker exec "$PROD_DB_CONTAINER" pg_dump -U filemanager -d filemanager \
+docker exec "$PROD_DB_CONTAINER" pg_dump --clean --if-exists -U filemanager -d filemanager \
     | gzip > "$BACKUP_DIR/prod-db.sql.gz"
 ok "database -> prod-db.sql.gz ($(du -h "$BACKUP_DIR/prod-db.sql.gz" | cut -f1))"
 
@@ -187,7 +205,8 @@ ok ".env -> env.backup (not modified by this script, kept for completeness)"
 } > "$BACKUP_DIR/MANIFEST"
 ok "manifest written"
 
-ROLLBACK_CMD="$PROD_DIR/scripts/promote-dev-to-prod.sh --rollback $BACKUP_DIR"
+# Run from dev: the rollback resets the production tree, script included
+ROLLBACK_CMD="$DEV_DIR/scripts/promote-dev-to-prod.sh --rollback $BACKUP_DIR"
 
 # From here on, any failure prints the rollback command.
 trap 'printf "\n\033[1;31mPromotion failed.\033[0m Roll back with:\n  %s\n" "$ROLLBACK_CMD"' ERR
@@ -223,7 +242,20 @@ done
 
 log "Verifying migration"
 version="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc 'select version_num from alembic_version;' | tr -d '[:space:]')"
-ok "alembic version: $version"
+expected="$(python3 - "$PROD_DIR/backend/alembic/versions" <<'PY'
+import pathlib, re, sys
+revs, downs = set(), set()
+for f in pathlib.Path(sys.argv[1]).glob("*.py"):
+    s = f.read_text()
+    r = re.search(r"^revision\b[^=]*=\s*['\"]([^'\"]+)", s, re.M)
+    d = re.search(r"^down_revision\b[^=]*=\s*['\"]([^'\"]+)", s, re.M)
+    if r: revs.add(r.group(1))
+    if d: downs.add(d.group(1))
+print(" ".join(sorted(revs - downs)))
+PY
+)"
+[ "$version" = "$expected" ] || die "Database is at alembic '$version', code expects '$expected'. Logs: docker logs $PROD_API_CONTAINER"
+ok "alembic version: $version (head)"
 
 enum_has_update="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc \
     "select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='operationtype' and e.enumlabel='UPDATE';" | tr -d '[:space:]')"
@@ -268,7 +300,13 @@ $(printf '\033[1;32mPromotion complete.\033[0m')
 
 Remaining manual steps:
   1. Push the merged branch:   git -C $PROD_DIR push origin vf
-  2. Configure the new integrations in the Admin Panel -> Configuration:
+  2. Review behaviour that changes with this release (Admin Panel -> Configuration):
+       - Session lifetime: 5 days by default (was 30); "Remember me" keeps 30 for
+         non-admins. Admins confirm their password before changing system settings.
+       - PUSH ignores OS metadata files (.DS_Store, ._*, Thumbs.db, desktop.ini, ...)
+         and destroys them at the source (push_ignore_system_files, on).
+       - PUSH/UPDATE require catalog file names like 3.png (push_validation_file_names, on).
+  3. Configure the new integrations in the Admin Panel -> Configuration:
        - PIM: base URL, endpoint, API token, then enable. Delivery is queued and
          retried (Delivery & Retries); the default payload now sends tgId.
        - Catalog Validation: RFM_ValidateProductName URL + API key, then enable.
@@ -279,8 +317,8 @@ Remaining manual steps:
      Production .env was not modified. Because the new keys sync from .env only
      when the variable is present, leaving them unset keeps the Admin Panel
      authoritative across restarts.
-  3. Deploy the rebuilt worker to the Windows host and re-pair it.
-  4. Workers that the old health check left SUSPENDED stay SUSPENDED (they
+  4. Deploy the rebuilt worker to the Windows host and re-pair it.
+  5. Workers that the old health check left SUSPENDED stay SUSPENDED (they
      cannot be told apart from administrator suspensions). Reactivate each
      one once in Admin Panel -> Workers; from then on a worker that misses
      heartbeats goes OFFLINE and returns to ACTIVE on its own.
