@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Menedżer plików – szybki start</title>
+<style>
+@page { size: A4; margin: 11mm 12mm 12mm 12mm; }
+:root{--ink:#0f172a;--muted:#475569;--line:#e2e8f0;--blue:#2563eb}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff}
+body{font-family:Roboto,sans-serif;color:var(--ink);font-size:9.6pt;line-height:1.42;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1{font-size:19pt;margin:0;letter-spacing:-.3px}
+h2{font-size:12.5pt;margin:0 0 1.8mm;display:flex;align-items:center;gap:2.2mm}
+h2 .n{width:6.6mm;height:6.6mm;border-radius:50%;background:var(--blue);color:#fff;font-size:10pt;display:inline-flex;align-items:center;justify-content:center}
+p{margin:0 0 1.6mm}
+ol,ul{margin:0 0 1.6mm;padding-left:5mm}
+li{margin:0 0 .8mm}
+b{font-weight:600}
+.head{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--blue);padding-bottom:2mm;margin-bottom:3mm}
+.head .sub{color:var(--muted);font-size:9.5pt}
+.ui{display:inline-block;padding:0 1.3mm;border:1px solid #cbd5e1;border-radius:3px;background:#f8fafc;font-weight:500;font-size:9pt;white-space:nowrap;line-height:1.4}
+.ui.p{background:var(--blue);border-color:var(--blue);color:#fff}
+.tag{display:inline-block;padding:0 1.4mm;border-radius:3px;font-weight:700;font-size:8pt;line-height:1.5}
+.push{background:#dbeafe;color:#1d4ed8}.pull{background:#fef3c7;color:#b45309}.update{background:#cffafe;color:#0e7490}
+code{font-family:"DejaVu Sans Mono",monospace;font-size:8.4pt;background:#f1f5f9;padding:0 1mm;border-radius:2px;white-space:nowrap}
+.ops{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:3mm}
+.op{border:1px solid var(--line);border-radius:5px;padding:2.2mm 3mm}
+.op p{margin:1mm 0 0;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:6px;padding:3mm 3.5mm 2mm;margin-bottom:3mm;break-inside:avoid}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:4mm;align-items:start}
+.row.w{grid-template-columns:1.15fr .85fr}
+.page2 ~ .card .row.w{grid-template-columns:1.45fr .55fr}
+img{width:100%;border:1px solid #cbd5e1;border-radius:4px;display:block}
+.cap{font-size:7.8pt;color:#64748b;margin-top:.8mm;text-align:center}
+.warn{background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:2mm 3mm;margin:1.5mm 0}
+.stop{background:#fef2f2;border:1px solid #fecaca;border-radius:5px;padding:2mm 3mm;margin:1.5mm 0}
+.ok{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;padding:2mm 3mm;margin:1.5mm 0}
+table{border-collapse:collapse;width:100%;font-size:9pt}
+th,td{border:1px solid var(--line);padding:1.1mm 2mm;text-align:left;vertical-align:top}
+th{background:#f1f5f9;font-weight:600}
+.page2{break-before:page}
+.foot{font-size:7.8pt;color:#94a3b8;margin-top:2mm}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div><h1>Menedżer plików (RFM) – szybki start</h1>
+  <div class="sub">Najważniejsze na 2 stronach. Szczegóły: „Instrukcja użytkownika” (Instrukcja_RFM_PUSH_PULL_UPDATE.pdf).</div></div>
+</div>
+
+<div class="ops">
+  <div class="op"><span class="tag push">PUSH</span> <b>Wyślij</b><p>Wysyła gotowy katalog zdjęć. Katalog znika ze Ścieżki A.</p></div>
+  <div class="op"><span class="tag update">UPDATE</span> <b>Aktualizuj katalog</b><p>Poprawia pliki w katalogu, który już wysłano.</p></div>
+  <div class="op"><span class="tag pull">PULL</span> <b>Cofnij</b><p>Zabiera wysłany katalog z powrotem do Ścieżki A.</p></div>
+</div>
+
+<div class="card">
+  <h2>Zanim wyślesz – 4 zasady</h2>
+  <div class="row">
+    <ol>
+      <li><b>Nazwa folderu = nazwa produktu</b>, np. <code>TORBA HB0788 FA0542-910 SILVER</code>.</li>
+      <li><b>Minimum 2 zdjęcia</b> (jpg, png, gif, bmp, tif, webp).</li>
+    </ol>
+    <ol start="3">
+      <li><b>Pliki nazwane samym numerem:</b> <code>1.jpg</code>, <code>2.png</code> ✓ &nbsp; <code>okladka.jpg</code> ✗</li>
+      <li><b>Tylko prawdziwe zdjęcia</b>, bez podfolderów i innych plików.</li>
+    </ol>
+  </div>
+  <p style="margin:0">Jeśli coś się nie zgadza, pojawi się okno <b>„Nie można kontynuować”</b> z powodem. Nic nie zostanie zmienione – popraw i spróbuj ponownie.</p>
+</div>
+
+<div class="card">
+  <h2>Logowanie</h2>
+  <p style="margin:0">Otwórz adres Menedżera plików (środowisko testowe: <b>https://dev.ff.vitkac.local</b>), wpisz login i hasło, wybierz metodę: <b>PolkaSQL</b> (konto z PolkaSQL) albo <b>Lokalna</b> (konto założone w Menedżerze plików) → <span class="ui p">Zaloguj się</span>. „Zapamiętaj mnie” = nie wylogowuje po zamknięciu przeglądarki.</p>
+</div>
+
+<div class="card">
+  <h2><span class="n">1</span>Wyślij katalog <span class="tag push">PUSH</span></h2>
+  <div class="row w">
+    <div>
+      <p><b>Sposób A – z Eksploratora Windows</b> (gdy masz zainstalowany dodatek RFM):</p>
+      <ol>
+        <li>Zaznacz folder(y) produktu – <b>tylko foldery</b>, w tym samym miejscu.</li>
+        <li>Prawy przycisk myszy → <b>Przygotuj zaznaczone do wysłania przez RFM</b>. W Windows 11 najpierw <b>Pokaż więcej opcji</b>.</li>
+        <li>Otworzy się przeglądarka z zaznaczonymi katalogami. Za pierwszym razem kliknij tam <span class="ui p">Zatwierdź urządzenie</span>.</li>
+      </ol>
+      <p><b>Sposób B – w aplikacji:</b> przejdź do folderu (kliknij nazwę lub wpisz ścieżkę, np. <code>A:/tester</code>) i zaznacz <b>pole wyboru</b> przy katalogu.</p>
+      <p><b>Potem:</b> kliknij <span class="ui p">Wyślij →</span>, przeczytaj okno i kliknij <span class="ui p">Potwierdź</span>.</p>
+      <div class="ok">Gotowe, gdy w <b>Historii operacji</b> jest wiersz <span class="tag push">PUSH</span> ze statusem <b>Zakończone</b>. „PIM: powiadomiono” i „Synchronizacja” dzieją się dalej same – nie musisz czekać.</div>
+    </div>
+    <div>
+      <img src="img/windows_menu.jpg">
+      <div class="cap">Menu w Eksploratorze Windows (ilustracja)</div>
+      <img src="img/prepare_deeplink.jpg" style="margin-top:2mm">
+      <div class="cap">Aplikacja z zaznaczonymi katalogami – teraz „Wyślij”</div>
+    </div>
+  </div>
+  <div class="warn" style="margin-bottom:1mm"><b>Uwaga:</b> po wysłaniu katalog <b>znika ze Ścieżki A</b>. Odzyskasz go tylko przez <b>Cofnij</b> (punkt 3).</div>
+</div>
+
+<!-- ================= STRONA 2 ================= -->
+<div class="page2"></div>
+
+<div class="card">
+  <h2><span class="n">2</span>Popraw wysłany katalog <span class="tag update">UPDATE</span></h2>
+  <div class="row w">
+    <div>
+      <ol>
+        <li>W <b>Historii operacji</b> zaznacz kółko przy wierszu <span class="tag push">PUSH</span> tego katalogu.</li>
+        <li>Kliknij <span class="ui">Aktualizuj katalog</span>.</li>
+        <li>Przy plikach wybierz zmianę, a nowe pliki dodaj przyciskami na dole okna:</li>
+      </ol>
+      <table style="margin-bottom:1.6mm">
+        <tr><th style="width:30%">Chcę…</th><th>Kliknij</th></tr>
+        <tr><td>zmienić nazwę</td><td>przy pliku <b>Zmień nazwę</b> → wpisz np. <code>8.jpg</code></td></tr>
+        <tr><td>usunąć plik</td><td>przy pliku <b>Usuń</b></td></tr>
+        <tr><td>podmienić zdjęcie</td><td>przy pliku <b>Zastąp</b> → <b>Ze ścieżki A…</b> lub <b>Prześlij…</b> (z komputera). Ten sam format: jpg za jpg.</td></tr>
+        <tr><td>dodać zdjęcie</td><td><b>Dodaj ze ścieżki A…</b> lub <b>Prześlij nowe pliki…</b> → w polu nazwy wpisz numer, np. <code>10.jpg</code></td></tr>
+      </table>
+      <ol start="4">
+        <li>Sprawdź listę <b>Oczekujące zmiany</b> → <span class="ui p">Zastosuj zmiany</span> → <span class="ui p">Potwierdź</span>.</li>
+      </ol>
+      <div class="stop"><b>Usunięte i zastąpione pliki przepadają na zawsze</b> – nawet „Cofnij” ich nie przywróci. Zachowaj kopię, jeśli możesz jej potrzebować.</div>
+    </div>
+    <div>
+      <img src="img/update2_draft.jpg">
+      <div class="cap">Okno „Aktualizuj katalog”: zastąpienie, zmiana nazwy i dodanie pliku</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2><span class="n">3</span>Cofnij wysłanie <span class="tag pull">PULL</span></h2>
+  <div class="row w">
+    <div>
+      <ol>
+        <li>W <b>Historii operacji</b> zaznacz kółko przy wierszu <span class="tag push">PUSH</span> katalogu.</li>
+        <li>Kliknij <span class="ui">← Cofnij</span> → <span class="ui p">Potwierdź</span>.</li>
+        <li>Katalog wraca do Ścieżki A, <b>w to samo miejsce</b>, z którego był wysłany.</li>
+      </ol>
+      <div class="warn"><b>Katalog wraca w obecnej postaci</b> – razem ze wszystkimi aktualizacjami (UPDATE), a nie taki, jaki był wysłany. Aplikacja ostrzega o tym osobnym oknem.</div>
+    </div>
+    <div>
+      <img src="img/pull2_selected.jpg">
+      <div class="cap">Wybrany PUSH z dopiskiem „zaktualizowano w #…” – aktywne „Cofnij” i „Aktualizuj katalog”</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Gdy coś nie działa</h2>
+  <table>
+    <tr><th style="width:38%">Problem</th><th>Co zrobić</th></tr>
+    <tr><td>„Wyślij” jest szary</td><td>Zaznacz pole wyboru przy <b>folderze</b> (plików nie da się zaznaczyć).</td></tr>
+    <tr><td>Brak kółka wyboru w historii</td><td>Wybrać można tylko <b>PUSH</b> ze statusem <b>Zakończone</b>, który nie był jeszcze cofnięty.</td></tr>
+    <tr><td>„Nie można kontynuować”</td><td>Przeczytaj powód w oknie i popraw katalog według 4 zasad z pierwszej strony.</td></tr>
+    <tr><td>Brak pozycji RFM w menu Windows</td><td>Zaznacz tylko foldery; w Windows 11 kliknij „Pokaż więcej opcji”; folder musi leżeć w folderze sieciowym ze zdjęciami.</td></tr>
+    <tr><td>„PIM: błąd” lub długo „PIM: ponawianie”</td><td>Kliknij numer operacji (ID) → <b>Wyślij ponownie do PIM</b>.</td></tr>
+    <tr><td>Nie widzę okna potwierdzenia</td><td>Wyłączono je opcją „Nie pytaj ponownie”. Włączysz je w <b>Ustawienia → Potwierdzenia</b>.</td></tr>
+  </table>
+  <p class="foot" style="margin:1.5mm 0 0">Zgłaszając problem administratorowi, podaj <b>numer operacji (ID)</b>, nazwę katalogu i treść komunikatu.</p>
+</div>
+
+</body>
+</html>
