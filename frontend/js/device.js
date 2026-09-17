@@ -119,7 +119,7 @@ async function approveDevice() {
             } else if (response.status === 400) {
                 showError(t('device.expired'));
             } else {
-                showError(t('device.error').replace('{error}', error.detail || 'Unknown error'));
+                showError(t('device.error', { error: error.error || error.detail || t('errors.unknown') }));
             }
 
             approveBtn.disabled = false;

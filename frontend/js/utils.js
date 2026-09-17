@@ -3,6 +3,25 @@
  * Helper functions for common tasks
  */
 
+import { t, isI18nReady, getCurrentLocale } from './i18n.js';
+
+// Pages without translations (the admin panel) keep English dates and numbers
+const TIME_FALLBACK = {
+    'time.justNow': 'Just now',
+    'time.minutesAgo': '{count} min ago',
+    'time.hoursAgo': '{count} h ago',
+    'time.oneDayAgo': '1 day ago',
+    'time.daysAgo': '{count} days ago'
+};
+
+function uiLocale() {
+    return isI18nReady() ? getCurrentLocale() : 'en-US';
+}
+
+function timeText(key, count) {
+    return isI18nReady() ? t(key, { count }) : TIME_FALLBACK[key].replace('{count}', count);
+}
+
 /**
  * Format file size in human-readable format
  * @param {number} bytes - File size in bytes
@@ -16,7 +35,11 @@ export function formatFileSize(bytes) {
     const k = 1024;
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+    const value = (bytes / Math.pow(k, i)).toLocaleString(uiLocale(), {
+        maximumFractionDigits: 2,
+        useGrouping: false
+    });
+    return value + ' ' + units[i];
 }
 
 /**
@@ -41,23 +64,34 @@ export function formatDate(date) {
 
     // Show relative time for recent dates
     if (diffMins < 1) {
-        return 'Just now';
+        return timeText('time.justNow', 0);
     } else if (diffMins < 60) {
-        return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+        return timeText('time.minutesAgo', diffMins);
     } else if (diffHours < 24) {
-        return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+        return timeText('time.hoursAgo', diffHours);
+    } else if (diffDays === 1) {
+        return timeText('time.oneDayAgo', 1);
     } else if (diffDays < 7) {
-        return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+        return timeText('time.daysAgo', diffDays);
     }
 
     // Show full date for older dates
-    return dateObj.toLocaleString('en-US', {
+    return dateObj.toLocaleString(uiLocale(), {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
     });
+}
+
+/**
+ * Full date and time in the UI language, e.g. "17.09.2026, 15:38:35"
+ * @param {string|Date} value - Date to format
+ * @returns {string} Formatted date, or '' when there is none
+ */
+export function formatDateTime(value) {
+    return value ? new Date(value).toLocaleString(uiLocale()) : '';
 }
 
 /**

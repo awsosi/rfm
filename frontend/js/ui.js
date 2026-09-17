@@ -3,7 +3,7 @@
  * Handles DOM updates and UI interactions
  */
 
-import { formatFileSize, formatDate, escapeHtml, showConfirm, showPrompt, showToast } from './utils.js';
+import { formatFileSize, formatDate, formatDateTime, escapeHtml, showConfirm, showPrompt, showToast } from './utils.js';
 import { t } from './i18n.js';
 
 /**
@@ -685,13 +685,13 @@ function createOperationTableRow(operation) {
 
     const userCell = document.createElement('td');
     userCell.className = 'col-user';
-    userCell.textContent = operation.user_name || 'Unknown';
+    userCell.textContent = operation.user_name || t('explorer.unknownUser');
     row.appendChild(userCell);
 
     const timestampCell = document.createElement('td');
     timestampCell.className = 'col-timestamp';
-    timestampCell.textContent = formatTimestamp(operation.created_at);
-    timestampCell.title = new Date(operation.created_at).toLocaleString();
+    timestampCell.textContent = formatDate(operation.created_at);
+    timestampCell.title = formatDateTime(operation.created_at);
     row.appendChild(timestampCell);
 
     return row;
@@ -715,10 +715,6 @@ export function formatOperationStatus(status) {
         ROLLED_BACK: 'details.rolledBack'
     };
     return keys[status] ? t(keys[status]) : status;
-}
-
-function formatDateTime(value) {
-    return value ? new Date(value).toLocaleString() : '';
 }
 
 /**
@@ -793,23 +789,6 @@ export function buildIntegrationBadges(operation) {
     }
 
     return wrap;
-}
-
-function formatTimestamp(timestamp) {
-    if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return diffMins + 'm ago';
-    if (diffHours < 24) return diffHours + 'h ago';
-    if (diffDays < 7) return diffDays + 'd ago';
-
-    return date.toLocaleDateString();
 }
 
 export function updateOperationInQueueTable(operation) {

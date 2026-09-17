@@ -34,7 +34,8 @@ import {
     stopRemoteSync,
     getOperationHistory,
     searchOperations,
-    listActiveWorkers
+    listActiveWorkers,
+    apiRequest
 } from './api.js';
 import {
     renderFileList,
@@ -74,7 +75,7 @@ import {
     updatePullButtonState,
     updateUpdateButtonState
 } from './ui.js';
-import { normalizePath, joinPath, debounce, showDialog, formatFileSize } from './utils.js';
+import { normalizePath, joinPath, debounce, showDialog, formatFileSize, formatDateTime } from './utils.js';
 import {
     DIALOGS,
     confirmDialog,
@@ -811,6 +812,7 @@ async function loadDirectory(paneId, path, silent = false) {
         const sortedFiles = sortFiles(files, pane.sortBy, pane.sortOrder);
         renderFileList(paneId, sortedFiles, false);
         markDirectoryRows(paneId); // Apply directory styling for VF redesign
+        updateVFButtonStates(); // the selection may be gone (e.g. a pushed folder)
 
         // Update sort arrows in header
         updateSortArrows(paneId, pane.sortBy, pane.sortOrder);
@@ -1208,6 +1210,23 @@ async function handleContextMenuAction(action, file, paneId) {
                 navigateToDirectory(paneId, file.path);
             }
             break;
+
+        case 'push': {
+            if (!file.is_directory || file.is_parent_dir) {
+                showError(t('operations.selectDirectoryNotFile'));
+                break;
+            }
+            // Push exactly the folder that was right-clicked
+            clearSelection(paneId);
+            const checkbox = Array.from(document.querySelectorAll(`#file-list-body-${paneId} .file-select`))
+                .find(input => input.dataset.path === file.path);
+            if (checkbox) {
+                checkbox.checked = true;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            await handlePushOperation();
+            break;
+        }
 
         case 'rename':
             await handleRename(file, paneId);
@@ -1964,6 +1983,7 @@ async function loadOperationHistory(append = false) {
         const queue = state.operationQueue;
         const sortedOps = sortOperations(queue.operations, queue.sortBy, queue.sortOrder);
         renderOperationQueue(sortedOps, append);
+        updateVFButtonStates(); // a pulled PUSH can no longer be selected
 
         // Update sort arrows in header
         updateOperationQueueSortArrows(queue.sortBy, queue.sortOrder);
@@ -2767,7 +2787,7 @@ function buildIntegrationDetails(operation) {
     block.className = 'integration-details';
     if (!pim && !sync) return block;
 
-    const when = value => (value ? new Date(value).toLocaleString() : null);
+    const when = formatDateTime;
     const stoppedBy = job => t('integration.stoppedBy', { time: when(job.cancelled_at), user: job.cancelled_by });
     const facts = document.createElement('dl');
     facts.className = 'operation-facts';
@@ -2896,7 +2916,7 @@ function buildOperationSummary(operation) {
         dd.textContent = value;
         facts.append(dt, dd);
     };
-    const when = value => (value ? new Date(value).toLocaleString() : null);
+    const when = formatDateTime;
     fact('details.created', when(operation.created_at));
     fact('details.started', when(operation.started_at));
     fact('details.completed', when(operation.completed_at));
@@ -3140,7 +3160,7 @@ async function handlePushOperation() {
             if (other.length > 0) {
                 const preview = other
                     .slice(0, 3)
-                    .map(item => `${item.source_path}: ${item.error || 'unknown error'}`)
+                    .map(item => `${item.source_path}: ${item.error || t('errors.unknown')}`)
                     .join('; ');
                 showError(t('operations.pushBatchFailed', { count: other.length, errors: preview }));
             }
@@ -3151,6 +3171,7 @@ async function handlePushOperation() {
         }
 
         clearSelection('a');
+        updateVFButtonStates();
 
         // Refresh operation history
         await loadOperationHistory();
@@ -3384,27 +3405,13 @@ function handleFileListChanged(data) {
  * @param {string} targetPath - Real Windows path (e.g., "\\server\share\folder" or "G:\folder")
  */
 async function resolveWindowsPath(targetPath) {
-    const { API_BASE_URL, getToken } = await import('./auth.js');
-    const token = getToken();
-
-    const response = await fetch(`${API_BASE_URL}/api/path/resolve`, {
+    return await apiRequest('/api/path/resolve', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({
             windows_path: targetPath,
             worker_id: state.workerId
         })
     });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to resolve path');
-    }
-
-    return await response.json();
 }
 
 async function handlePrepareAction(targetPaths) {
@@ -3426,7 +3433,7 @@ async function handlePrepareAction(targetPaths) {
         }
 
         if (resolved.length === 0) {
-            throw new Error('No paths could be resolved');
+            throw new Error(t('errors.noPathsResolved'));
         }
 
         const parentPath = resolved[0].parent_path;
@@ -3490,8 +3497,8 @@ async function handlePrepareAction(targetPaths) {
 
                 if (foundCount === 0) {
                     console.warn('Deep link: No matching folders found in directory');
-                    showError(t('errors.pathNotAllowed') + ': Folder not found');
-                    reject(new Error('Folder not found'));
+                    showError(t('errors.pathNotAllowed') + ': ' + t('errors.folderNotFound'));
+                    reject(new Error(t('errors.folderNotFound')));
                     return;
                 }
 
@@ -3536,7 +3543,7 @@ async function handlePushAction(targetPaths) {
                 console.log('Deep link: Push operation triggered successfully');
             } catch (error) {
                 console.error('Deep link: Push operation failed:', error);
-                showError(t('operations.pushFailed').replace('{error}', error.message));
+                showError(t('operations.pushFailed', { error: error.message }));
             }
         } else if (selectedFiles.length === 0) {
             console.error('Deep link: No directory selected for push');
@@ -3547,7 +3554,7 @@ async function handlePushAction(targetPaths) {
         }
     } catch (error) {
         console.error('Deep link: Failed to prepare push action:', error);
-        showError(t('operations.pushFailed') + ': ' + error.message);
+        showError(t('operations.pushFailed', { error: error.message }));
     }
 }
 

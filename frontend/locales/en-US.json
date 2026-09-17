@@ -68,7 +68,8 @@
     "pathASubtitle": "Catalogs ready to push",
     "editPathTitle": "Click to edit the path",
     "actionHint": "Select a directory to push, or an operation to pull or update.",
-    "update": "Update"
+    "update": "Update",
+    "unknownUser": "Unknown"
   },
   "contextMenu": {
     "open": "Open",
@@ -163,13 +164,17 @@
     "noWorkerAvailable": "No worker is available to handle this path. Please contact your administrator.",
     "noWorkersAvailable": "No active workers are available. The file explorer cannot function without an active worker. Please contact your administrator.",
     "failedToLoadWorkers": "Failed to load workers. Some features may not work correctly.",
-    "pathNotAllowed": "The selected path is not configured for RFM operations."
+    "pathNotAllowed": "The selected path is not configured for RFM operations.",
+    "folderNotFound": "Folder not found",
+    "noPathsResolved": "None of the selected paths could be resolved",
+    "unknown": "unknown error"
   },
   "time": {
     "justNow": "Just now",
-    "minutesAgo": "{count}m ago",
-    "hoursAgo": "{count}h ago",
-    "daysAgo": "{count}d ago"
+    "minutesAgo": "{count} min ago",
+    "hoursAgo": "{count} h ago",
+    "oneDayAgo": "1 day ago",
+    "daysAgo": "{count} days ago"
   },
   "validation": {
     "title": "Cannot proceed",

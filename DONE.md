@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-09-17 - Explorer: right-click "Push", button states, Polish dates and numbers
+
+Found while writing the Polish user guide (`docs/instructions/`).
+
+**Right-click "Push >" did nothing.** The Path A context menu offered `push`, but `handleContextMenuAction` (`frontend/js/app.js`) had no case for it. It now selects exactly the right-clicked folder and runs the normal PUSH (same confirmation and validation); a file or `..` shows "Select a directory (not a file)".
+
+**Push/Pull/Update stayed enabled with nothing selected.** Button state was recomputed only on checkbox/radio `change` events. Re-renders that drop a selection fire none: after a PUSH (the folder leaves Path A, `clearSelection` sets `checked` directly), after navigating to another folder, after a PULL (the pulled PUSH loses its radio). `updateVFButtonStates()` now runs after every Path A and history render and after the post-PUSH `clearSelection`.
+
+**Dates, times and numbers in the UI language.** `formatDate` returned hard-coded English ("5 mins ago", "Mar 30, 2026, 01:06 PM"), the history used its own English "5m ago", full timestamps used the browser locale, and sizes always used a dot. Now in `utils.js`: `formatDate` (relative via `time.*` keys, older dates via `toLocaleString(uiLocale)`), new `formatDateTime` (history tooltip, operation details, PIM/sync tooltips), `formatFileSize` with the locale decimal separator. PL: "Przed chwilą", "31 min temu", "4 godz. temu", "1 dzień temu", "3 dni temu", "17.09.2026, 15:42:47", "1013,75 KB". The admin panel loads no translations, so these fall back to English there. New key `time.oneDayAgo` (Polish "1 dzień", not "1 dni"); en-US time keys aligned with the fallback.
+
+**Other untranslated strings on user pages.** History "Unknown" user, "unknown error" in PUSH batch failures, Windows deep-link "Folder not found" / "No paths could be resolved", device approval "Unknown error". `resolveWindowsPath` now uses `apiRequest`: it read `error.detail` from a `{"error": ...}` body, so every failure said "Failed to resolve path". `handlePushAction` printed a raw `{error}` placeholder. The admin panel itself is still English only.
+
+**Verified** with Playwright against the dev WebUI in pl-PL and en-US (no console errors or missing keys) and the English fallback on a page without i18n.
+
 ## 2026-09-17 - Session lifetime, "Remember me", admin password confirmation
 
 **Why.** WebUI users were logged out every 30 min: `auth.js` ignored the server's `expires_in` and hard-coded 30 min in `sessionStorage` (see LESSONS_LEARNED). The Admin Panel's "Session Lifetime (days)" was never read; the API used env `ACCESS_TOKEN_EXPIRE_DAYS` (30).

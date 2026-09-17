@@ -6,6 +6,17 @@
 
 ---
 
+## UI State Derived From a Selection Must Be Recomputed After Every Re-render
+
+**Problem:** The explorer enabled Push/Pull/Update from `change` events on checkboxes and radios. A re-render that removes the selected row fires no event: after a PUSH the folder leaves Path A, `clearSelection()` sets `checked = false` directly, and a PULL hides the radio of its PUSH. The buttons stayed enabled with nothing selected. Clicking them then only showed "Select a directory".
+
+**Why it is invisible:** Every click-driven path works; the stale state appears only after the list changes under the user.
+
+**Rules:**
+1. Recompute derived state (`updateVFButtonStates()`) right after each render of the list it depends on, not only in event handlers.
+2. Setting `checked` programmatically does not fire `change`; call the state update yourself.
+3. Every menu item needs a handler: `contextMenu.push` was rendered and translated, but `handleContextMenuAction` had no `case 'push'`.
+
 ## Session Lifetime Must Come From the Server, and Only One Redirect Wins
 
 **Problem:** Users were logged out every 30 minutes although the API issued 30-day tokens. `frontend/js/auth.js` ignored `expires_in` and hard-coded a 30-minute client expiry in `sessionStorage`; the Admin Panel's "Session Lifetime (days)" (`session_lifetime_days`) was saved to the config table but no code read it. Separately, when every API call of a page answered 401, each one called the login redirect: the first cleared the token, the next no longer saw a session and overwrote `location.href` without `expired=1`, so the "session expired" notice never showed.

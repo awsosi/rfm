@@ -68,7 +68,8 @@
     "pathASubtitle": "Katalogi gotowe do wypchnięcia",
     "editPathTitle": "Kliknij, aby edytować ścieżkę",
     "actionHint": "Wybierz katalog, aby go wypchnąć, albo operację, aby cofnąć lub zaktualizować.",
-    "update": "Aktualizacja"
+    "update": "Aktualizacja",
+    "unknownUser": "Nieznany"
   },
   "contextMenu": {
     "open": "Otwórz",
@@ -163,12 +164,16 @@
     "noWorkerAvailable": "Brak dostępnego workera do obsługi tej ścieżki. Skontaktuj się z administratorem.",
     "noWorkersAvailable": "Brak aktywnych workerów. Eksplorator plików nie może działać bez aktywnego workera. Skontaktuj się z administratorem.",
     "failedToLoadWorkers": "Nie udało się wczytać workerów. Niektóre funkcje mogą nie działać poprawnie.",
-    "pathNotAllowed": "Wybrana ścieżka nie jest skonfigurowana dla operacji RFM."
+    "pathNotAllowed": "Wybrana ścieżka nie jest skonfigurowana dla operacji RFM.",
+    "folderNotFound": "Nie znaleziono folderu",
+    "noPathsResolved": "Nie udało się rozpoznać żadnej z wybranych ścieżek",
+    "unknown": "nieznany błąd"
   },
   "time": {
     "justNow": "Przed chwilą",
     "minutesAgo": "{count} min temu",
     "hoursAgo": "{count} godz. temu",
+    "oneDayAgo": "1 dzień temu",
     "daysAgo": "{count} dni temu"
   },
   "validation": {
