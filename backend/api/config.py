@@ -62,7 +62,11 @@ class Settings(BaseSettings):
         description="Secret key for JWT token signing",
     )
     algorithm: str = "HS256"
-    access_token_expire_days: int = 30
+
+    # Session policy (seeds the config table; the Admin Panel is authoritative)
+    session_lifetime_days: int = 5          # admins, and users without "Remember me"
+    session_remember_me_days: int = 30      # "Remember me" (never for admins)
+    admin_reauth_minutes: int = 15          # admin password confirmation for system settings
 
     # TLS/SSL
     tls_enabled: bool = True

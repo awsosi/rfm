@@ -164,7 +164,7 @@ docker-compose exec postgres psql -U filemanager
 
 **Key Tables**:
 - `users` - Authentication with Argon2 password hashing
-- `sessions` - 30-day JWT tokens (HS256)
+- `sessions` - JWT tokens (HS256), lifetime from the session policy config
 - `workers` - Windows service registration, public keys, heartbeat tracking
 - `operations` - File operation audit trail with rollback tracking
 - `operation_workers` - Multi-worker coordination
@@ -432,7 +432,8 @@ pytest --cov=. --cov-report=html   # Coverage report
 
 - SECRET_KEY must be 64+ bytes random string: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 - mTLS certificates for worker authentication stored in `ssl/` directory
-- Session tokens are 30-day long-lived JWTs (configurable via `ACCESS_TOKEN_EXPIRE_DAYS`)
+- Session tokens are JWTs lasting `session_lifetime_days` (default 5), or `session_remember_me_days` (default 30) with "Remember me", which never applies to admins
+- Admin changes to system settings depend on `require_recent_auth`: the password must have been typed in the session within `admin_reauth_minutes` (default 15), else 403 `reauth_required` and the WebUI asks for it
 - External auth (Sybase/PolkaSQL) supported via `ENABLE_POLKA_AUTH`
 - All passwords hashed with Argon2id (OWASP recommended)
 - Path traversal protection in `workers/FileManagerWorker/FileOperations.cs`

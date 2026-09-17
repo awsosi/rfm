@@ -137,7 +137,8 @@ class Session(Base):
     """
     Session model for token-based authentication.
 
-    Long-lived sessions (30 days) with HS256 signed tokens.
+    HS256 signed tokens. Lifetime comes from the ``session_lifetime_days`` /
+    ``session_remember_me_days`` config (see api.middleware.auth).
     """
     __tablename__ = "sessions"
 
@@ -157,6 +158,10 @@ class Session(Base):
     )
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)
+    # Opened with "Remember me" (never for an admin)
+    remember_me = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Last time the password was typed in this session (login or confirmation)
+    reauthenticated_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="sessions")

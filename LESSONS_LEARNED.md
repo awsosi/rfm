@@ -6,6 +6,17 @@
 
 ---
 
+## Session Lifetime Must Come From the Server, and Only One Redirect Wins
+
+**Problem:** Users were logged out every 30 minutes although the API issued 30-day tokens. `frontend/js/auth.js` ignored `expires_in` and hard-coded a 30-minute client expiry in `sessionStorage`; the Admin Panel's "Session Lifetime (days)" (`session_lifetime_days`) was saved to the config table but no code read it. Separately, when every API call of a page answered 401, each one called the login redirect: the first cleared the token, the next no longer saw a session and overwrote `location.href` without `expired=1`, so the "session expired" notice never showed.
+
+**Why it is invisible:** Every piece worked on its own: the token was valid, the setting saved, the redirect reached the login page. Nothing errors; the user just logs in again.
+
+**Rules:**
+1. The client stores the expiry the server returns (`expires_in`), never its own constant.
+2. A setting shown in the Admin Panel needs a test that changes it and observes the behaviour (`tests/test_session_policy.py`).
+3. `location.href` assignments do not stop the script; the last one wins. Guard redirect helpers so the first call decides (`redirectToLogin`).
+
 ## `showDialog` Resolves an Object: `!await showDialog()` Is Always False
 
 **Problem:** A "Stop sending to PIM" button asked `if (!await showDialog({...})) return;`. `showDialog` (`frontend/js/utils.js`) resolves `{ confirmed, value, dontAskAgain }`, an object, which is always truthy, so Cancel went ahead and stopped the job.

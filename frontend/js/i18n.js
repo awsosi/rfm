@@ -197,6 +197,14 @@ export function t(key, params = {}) {
 }
 
 /**
+ * Whether a locale has been loaded (initI18n or setLocale ran on this page)
+ * @returns {boolean}
+ */
+export function isI18nReady() {
+    return Object.keys(translations).length > 0;
+}
+
+/**
  * Get current locale
  * @returns {string} Current locale code
  */

@@ -794,8 +794,14 @@ body[data-theme="dark"] select.filter-select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-md);
+    flex-wrap: wrap;
+    gap: var(--spacing-xs) var(--spacing-md);
     margin-bottom: var(--spacing-md);
+}
+
+.login-options small {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
 }
 
 .login-footer {
@@ -1887,7 +1893,8 @@ body[data-theme="dark"] .file-list tbody tr.selected {
 /* Inline alerts. Hardcoded light-mode hex values used to stay light in dark
    mode; these follow the theme and carry an icon slot. */
 .error-message,
-.success-message {
+.success-message,
+.info-message {
     display: flex;
     align-items: flex-start;
     gap: var(--spacing-sm);
@@ -1911,8 +1918,15 @@ body[data-theme="dark"] .file-list tbody tr.selected {
     border-color: color-mix(in srgb, var(--success-color) 35%, transparent);
 }
 
+.info-message {
+    background-color: var(--info-soft);
+    color: var(--info-color);
+    border-color: color-mix(in srgb, var(--info-color) 35%, transparent);
+}
+
 .error-message::before,
-.success-message::before {
+.success-message::before,
+.info-message::before {
     flex: none;
     font-weight: 700;
     line-height: 1.5;
@@ -1920,6 +1934,7 @@ body[data-theme="dark"] .file-list tbody tr.selected {
 
 .error-message::before { content: "!"; }
 .success-message::before { content: "\2713"; }
+.info-message::before { content: "i"; }
 
 body[data-theme="dark"] .error-message { color: #fca5a5; }
 body[data-theme="dark"] .success-message { color: #6ee7b7; }

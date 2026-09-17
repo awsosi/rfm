@@ -133,8 +133,18 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="config-session-lifetime">Session Lifetime (days)</label>
-                                    <input type="number" id="config-session-lifetime" name="session_lifetime_days" class="form-control" min="1" max="365">
-                                    <small>How long user sessions remain valid</small>
+                                    <input type="number" id="config-session-lifetime" name="session_lifetime_days" class="form-control" min="1" max="365" placeholder="5">
+                                    <small>How long a session lasts for admins, and for users who don't tick "Remember me". An open page keeps its session alive. Applies to new logins and refreshes.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-session-remember-me-days">"Remember Me" Session Lifetime (days)</label>
+                                    <input type="number" id="config-session-remember-me-days" name="session_remember_me_days" class="form-control" min="1" max="365" placeholder="30">
+                                    <small>Users who tick "Remember me" stay signed in after closing the browser, for this long. Never applies to admins.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-admin-reauth-minutes">Admin Password Confirmation (minutes)</label>
+                                    <input type="number" id="config-admin-reauth-minutes" name="admin_reauth_minutes" class="form-control" min="1" max="1440" placeholder="15">
+                                    <small>Changing users, workers, configuration, Samba paths or logging asks the admin for their password again once this long has passed since they last typed it.</small>
                                 </div>
                             </div>
 

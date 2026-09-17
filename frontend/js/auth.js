@@ -11,21 +11,78 @@ export const API_BASE_URL = window.API_URL_PUBLIC || (
         : window.location.origin
 );
 
-// Session storage keys
+// Storage keys. A remembered session lives in localStorage (survives closing
+// the browser); any other session in sessionStorage (ends with the tab).
 export const TOKEN_KEY = 'auth_token';
 export const USER_KEY = 'current_user';
 export const TOKEN_EXPIRY_KEY = 'token_expiry';
+const TOKEN_LIFETIME_KEY = 'token_lifetime';
+const SESSION_KEYS = [TOKEN_KEY, USER_KEY, TOKEN_EXPIRY_KEY, TOKEN_LIFETIME_KEY];
+
+const LOGIN_PAGE = '/pages/login.html';
+
+// Set when checkAuth() finds a session that has run out, so the login page
+// can say why the user is there.
+let sessionExpired = false;
+// Several requests can fail at once; the first redirect decides where to go.
+let redirecting = false;
+
+function storages() {
+    const list = [];
+    for (const name of ['localStorage', 'sessionStorage']) {
+        try {
+            if (window[name]) list.push(window[name]);
+        } catch (error) {
+            /* Storage blocked (privacy settings): skip it */
+        }
+    }
+    return list;
+}
+
+/** The storage holding the current session, or null. */
+function sessionStore() {
+    return storages().find(store => store.getItem(TOKEN_KEY)) || null;
+}
+
+/**
+ * Store a session returned by /api/auth/login, /refresh or /me.
+ * @param {Object} data - LoginResponse (access_token, expires_in, user_id, username, role, remember_me)
+ */
+export function storeSession(data) {
+    clearSession();
+    let store = null;
+    try {
+        store = data.remember_me ? window.localStorage : window.sessionStorage;
+    } catch (error) {
+        store = storages()[0];
+    }
+    if (!store) return;
+    store.setItem(TOKEN_KEY, data.access_token);
+    store.setItem(TOKEN_EXPIRY_KEY, String(Date.now() + data.expires_in * 1000));
+    store.setItem(TOKEN_LIFETIME_KEY, String(data.expires_in * 1000));
+    store.setItem(USER_KEY, JSON.stringify({
+        id: data.user_id,
+        username: data.username,
+        role: data.role
+    }));
+}
+
+function clearSession() {
+    for (const store of storages()) {
+        SESSION_KEYS.forEach(key => store.removeItem(key));
+    }
+}
 
 /**
  * Login user with username and password
  * @param {string} username - Username
  * @param {string} password - Password
- * @param {string} authMethod - Authentication method: 'auto', 'remote', or 'local'
+ * @param {string} authMethod - Authentication method: 'auto', 'polka', or 'local'
+ * @param {boolean} rememberMe - Keep the session after the browser closes (ignored for admins)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function login(username, password, authMethod = 'auto') {
+export async function login(username, password, authMethod = 'auto', rememberMe = false) {
     try {
-        // Use JSON-based login endpoint to support auth_method parameter
         const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: {
@@ -34,39 +91,21 @@ export async function login(username, password, authMethod = 'auto') {
             body: JSON.stringify({
                 username: username,
                 password: password,
-                auth_method: authMethod
+                auth_method: authMethod,
+                remember_me: rememberMe
             })
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
+            const errorData = await response.json().catch(() => ({}));
+            const detail = errorData.error ?? errorData.detail;
             return {
                 success: false,
-                error: errorData.detail || 'Invalid credentials'
+                error: typeof detail === 'string' ? detail : 'Invalid credentials'
             };
         }
 
-        const data = await response.json();
-
-        // Store token and user data
-        sessionStorage.setItem(TOKEN_KEY, data.access_token);
-
-        // Calculate token expiry (default 30 minutes)
-        const expiryTime = Date.now() + (30 * 60 * 1000);
-        sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
-
-        // Fetch and store user data
-        const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-            headers: {
-                'Authorization': `Bearer ${data.access_token}`
-            }
-        });
-
-        if (userResponse.ok) {
-            const userData = await userResponse.json();
-            sessionStorage.setItem(USER_KEY, JSON.stringify(userData));
-        }
-
+        storeSession(await response.json());
         return { success: true };
 
     } catch (error) {
@@ -79,13 +118,10 @@ export async function login(username, password, authMethod = 'auto') {
 }
 
 /**
- * Logout current user
- * Clears session storage and redirects to login
+ * Logout current user: forget the session in this browser.
  */
 export function logout() {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem(TOKEN_EXPIRY_KEY);
+    clearSession();
 }
 
 /**
@@ -93,15 +129,15 @@ export function logout() {
  * @returns {boolean}
  */
 export function checkAuth() {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    const expiry = sessionStorage.getItem(TOKEN_EXPIRY_KEY);
+    const store = sessionStore();
+    const expiry = store?.getItem(TOKEN_EXPIRY_KEY);
 
-    if (!token || !expiry) {
+    if (!store || !expiry) {
         return false;
     }
 
-    // Check if token is expired
     if (Date.now() > parseInt(expiry)) {
+        sessionExpired = true;
         logout();
         return false;
     }
@@ -117,7 +153,7 @@ export function getToken() {
     if (!checkAuth()) {
         return null;
     }
-    return sessionStorage.getItem(TOKEN_KEY);
+    return sessionStore().getItem(TOKEN_KEY);
 }
 
 /**
@@ -129,7 +165,7 @@ export function getCurrentUser() {
         return null;
     }
 
-    const userData = sessionStorage.getItem(USER_KEY);
+    const userData = sessionStore().getItem(USER_KEY);
     if (!userData) {
         return null;
     }
@@ -153,8 +189,48 @@ export function isAdmin() {
 }
 
 /**
+ * Send the user to the login page, coming back here after signing in.
+ * The login page explains that the session expired when one was in use.
+ */
+export function redirectToLogin() {
+    if (redirecting) return;
+    const expired = sessionExpired || Boolean(sessionStore());
+    logout();
+
+    const here = new URL(window.location.href);
+    if (here.pathname === LOGIN_PAGE) return;
+    redirecting = true;
+    here.searchParams.delete('token'); // a deep-link token must not be replayed
+
+    const params = new URLSearchParams();
+    if (expired) params.set('expired', '1');
+    params.set('return', here.pathname + here.search + here.hash);
+    window.location.href = `${LOGIN_PAGE}?${params}`;
+}
+
+/**
+ * Where to go after signing in: the requested page when it is on this site,
+ * otherwise the explorer.
+ * @param {string|null} returnUrl
+ * @returns {string}
+ */
+export function safeReturnUrl(returnUrl) {
+    if (returnUrl) {
+        try {
+            const url = new URL(returnUrl, window.location.href);
+            if (url.origin === window.location.origin && url.pathname !== LOGIN_PAGE) {
+                return url.href;
+            }
+        } catch (error) {
+            /* Malformed: fall through */
+        }
+    }
+    return 'explorer.html';
+}
+
+/**
  * Refresh authentication token
- * @returns {Promise<boolean>}
+ * @returns {Promise<boolean|null>} true refreshed, false session rejected, null not reachable
  */
 export async function refreshToken() {
     const currentToken = getToken();
@@ -170,50 +246,58 @@ export async function refreshToken() {
             }
         });
 
-        if (!response.ok) {
-            logout();
+        if (response.status === 401) {
             return false;
         }
+        if (!response.ok) {
+            return null;
+        }
 
-        const data = await response.json();
-        sessionStorage.setItem(TOKEN_KEY, data.access_token);
-
-        // Update expiry time
-        const expiryTime = Date.now() + (30 * 60 * 1000);
-        sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
-
+        storeSession(await response.json());
         return true;
 
     } catch (error) {
         console.error('Token refresh error:', error);
-        return false;
+        return null;
     }
 }
 
 /**
- * Setup automatic token refresh
- * Refreshes token 5 minutes before expiry
+ * Keep an open page's session alive and leave it when the session ends.
+ *
+ * Once half of the session lifetime has passed the token is refreshed (the
+ * server extends it by the current session policy). An expired or rejected
+ * session sends the user to the login page. Checked every minute and whenever
+ * the tab becomes visible again (timers are throttled in background tabs and
+ * stop while the computer sleeps).
  */
 export function setupAutoRefresh() {
-    // Check every minute if token needs refresh
-    setInterval(async () => {
-        const expiry = sessionStorage.getItem(TOKEN_EXPIRY_KEY);
-        if (!expiry) {
+    let busy = false;
+    const check = async () => {
+        if (busy) return;
+        if (!checkAuth()) {
+            redirectToLogin();
             return;
         }
+        const store = sessionStore();
+        const expiry = parseInt(store.getItem(TOKEN_EXPIRY_KEY));
+        const lifetime = parseInt(store.getItem(TOKEN_LIFETIME_KEY)) || 0;
+        if (expiry - Date.now() > lifetime / 2) return;
 
-        const expiryTime = parseInt(expiry);
-        const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
-
-        // Refresh if expiring in next 5 minutes
-        if (expiryTime < fiveMinutesFromNow) {
-            const refreshed = await refreshToken();
-            if (!refreshed) {
-                // Token refresh failed, redirect to login
-                window.location.href = '/pages/login.html';
+        busy = true;
+        try {
+            if (await refreshToken() === false) {
+                redirectToLogin();
             }
+        } finally {
+            busy = false;
         }
-    }, 60000); // Check every minute
+    };
+
+    setInterval(check, 60000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+    });
 }
 
 /**

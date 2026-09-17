@@ -50,6 +50,7 @@
                 <p class="login-subtitle" data-i18n="login.subtitle">Sign in to manage photo catalogs</p>
             </div>
 
+            <div id="expired-message" class="info-message hidden" role="status" data-i18n="login.sessionExpired">Your session has expired. Sign in again to continue.</div>
             <div id="error-message" class="error-message hidden" role="alert" aria-live="assertive"></div>
 
             <form id="login-form" novalidate>
@@ -79,9 +80,10 @@
 
                 <div class="login-options">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="remember-me" name="remember">
+                        <input type="checkbox" id="remember-me" name="remember" aria-describedby="remember-me-hint">
                         <span data-i18n="login.rememberMe">Remember me</span>
                     </label>
+                    <small id="remember-me-hint" data-i18n="login.rememberMeHint">Not available for administrator accounts</small>
                 </div>
 
                 <div class="form-group hidden" id="auth-method-group">
@@ -109,7 +111,7 @@
     </main>
 
     <script type="module">
-        import { login, checkAuth } from '../js/auth.js';
+        import { login, checkAuth, safeReturnUrl } from '../js/auth.js';
         import { initI18n, translatePage, t, setLocale, getCurrentLocale } from '../js/i18n.js';
 
         await initI18n();
@@ -117,10 +119,14 @@
         document.title = t('login.pageTitle');
 
         const urlParams = new URLSearchParams(window.location.search);
-        const returnUrl = urlParams.get('return');
+        const returnUrl = safeReturnUrl(urlParams.get('return'));
 
         if (checkAuth()) {
-            window.location.href = returnUrl || 'explorer.html';
+            window.location.href = returnUrl;
+        }
+
+        if (urlParams.get('expired') === '1') {
+            document.getElementById('expired-message').classList.remove('hidden');
         }
 
         const loginForm = document.getElementById('login-form');
@@ -201,9 +207,11 @@
             const username = document.getElementById('username').value.trim();
             const password = passwordInput.value;
             const authMethod = authMethodSelect.value || 'local';
+            const rememberMe = document.getElementById('remember-me').checked;
 
             errorMessage.classList.add('hidden');
             errorMessage.textContent = '';
+            document.getElementById('expired-message').classList.add('hidden');
 
             if (!username || !password) {
                 showError(t('login.missingCredentials'));
@@ -215,10 +223,10 @@
             loginBtn.classList.add('is-busy');
 
             try {
-                const result = await login(username, password, authMethod);
+                const result = await login(username, password, authMethod, rememberMe);
 
                 if (result.success) {
-                    window.location.href = returnUrl || 'explorer.html';
+                    window.location.href = returnUrl;
                     return;
                 }
                 showError(result.error || t('login.loginFailed'));

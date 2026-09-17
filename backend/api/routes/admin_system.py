@@ -18,7 +18,7 @@ from sqlalchemy import select, update, delete, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
-from api.middleware.auth import require_admin
+from api.middleware.auth import require_admin, require_recent_auth
 from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import MessageResponse, WorkerResponse
 from api.schemas_admin import (
@@ -73,7 +73,7 @@ async def list_samba_paths(
 async def create_samba_path(
     path_data: SambaPathCreate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Create new Samba path configuration."""
@@ -123,7 +123,7 @@ async def update_samba_path(
     path_id: int,
     path_data: SambaPathUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update Samba path configuration."""
@@ -184,7 +184,7 @@ async def update_samba_path(
 async def delete_samba_path(
     path_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Delete Samba path configuration."""
@@ -296,7 +296,7 @@ async def provision_worker(
     worker_id: int,
     provision_data: WorkerProvisionRequest,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
@@ -993,7 +993,7 @@ async def get_logging_config(
 async def update_logging_config(
     config_data: LogConfigUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):

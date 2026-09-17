@@ -3,7 +3,7 @@
  * Handles all API calls and WebSocket connections
  */
 
-import { getToken, getApiBaseUrl, logout } from './auth.js';
+import { getToken, getApiBaseUrl, redirectToLogin } from './auth.js';
 
 const API_BASE_URL = getApiBaseUrl();
 const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
@@ -17,11 +17,13 @@ let wsEventHandlers = [];
  * Make authenticated API request
  * @param {string} endpoint - API endpoint
  * @param {Object} options - Fetch options
+ * @param {boolean} [passwordConfirmed] - internal: already retried after a password confirmation
  * @returns {Promise<any>}
  */
-export async function apiRequest(endpoint, options = {}) {
+export async function apiRequest(endpoint, options = {}, passwordConfirmed = false) {
     const token = getToken();
     if (!token) {
+        redirectToLogin();
         throw new Error('Not authenticated');
     }
 
@@ -38,11 +40,23 @@ export async function apiRequest(endpoint, options = {}) {
         }
     });
 
-    // Handle unauthorized
+    // Handle unauthorized: the session expired or was ended
     if (response.status === 401) {
-        logout();
-        window.location.href = '/pages/login.html';
+        redirectToLogin();
         throw new Error('Unauthorized');
+    }
+
+    // Admin changes to system settings need a recent password confirmation:
+    // ask for it, then send the same request again
+    if (response.status === 403) {
+        const body = await response.clone().json().catch(() => ({}));
+        if (body.error?.code === 'reauth_required' && !passwordConfirmed) {
+            const { confirmPassword, notConfirmedError } = await import('./reauth.js');
+            if (await confirmPassword()) {
+                return apiRequest(endpoint, options, true);
+            }
+            throw notConfirmedError();
+        }
     }
 
     // Handle errors
@@ -312,8 +326,7 @@ export function uploadUpdateFile(file, onProgress) {
         }
         xhr.addEventListener('load', async () => {
             if (xhr.status === 401) {
-                logout();
-                window.location.href = '/pages/login.html';
+                redirectToLogin();
                 reject(new Error('Unauthorized'));
             } else if (xhr.status >= 200 && xhr.status < 300) {
                 resolve(xhr.response);
@@ -622,9 +635,15 @@ export async function connectWebSocket() {
             console.error('WebSocket error:', error);
         };
 
-        wsConnection.onclose = () => {
+        wsConnection.onclose = (event) => {
             console.log('WebSocket disconnected');
             wsConnection = null;
+
+            // 1008: the server refused the token (expired or invalid)
+            if (event.code === 1008) {
+                redirectToLogin();
+                return;
+            }
 
             // Attempt to reconnect after 5 seconds
             if (!wsReconnectTimer) {

@@ -18,7 +18,9 @@
     "showPassword": "Pokaż hasło",
     "hidePassword": "Ukryj hasło",
     "languageLabel": "Język",
-    "missingCredentials": "Podaj nazwę użytkownika i hasło."
+    "missingCredentials": "Podaj nazwę użytkownika i hasło.",
+    "rememberMeHint": "Niedostępne dla kont administratorów",
+    "sessionExpired": "Sesja wygasła. Zaloguj się ponownie, aby kontynuować."
   },
   "explorer": {
     "pageTitle": "Eksplorator – Menedżer plików",
@@ -347,5 +349,14 @@
     "stopSync": "Zatrzymaj sprawdzanie serwera obrazów",
     "stopSyncDone": "Sprawdzanie serwera obrazów zostało zatrzymane.",
     "stopSyncConfirm": "Serwer obrazów nie będzie już sprawdzany dla tego katalogu. Możesz później wznowić sprawdzanie z tego okna."
+  },
+  "reauth": {
+    "title": "Potwierdź hasło",
+    "message": "Zmiana ustawień systemu wymaga podania hasła.",
+    "confirm": "Potwierdź",
+    "cancel": "Anuluj",
+    "invalidPassword": "Nieprawidłowe hasło.",
+    "missingPassword": "Wpisz hasło.",
+    "notConfirmed": "Hasło nie zostało potwierdzone. Nic nie zmieniono."
   }
 }

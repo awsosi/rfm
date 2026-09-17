@@ -18,7 +18,9 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "languageLabel": "Language",
-    "missingCredentials": "Enter your username and password."
+    "missingCredentials": "Enter your username and password.",
+    "rememberMeHint": "Not available for administrator accounts",
+    "sessionExpired": "Your session has expired. Sign in again to continue."
   },
   "explorer": {
     "pageTitle": "Explorer - File Manager",
@@ -347,5 +349,14 @@
     "stopSync": "Stop checking image host",
     "stopSyncDone": "The image host check was stopped.",
     "stopSyncConfirm": "The image host will no longer be checked for this catalog. You can start checking again later from this dialog."
+  },
+  "reauth": {
+    "title": "Confirm your password",
+    "message": "Changing system settings requires your password.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "invalidPassword": "Incorrect password.",
+    "missingPassword": "Enter your password.",
+    "notConfirmed": "Password not confirmed. Nothing was changed."
   }
 }

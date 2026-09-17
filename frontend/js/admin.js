@@ -3,7 +3,7 @@
  * Single source of truth for all admin panel functionality.
  */
 
-import { checkAuth, logout, getCurrentUser } from './auth.js';
+import { checkAuth, logout, getCurrentUser, redirectToLogin, setupAutoRefresh } from './auth.js';
 import {
     getUsers, createUser, updateUser, deleteUser,
     getWorkers, approveWorker, rejectWorker,
@@ -71,7 +71,7 @@ async function loadAndApplyTheme() {
  */
 export function initAdminPanel() {
     if (!checkAuth()) {
-        window.location.href = 'login.html';
+        redirectToLogin();
         return;
     }
 
@@ -83,6 +83,7 @@ export function initAdminPanel() {
     }
 
     document.getElementById('user-name').textContent = currentUser.username;
+    setupAutoRefresh();
 
     // Load and apply theme
     loadAndApplyTheme();
@@ -825,6 +826,8 @@ export async function loadConfigurationData() {
         const fieldMappings = {
             'config-max-concurrent-users': 'max_concurrent_users',
             'config-session-lifetime': 'session_lifetime_days',
+            'config-session-remember-me-days': 'session_remember_me_days',
+            'config-admin-reauth-minutes': 'admin_reauth_minutes',
             'config-polka-auth-enabled': 'polka_auth_enabled',
             'config-polka-auth-url': 'polka_auth_url',
             'config-polka-auth-api-key': 'polka_auth_api_key',
@@ -932,6 +935,8 @@ export async function saveConfigurationData() {
     const fieldMappings = {
         'config-max-concurrent-users': 'max_concurrent_users',
         'config-session-lifetime': 'session_lifetime_days',
+        'config-session-remember-me-days': 'session_remember_me_days',
+        'config-admin-reauth-minutes': 'admin_reauth_minutes',
         'config-polka-auth-enabled': 'polka_auth_enabled',
         'config-polka-auth-url': 'polka_auth_url',
         'config-polka-auth-api-key': 'polka_auth_api_key',

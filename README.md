@@ -35,7 +35,8 @@ A production-ready, modular file management system designed for enterprise envir
 ### Security
 - ✅ HTTPS + TLS 1.3 minimum
 - ✅ mTLS (mutual TLS) for worker authentication
-- ✅ 30-day long-lived session tokens (HS256 JWT)
+- ✅ Session tokens (HS256 JWT): 5 days, 30 with "Remember me" (not for admins), adjustable in the Admin Panel
+- ✅ Admins confirm their password (every 15 min by default) before changing system settings
 - ✅ Argon2id password hashing
 - ✅ Role-based access control (admin, user)
 - ✅ Complete immutable audit trail
@@ -286,7 +287,10 @@ DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/filemanager
 
 # Security
 SECRET_KEY=<64-byte-random-string>
-ACCESS_TOKEN_EXPIRE_DAYS=30
+# Session policy (Admin Panel is authoritative; env seeds it when set)
+SESSION_LIFETIME_DAYS=5
+SESSION_REMEMBER_ME_DAYS=30
+ADMIN_REAUTH_MINUTES=15
 
 # Workers
 WORKER_HEARTBEAT_INTERVAL=30

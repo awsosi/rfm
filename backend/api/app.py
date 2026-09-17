@@ -112,6 +112,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
     import os as _os
 
     optional_env_configs = {
+        # Session policy
+        "session_lifetime_days": (("SESSION_LIFETIME_DAYS",), str(settings.session_lifetime_days)),
+        "session_remember_me_days": (("SESSION_REMEMBER_ME_DAYS",), str(settings.session_remember_me_days)),
+        "admin_reauth_minutes": (("ADMIN_REAUTH_MINUTES",), str(settings.admin_reauth_minutes)),
         # PIM signalling
         "pim_enabled": (("ENABLE_PIM", "PIM_ENABLED"), str(settings.pim_enabled).lower()),
         "pim_base_url": (("PIM_BASE_URL",), settings.pim_base_url or ""),

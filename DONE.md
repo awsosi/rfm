@@ -6,6 +6,26 @@
 
 ---
 
+## 2026-09-17 - Session lifetime, "Remember me", admin password confirmation
+
+**Why.** WebUI users were logged out every 30 min: `auth.js` ignored the server's `expires_in` and hard-coded 30 min in `sessionStorage` (see LESSONS_LEARNED). The Admin Panel's "Session Lifetime (days)" was never read; the API used env `ACCESS_TOKEN_EXPIRE_DAYS` (30).
+
+**Session policy** (config table, Admin Panel > Configuration > Session & User Management; env `SESSION_LIFETIME_DAYS` / `SESSION_REMEMBER_ME_DAYS` / `ADMIN_REAUTH_MINUTES` seed it only when set):
+- `session_lifetime_days` = 5: admins, and users without "Remember me". The token lives in `sessionStorage` (ends with the tab).
+- `session_remember_me_days` = 30: "Remember me" / "Zapamiętaj mnie" (the checkbox existed but did nothing). Token in `localStorage`, survives closing the browser. Never for admins: the API ignores the flag for them, also on refresh (a promoted user loses it). The login page says so under the checkbox.
+- Windows client device flow sessions count as remembered (not for admins). `ACCESS_TOKEN_EXPIRE_DAYS` removed.
+- An open page refreshes its token once half of the lifetime has passed (every minute and when the tab becomes visible); the server extends it by the current policy.
+
+**Expired session -> login.** `redirectToLogin()` for: a stored session past its expiry, any 401 (fetch and upload), WebSocket closed 1008, failed refresh. It goes to `login.html?expired=1&return=<page>`, which shows "Your session has expired" (EN/PL) and returns to the page after sign-in. `return` must be same-origin (it was followed blindly before). The admin page now also refreshes its session.
+
+**Admin password confirmation.** `require_recent_auth` guards changes to system settings: users (create/update/delete), workers (update/approve/suspend/delete/provision), config (PUT, POST, bulk), Samba paths, logging config. The password must have been typed in this session within `admin_reauth_minutes` (15); login counts, approving a device does not. Otherwise 403 `{"code": "reauth_required"}`; `apiRequest` opens a password dialog (a `<form>` with read-only `autocomplete="username"` and `autocomplete="current-password"`, so password managers fill it), `POST /api/auth/reauthenticate` (local hash or PolkaSQL; wrong password is 403 and keeps the session; audit `reauthenticate` / `reauthenticate_failed`), then retries the request once. Cancel/Escape sends nothing ("Password not confirmed. Nothing was changed."). Operational actions (worker commands, stop-all, test path, indexing) are not guarded.
+
+**Schema.** Migration `020`: `sessions.remember_me`, `sessions.reauthenticated_at`; seeds `session_remember_me_days`, `admin_reauth_minutes`; `session_lifetime_days` 30 -> 5 unless set by hand. Existing sessions keep their expiry; admins confirm their password on the first settings change.
+
+**Tests.** 111 passed, 17 errors (pre-existing `test_auth.py` fixture), PostgreSQL 16. `test_session_policy.py` (6) over HTTP through the real app: lifetimes with/without remember for user and admin, adjustable lifetime followed by refresh, promotion drops remember, expired session 401, guarded bulk/PUT config and user creation refused past the window with nothing written, reads unguarded, wrong password keeps the session, confirmation unlocks, audit rows, adjustable window, device flow sessions (admin device session must confirm). Mutation-checked: remembering admins, accepting sessions never confirmed, ignoring the configured window, login not counting, unguarding bulk config each turn a test red. Migration 020 downgrade/upgrade round-trip, hand-set value kept. Browser: 39 Playwright checks against the dev WebUI with a mocked API (storage per remember/admin, EN/PL labels and hint, expired notice and return with hash, foreign return ignored, 401 and WS 1008 redirects, half-life refresh, admin session fields load/save, dialog attributes, wrong password, retry once, Escape cancels, PL texts). They caught a real bug: parallel 401s overwrote the redirect and lost `expired=1`.
+
+---
+
 ## 2026-09-17 - PULL reports eventType "deleted" to PIM
 
 **Bug.** Dev PULL #21 (`OZDOBA PS261403 0-BRASS`) sent PIM `eventType "updated"` (event 13, delivered 200). PULL removes the catalog from PATH_B, so PIM must hear `deleted`. The code default, `Settings`, the env sync fallback, `.env.example` and the value seeded by migration 012 all said `updated` (the original mapping); PIM keys sync from env only when set, so the seeded DB value was what counted.

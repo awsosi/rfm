@@ -23,7 +23,7 @@ This database layer provides:
 
 ### Sessions Table
 - Token-based authentication
-- 30-day long-lived sessions
+- Sessions: 5 days by default, 30 with "Remember me" (not for admins); config `session_lifetime_days` / `session_remember_me_days`
 - IP and user agent tracking
 
 ### Workers Table

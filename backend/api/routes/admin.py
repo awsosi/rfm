@@ -11,7 +11,7 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
-from api.middleware.auth import get_current_user, require_admin
+from api.middleware.auth import get_current_user, require_admin, require_recent_auth
 from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import (
     IntegrationQueueResponse,
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 async def create_user(
     user_data: UserCreate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Create a new user."""
@@ -94,7 +94,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update user information."""
@@ -191,7 +191,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Delete a user."""
@@ -280,7 +280,7 @@ async def update_worker(
     worker_id: int,
     worker_data: WorkerUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update worker configuration (approve, suspend, update paths)."""
@@ -337,7 +337,7 @@ async def update_worker(
 async def approve_worker(
     worker_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Approve a pending worker."""
@@ -388,7 +388,7 @@ async def approve_worker(
 async def suspend_worker(
     worker_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Suspend an active worker."""
@@ -433,7 +433,7 @@ async def suspend_worker(
 async def delete_worker(
     worker_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Delete a worker."""
@@ -516,7 +516,7 @@ async def update_config(
     key: str,
     config_data: ConfigUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update a configuration entry."""
@@ -570,7 +570,7 @@ async def update_config(
 async def bulk_update_config(
     bulk_data: ConfigBulkUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Bulk update multiple configuration entries."""
@@ -635,7 +635,7 @@ async def create_or_update_config(
     key: str,
     config_data: ConfigUpdate,
     request: Request,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_recent_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Create or update a configuration entry."""

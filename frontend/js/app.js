@@ -3,7 +3,7 @@
  * Initializes and manages the file explorer application
  */
 
-import { checkAuth, logout, getCurrentUser, isAdmin, setupAutoRefresh } from './auth.js';
+import { checkAuth, logout, getCurrentUser, isAdmin, setupAutoRefresh, redirectToLogin } from './auth.js';
 import { initI18n, translatePage, t, setLocale, getCurrentLocale } from './i18n.js';
 import {
     listFiles,
@@ -153,47 +153,37 @@ async function init() {
 
     // Token-based auto-login (if token provided and not already logged in)
     if (token && !checkAuth()) {
-        const { TOKEN_KEY, USER_KEY, TOKEN_EXPIRY_KEY, API_BASE_URL } = await import('./auth.js');
-        sessionStorage.setItem(TOKEN_KEY, token);
+        const { API_BASE_URL, storeSession } = await import('./auth.js');
 
-        // Validate token by fetching user data
+        // Validate token by fetching the session it belongs to
         try {
             const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (userResponse.ok) {
-                const userData = await userResponse.json();
-                sessionStorage.setItem(USER_KEY, JSON.stringify({
-                    id: userData.user_id,
-                    username: userData.username,
-                    role: userData.role
-                }));
-                // Set token expiry
-                const expiryTime = Date.now() + userData.expires_in * 1000;
-                sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+                storeSession(await userResponse.json());
             } else {
-                // Invalid token, redirect to login
-                window.location.href = 'login.html';
+                redirectToLogin();
                 return;
             }
         } catch (error) {
             console.error('Token validation failed:', error);
-            window.location.href = 'login.html';
+            redirectToLogin();
             return;
         }
     }
 
     // Check authentication
     if (!checkAuth()) {
-        window.location.href = 'login.html';
+        redirectToLogin();
         return;
     }
 
     // Get current user
     const user = getCurrentUser();
     if (!user) {
-        window.location.href = 'login.html';
+        redirectToLogin();
         return;
     }
 

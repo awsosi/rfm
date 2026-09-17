@@ -5,7 +5,7 @@ Validates session tokens from database and attaches user information
 to request state for use in route handlers.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
 import jwt
@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import get_settings, Settings
 from api.schemas import TokenData
 from database import get_db
-from models import Session as SessionModel, User, UserRole
+from models import Config, Session as SessionModel, User, UserRole
 
 
 security = HTTPBearer()
@@ -227,6 +227,78 @@ def require_role(required_role: UserRole):
 # Convenience dependencies for common roles
 require_admin = require_role(UserRole.ADMIN)
 require_user = require_role(UserRole.USER)
+
+
+# =============================================================================
+# Session policy (Admin Panel: Session & User Management)
+# =============================================================================
+
+# Config key -> (default, minimum)
+SESSION_POLICY_DEFAULTS = {
+    "session_lifetime_days": (5, 1),
+    "session_remember_me_days": (30, 1),
+    "admin_reauth_minutes": (15, 1),
+}
+
+
+async def get_session_policy(db: AsyncSession) -> dict:
+    """Session policy from the config table, falling back to the defaults."""
+    result = await db.execute(
+        select(Config.key, Config.value).where(Config.key.in_(SESSION_POLICY_DEFAULTS))
+    )
+    stored = {row.key: row.value for row in result}
+    policy = {}
+    for key, (default, minimum) in SESSION_POLICY_DEFAULTS.items():
+        try:
+            policy[key] = max(int(stored.get(key, default)), minimum)
+        except (TypeError, ValueError):
+            policy[key] = default
+    return policy
+
+
+def session_expiry(policy: dict, user: User, remember_me: bool) -> tuple[datetime, bool]:
+    """
+    Expiry of a session opened (or refreshed) now, and whether it is remembered.
+
+    "Remember me" never applies to admins: their sessions always use the
+    standard lifetime.
+    """
+    remember = bool(remember_me) and user.role != UserRole.ADMIN
+    days = policy["session_remember_me_days" if remember else "session_lifetime_days"]
+    return datetime.now(timezone.utc) + timedelta(days=days), remember
+
+
+class ReauthenticationRequired(HTTPException):
+    """The admin must confirm their password before changing system settings."""
+
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "reauth_required",
+                "message": "Confirm your password to change system settings",
+            },
+        )
+
+
+async def require_recent_auth(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """
+    Admin whose password was typed in this session within ``admin_reauth_minutes``.
+
+    Guards changes to system settings. The client answers 403
+    ``reauth_required`` with POST /api/auth/reauthenticate and retries.
+    """
+    session = getattr(current_user, "_current_session", None)
+    confirmed_at = session.reauthenticated_at if session else None
+    if confirmed_at is None:
+        raise ReauthenticationRequired()
+    policy = await get_session_policy(db)
+    if datetime.now(timezone.utc) - confirmed_at > timedelta(minutes=policy["admin_reauth_minutes"]):
+        raise ReauthenticationRequired()
+    return current_user
 
 
 async def get_optional_user(

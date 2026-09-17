@@ -17,11 +17,13 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
-from api.middleware.auth import get_current_user
+from api.middleware.auth import get_current_user, get_session_policy, session_expiry
 from api.middleware.logging import AuditLogger, get_client_ip
 from api.schemas import (
     LoginRequest,
     LoginResponse,
+    MessageResponse,
+    ReauthenticateRequest,
     DeviceAuthorizationResponse,
     DeviceAuthorizationPollRequest,
     DeviceAuthorizationApprovalRequest,
@@ -294,39 +296,12 @@ async def _perform_login(
                 detail="Invalid username or password",
             )
 
-    # Create session
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.access_token_expire_days
+    # The password was just typed: counts as a confirmation for admin changes
+    session = await _open_session(
+        request, db, settings, user,
+        remember_me=login_data.remember_me,
+        reauthenticated_at=datetime.now(timezone.utc),
     )
-
-    session = SessionModel(
-        user_id=user.id,
-        token="",  # Will be set after generating JWT
-        expires_at=expires_at,
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
-    db.add(session)
-    await db.flush()
-
-    # Generate JWT token
-    token_data = {
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role.value,
-        "session_id": session.id,
-        "exp": expires_at,
-    }
-
-    access_token = jwt.encode(
-        token_data,
-        settings.secret_key,
-        algorithm=settings.algorithm,
-    )
-
-    # Update session with token
-    session.token = access_token
-    await db.commit()
 
     # Log successful login
     await AuditLogger.log_authentication(
@@ -335,19 +310,62 @@ async def _perform_login(
         success=True,
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
-        details={"session_id": session.id},
+        details={"session_id": session.id, "remember_me": session.remember_me},
     )
 
-    # Calculate expires_in seconds
-    expires_in = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+    return _session_response(session, user)
 
+
+def _encode_session_token(session: SessionModel, user: User, settings: Settings) -> str:
+    return jwt.encode(
+        {
+            "user_id": user.id,
+            "username": user.username,
+            "role": user.role.value,
+            "session_id": session.id,
+            "exp": session.expires_at,
+        },
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+
+async def _open_session(
+    request: Request,
+    db: AsyncSession,
+    settings: Settings,
+    user: User,
+    remember_me: bool,
+    reauthenticated_at: datetime | None = None,
+) -> SessionModel:
+    """Create and commit a session whose lifetime follows the session policy."""
+    expires_at, remember = session_expiry(await get_session_policy(db), user, remember_me)
+    session = SessionModel(
+        user_id=user.id,
+        token="",  # Set once the id is known
+        expires_at=expires_at,
+        remember_me=remember,
+        reauthenticated_at=reauthenticated_at,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.add(session)
+    await db.flush()
+    session.token = _encode_session_token(session, user, settings)
+    await db.commit()
+    return session
+
+
+def _session_response(session: SessionModel, user: User, **extra) -> LoginResponse:
     return LoginResponse(
-        access_token=access_token,
+        access_token=session.token,
         token_type="bearer",
-        expires_in=expires_in,
+        expires_in=max(int((session.expires_at - datetime.now(timezone.utc)).total_seconds()), 0),
         user_id=user.id,
         username=user.username,
         role=user.role,
+        remember_me=session.remember_me,
+        **extra,
     )
 
 
@@ -466,21 +484,15 @@ async def get_current_user_info(
     """
     session = getattr(current_user, "_current_session", None)
 
-    if session:
-        expires_in = int(
-            (session.expires_at - datetime.now(timezone.utc)).total_seconds()
+    if not session:
+        return LoginResponse(
+            access_token="",
+            expires_in=0,
+            user_id=current_user.id,
+            username=current_user.username,
+            role=current_user.role,
         )
-    else:
-        expires_in = 0
-
-    return LoginResponse(
-        access_token=session.token if session else "",
-        token_type="bearer",
-        expires_in=expires_in,
-        user_id=current_user.id,
-        username=current_user.username,
-        role=current_user.role,
-    )
+    return _session_response(session, current_user)
 
 
 @router.post("/refresh")
@@ -508,43 +520,56 @@ async def refresh_token(
             detail="No active session",
         )
 
-    # Extend expiration
-    new_expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.access_token_expire_days
+    # Extend by the current policy; a user promoted to admin loses "Remember me"
+    session.expires_at, session.remember_me = session_expiry(
+        await get_session_policy(db), current_user, session.remember_me
     )
-
-    # Generate new token
-    token_data = {
-        "user_id": current_user.id,
-        "username": current_user.username,
-        "role": current_user.role.value,
-        "session_id": session.id,
-        "exp": new_expires_at,
-    }
-
-    new_token = jwt.encode(
-        token_data,
-        settings.secret_key,
-        algorithm=settings.algorithm,
-    )
-
-    # Update session
-    session.token = new_token
-    session.expires_at = new_expires_at
+    session.token = _encode_session_token(session, current_user, settings)
     await db.commit()
 
-    expires_in = int(
-        (new_expires_at - datetime.now(timezone.utc)).total_seconds()
-    )
+    return _session_response(session, current_user)
 
-    return LoginResponse(
-        access_token=new_token,
-        token_type="bearer",
-        expires_in=expires_in,
+
+@router.post("/reauthenticate", response_model=MessageResponse)
+async def reauthenticate(
+    request: Request,
+    body: ReauthenticateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Confirm the current user's password within this session.
+
+    Admin changes to system settings require a confirmation no older than
+    ``admin_reauth_minutes`` (see ``require_recent_auth``).
+    """
+    session = getattr(current_user, "_current_session", None)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No active session")
+
+    if current_user.is_polka_auth:
+        valid, _ = await verify_polka_credentials(current_user.username, body.password, db)
+    else:
+        try:
+            valid = ph.verify(current_user.password_hash, body.password)
+        except VerifyMismatchError:
+            valid = False
+
+    await AuditLogger.log_authentication(
         user_id=current_user.id,
-        username=current_user.username,
-        role=current_user.role,
+        action="reauthenticate" if valid else "reauthenticate_failed",
+        success=valid,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details={"session_id": session.id},
     )
+    if not valid:
+        # 403, not 401: a wrong password must not end the session
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid password")
+
+    session.reauthenticated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return MessageResponse(message="Password confirmed")
 
 
 # =============================================================================
@@ -682,39 +707,8 @@ async def device_authorization_poll(
             detail="User not found",
         )
 
-    # Create session for the device
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.access_token_expire_days
-    )
-
-    session = SessionModel(
-        user_id=user.id,
-        token="",  # Will be set after generating JWT
-        expires_at=expires_at,
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
-    db.add(session)
-    await db.flush()
-
-    # Generate JWT token
-    token_data = {
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role.value,
-        "session_id": session.id,
-        "exp": expires_at,
-    }
-
-    access_token = jwt.encode(
-        token_data,
-        settings.secret_key,
-        algorithm=settings.algorithm,
-    )
-
-    # Update session with token
-    session.token = access_token
-    await db.commit()
+    # The Windows client keeps its credentials, like "Remember me" (not for admins)
+    session = await _open_session(request, db, settings, user, remember_me=True)
 
     # Clean up device authorization request
     await db.delete(device_auth)
@@ -730,21 +724,8 @@ async def device_authorization_poll(
         details={"device_code": device_auth.device_code, "user_code": device_auth.user_code},
     )
 
-    # Calculate expires_in seconds
-    expires_in = int((expires_at - datetime.now(timezone.utc)).total_seconds())
-
-    # Generate refresh token (same as access token for now, can be different in future)
-    refresh_token = access_token
-
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=expires_in,
-        user_id=user.id,
-        username=user.username,
-        role=user.role,
-        refresh_token=refresh_token,
-    )
+    # Refresh token is the access token for now
+    return _session_response(session, user, refresh_token=session.token)
 
 
 @router.post("/device/approve")

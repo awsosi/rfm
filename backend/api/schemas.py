@@ -32,6 +32,7 @@ class LoginRequest(BaseModel):
         default="auto",
         description="Authentication method: 'auto' (try PolkaSQL first, fallback to local), 'polka' (only PolkaSQL), 'local' (only local)"
     )
+    remember_me: bool = Field(default=False, description="Keep the session longer; ignored for admins")
 
     @field_validator('auth_method')
     @classmethod
@@ -54,6 +55,13 @@ class LoginResponse(BaseModel):
     username: str
     role: UserRole
     refresh_token: Optional[str] = Field(None, description="Refresh token for device flow")
+    remember_me: bool = Field(False, description="Session is remembered (always false for admins)")
+
+
+class ReauthenticateRequest(BaseModel):
+    """Password confirmation for admin changes to system settings."""
+
+    password: str = Field(..., min_length=1)
 
 
 class DeviceAuthorizationResponse(BaseModel):
