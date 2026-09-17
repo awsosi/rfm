@@ -437,6 +437,7 @@ pytest --cov=. --cov-report=html   # Coverage report
 - External auth (Sybase/PolkaSQL) supported via `ENABLE_POLKA_AUTH`
 - All passwords hashed with Argon2id (OWASP recommended)
 - Path traversal protection in `workers/FileManagerWorker/FileOperations.cs`
+- Secrets in `.env` and the `config` table are readable by AI sessions on this host; the owner rotates them afterwards with `scripts/rotate-secrets.sh`. Never print secret values: check lengths, counts or booleans instead
 
 ---
 

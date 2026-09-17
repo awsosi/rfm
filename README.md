@@ -338,6 +338,24 @@ Key settings:
 9. **Use RBAC** - limit admin privileges to necessary personnel only
 10. **Enable external auth** (Sybase) for centralized authentication
 
+### Rotating secrets after AI tools or shared shell access
+
+Anyone who can read `.env`, the database or the containers on the host (including AI coding tools such as Claude Code or Codex) can see the internal secrets. Rotate them when such a session is over:
+
+```bash
+scripts/rotate-secrets.sh --dry-run   # checks only, changes nothing
+scripts/rotate-secrets.sh             # dev + prod, press ENTER to confirm
+scripts/rotate-secrets.sh prod        # one environment (dev or prod)
+```
+
+It generates new `POSTGRES_PASSWORD`, `REDIS_PASSWORD` and `SECRET_KEY` values, changes the database role password (sent as a SCRAM verifier, so it never appears in logs), updates `.env` (mode 600), restarts postgres, redis and api, and waits until the API reaches both with the new passwords. No value is printed or passed on a command line.
+
+- Every user and Windows client is signed out; unused UPDATE upload links stop working. Workers are not affected.
+- It refuses to run while operations are pending or in progress (`--force` overrides).
+- If a step fails it says what state it left and how to recover. Running it again is always safe.
+- External API keys (PIM `X-API-TOKEN`, PolkaSQL, catalog validation, ROSAPI, remote audit) cannot be rotated from here. The script lists the ones that are set; rotate them at the provider and save the new values in Admin Panel -> Configuration.
+- It warns about active accounts that still accept `admin123` or `INITIAL_ADMIN_PASSWORD`.
+
 ## 📖 API Documentation
 
 ### Authentication Endpoints
