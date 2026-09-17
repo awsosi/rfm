@@ -18,7 +18,7 @@ Found while writing the Polish user guide (`docs/instructions/`).
 
 **Other untranslated strings on user pages.** History "Unknown" user, "unknown error" in PUSH batch failures, Windows deep-link "Folder not found" / "No paths could be resolved", device approval "Unknown error". `resolveWindowsPath` now uses `apiRequest`: it read `error.detail` from a `{"error": ...}` body, so every failure said "Failed to resolve path". `handlePushAction` printed a raw `{error}` placeholder. The admin panel itself is still English only.
 
-**Verified** with Playwright against the dev WebUI in pl-PL and en-US (no console errors or missing keys) and the English fallback on a page without i18n.
+**Verified** with Playwright against the dev WebUI in pl-PL and en-US (no console errors or missing keys), the English fallback on a page without i18n, and after redeploy real runs as `tester`: PUSH #35/#36 (Push disabled afterwards), PULL #37 and #41 (Pull/Update disabled afterwards), UPDATE #38-#40, right-click push of one folder while another was ticked (#42, only the right-clicked one pushed; pulled back in #43).
 
 ## 2026-09-17 - Session lifetime, "Remember me", admin password confirmation
 

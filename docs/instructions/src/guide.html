@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Menedżer plików – instrukcja użytkownika</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+:root{
+  --ink:#0f172a; --muted:#475569; --soft:#64748b; --line:#e2e8f0;
+  --blue:#2563eb; --blue-bg:#eff6ff; --blue-line:#bfdbfe;
+  --green:#15803d; --green-bg:#f0fdf4; --green-line:#bbf7d0;
+  --amber:#b45309; --amber-bg:#fffbeb; --amber-line:#fde68a;
+  --red:#b91c1c; --red-bg:#fef2f2; --red-line:#fecaca;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff}
+body{font-family:Roboto,"Segoe UI",sans-serif;color:var(--ink);font-size:10.6pt;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1,h2,h3,h4{line-height:1.25;margin:0}
+h2{font-size:19pt;color:var(--ink);margin:0 0 4mm;padding-bottom:2.5mm;border-bottom:2px solid var(--blue)}
+h2 .num{color:var(--blue);margin-right:2.5mm}
+h3{font-size:13pt;margin:6mm 0 2.5mm;color:#1e293b}
+h4{font-size:11pt;margin:4.5mm 0 1.5mm;color:#1e293b}
+p{margin:0 0 2.6mm}
+ul,ol{margin:0 0 3mm;padding-left:6mm}
+li{margin:0 0 1.2mm}
+.chapter{break-before:page}
+.lead{font-size:11.5pt;color:var(--muted);margin-bottom:4mm}
+b,strong{font-weight:600}
+.ui{display:inline-block;padding:0 1.6mm;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;font-weight:500;font-size:9.8pt;white-space:nowrap;line-height:1.45}
+.ui.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.tag{display:inline-block;padding:0 1.8mm;border-radius:4px;font-weight:700;font-size:8.8pt;letter-spacing:.3px;line-height:1.55}
+.tag.push{background:#dbeafe;color:#1d4ed8}.tag.pull{background:#fef3c7;color:#b45309}.tag.update{background:#cffafe;color:#0e7490}
+code,.path{font-family:"DejaVu Sans Mono",monospace;font-size:9pt;background:#f1f5f9;padding:0 1.2mm;border-radius:3px;white-space:nowrap}
+.box{border:1px solid;border-radius:6px;padding:3mm 4mm 1.2mm 11mm;margin:3mm 0 4mm;position:relative;break-inside:avoid}
+.box::before{position:absolute;left:3.6mm;top:2.6mm;font-weight:700;font-size:11pt}
+.box.info{background:var(--blue-bg);border-color:var(--blue-line)}.box.info::before{content:"i";color:var(--blue);left:4.8mm}
+.box.tip{background:var(--green-bg);border-color:var(--green-line)}.box.tip::before{content:"✓";color:var(--green)}
+.box.warn{background:var(--amber-bg);border-color:var(--amber-line)}.box.warn::before{content:"!";color:var(--amber);left:4.9mm}
+.box.stop{background:var(--red-bg);border-color:var(--red-line)}.box.stop::before{content:"✕";color:var(--red)}
+.box .t{font-weight:600;display:block;margin-bottom:1mm}
+figure{margin:3mm 0 5mm;break-inside:avoid;text-align:center}
+figure img{max-width:100%;border:1px solid #cbd5e1;border-radius:5px;box-shadow:0 1px 4px rgba(15,23,42,.08);display:block;margin:0 auto}
+figure.s img{max-width:62%} figure.xs img{max-width:44%} figure.m img{max-width:78%} figure.tall img{max-height:118mm;width:auto}
+figure.tall2 img{max-height:150mm;width:auto}
+figcaption{font-size:9pt;color:var(--soft);margin-top:1.6mm}
+figcaption b{color:var(--muted)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0 0 3mm}
+.steps>li{counter-increment:s;position:relative;padding-left:10mm;margin-bottom:2.6mm;min-height:7mm}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:6.6mm;height:6.6mm;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:9.5pt;display:flex;align-items:center;justify-content:center}
+table{border-collapse:collapse;width:100%;margin:2mm 0 4mm;font-size:9.8pt}
+tr{break-inside:avoid}
+h2,h3,h4{break-after:avoid;page-break-after:avoid}
+th,td{border:1px solid var(--line);padding:1.6mm 2.4mm;text-align:left;vertical-align:top}
+th{background:#f1f5f9;font-weight:600;color:#1e293b}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:5mm;align-items:start}
+.two figure{margin-top:0}
+.annot{position:relative;display:block;margin:0 auto}
+.annot img{width:100%}
+.mk{position:absolute;width:6.4mm;height:6.4mm;margin:-3.2mm 0 0 -3.2mm;border-radius:50%;background:#dc2626;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.2px #fff,0 1px 3px rgba(0,0,0,.4)}
+.legend{columns:2;column-gap:7mm;font-size:9.8pt}
+.legend li{break-inside:avoid}
+.legend .n{display:inline-flex;width:5mm;height:5mm;border-radius:50%;background:#dc2626;color:#fff;font-weight:700;font-size:8pt;align-items:center;justify-content:center;margin-right:1.5mm;vertical-align:1px}
+/* cover */
+.cover{height:262mm;display:flex;flex-direction:column;justify-content:space-between;padding:6mm 2mm 0}
+.cover .brand{display:flex;align-items:center;gap:4mm;color:var(--blue);font-weight:600;font-size:12pt}
+.cover .logo{width:13mm;height:13mm;border-radius:3.2mm;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:flex;align-items:center;justify-content:center}
+.cover h1{font-size:33pt;letter-spacing:-.5px;margin:0 0 5mm}
+.cover .sub{font-size:14.5pt;color:var(--muted);max-width:150mm}
+.cover .ops{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin-top:14mm}
+.cover .op{border:1px solid var(--line);border-radius:8px;padding:4mm}
+.cover .op .tag{font-size:10pt}
+.cover .op p{margin:2mm 0 0;font-size:10pt;color:var(--muted)}
+.cover .meta{font-size:9.5pt;color:var(--soft);border-top:1px solid var(--line);padding-top:4mm}
+.toc{list-style:none;padding:0;margin:0}
+.toc>li{margin:0 0 2.2mm;font-size:11.5pt}
+.toc a{color:var(--ink);text-decoration:none}
+.toc .n{display:inline-block;width:9mm;color:var(--blue);font-weight:700}
+.toc ul{list-style:none;padding-left:9mm;margin:1mm 0 0}
+.toc ul li{font-size:10pt;color:var(--muted);margin:0 0 .6mm}
+.toc ul a{color:var(--muted)}
+.flow{display:flex;align-items:center;justify-content:center;gap:3mm;margin:4mm 0 5mm;font-size:9.8pt;break-inside:avoid}
+.flow .node{border:1.5px solid #94a3b8;border-radius:6px;padding:2.5mm 3.5mm;text-align:center;background:#f8fafc;min-width:34mm}
+.flow .node b{display:block;font-size:10.5pt}
+.flow .arr{display:flex;flex-direction:column;align-items:center;color:var(--soft);font-size:8.6pt;gap:.5mm}
+.flow .arr span.a{font-size:15pt;line-height:1;color:#334155}
+.small{font-size:9.2pt;color:var(--muted)}
+.keep{break-inside:avoid}
+</style>
+</head>
+<body>
+
+<!-- ============ OKŁADKA ============ -->
+<section class="cover">
+  <div>
+    <div class="brand"><span class="logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7A1.5 1.5 0 0 1 19 9.7"/><path d="M3 8.8h16.6a1.4 1.4 0 0 1 1.38 1.66l-1.3 7A1.6 1.6 0 0 1 18.1 18.8H5.2a1.6 1.6 0 0 1-1.57-1.3l-1.3-7"/></svg></span>Menedżer plików (RFM)</div>
+    <div style="margin-top:38mm">
+      <h1>Instrukcja użytkownika</h1>
+      <div class="sub">Jak wysyłać, cofać i aktualizować katalogi zdjęć produktów – krok po kroku, na prawdziwych przykładach.</div>
+    </div>
+    <div class="ops">
+      <div class="op"><span class="tag push">PUSH</span> <b>Wyślij</b><p>Wysyła gotowy katalog zdjęć ze Ścieżki A.</p></div>
+      <div class="op"><span class="tag pull">PULL</span> <b>Cofnij</b><p>Zabiera wysłany katalog z powrotem do Ścieżki A.</p></div>
+      <div class="op"><span class="tag update">UPDATE</span> <b>Aktualizuj katalog</b><p>Poprawia pliki w katalogu, który już został wysłany.</p></div>
+    </div>
+  </div>
+  <div class="meta">
+    Wersja z 17 września 2026 r. · Zrzuty ekranu wykonano w środowisku testowym <b>https://dev.ff.vitkac.local</b> na koncie <b>tester</b>,
+    na katalogach <b>OZDOBA PS261403 0-BRASS</b> i <b>TORBA HB0788 FA0542-910 SILVER</b> (folder <span class="path">A:/tester</span>).
+    Numery operacji (np. #35) pochodzą z tych testów – u Ciebie będą inne.
+  </div>
+</section>
+
+<!-- ============ SPIS TREŚCI ============ -->
+<section class="chapter">
+  <h2>Spis treści</h2>
+  <ol class="toc">
+    <li><a href="#r1"><span class="n">1</span>Najważniejsze w 2 minuty</a></li>
+    <li><a href="#r2"><span class="n">2</span>Zasady dobrego katalogu</a></li>
+    <li><a href="#r3"><span class="n">3</span>Logowanie i ekran główny</a></li>
+    <li><a href="#r4"><span class="n">4</span>Przygotowanie katalogów prosto z Eksploratora Windows</a>
+      <ul><li>Menu „Przygotuj zaznaczone do wysłania przez RFM” · pierwsze uruchomienie</li></ul></li>
+    <li><a href="#r5"><span class="n">5</span>Wysyłanie katalogu – <span class="tag push">PUSH</span></a></li>
+    <li><a href="#r6"><span class="n">6</span>Cofanie katalogu, który nie był aktualizowany – <span class="tag pull">PULL</span></a></li>
+    <li><a href="#r7"><span class="n">7</span>Aktualizacja wysłanego katalogu – <span class="tag update">UPDATE</span></a>
+      <ul>
+        <li><a href="#r7-1">7.1 Otwieranie okna aktualizacji</a></li>
+        <li><a href="#r7-2">7.2 Sposób 1: pliki ze Ścieżki A (dodanie + zmiana nazwy)</a></li>
+        <li><a href="#r7-3">7.3 Sposób 2: pliki z komputera (zastąpienie + dodanie)</a></li>
+        <li><a href="#r7-4">7.4 Zastąpienie plikiem ze Ścieżki A i usuwanie pliku</a></li>
+        <li><a href="#r7-5">7.5 Ściąga: wszystkie opcje aktualizacji</a></li>
+      </ul></li>
+    <li><a href="#r8"><span class="n">8</span>Cofanie katalogu po aktualizacji – <span class="tag pull">PULL</span></a></li>
+    <li><a href="#r9"><span class="n">9</span>Praca w aplikacji – wszystkie opcje dokładnie</a>
+      <ul>
+        <li><a href="#r9-1">9.1 Górny pasek</a> · <a href="#r9-2">9.2 Panel „Ścieżka A”</a> · <a href="#r9-3">9.3 Przyciski środkowe</a></li>
+        <li><a href="#r9-4">9.4 Historia operacji</a> · <a href="#r9-5">9.5 Znaczki PIM i synchronizacji</a> · <a href="#r9-6">9.6 Okno szczegółów operacji</a></li>
+        <li><a href="#r9-7">9.7 Ustawienia</a> · <a href="#r9-8">9.8 Komunikaty</a></li>
+      </ul></li>
+    <li><a href="#r10"><span class="n">10</span>Problemy i pytania</a></li>
+  </ol>
+</section>
+
+<!-- ============ 1 ============ -->
+<section class="chapter" id="r1">
+  <h2><span class="num">1</span>Najważniejsze w 2 minuty</h2>
+  <p class="lead">Menedżer plików przenosi katalogi ze zdjęciami produktów z miejsca, w którym je przygotowujesz, do miejsca, z którego korzysta sklep. Robi to za pomocą trzech operacji.</p>
+
+  <div class="flow">
+    <div class="node"><b>Ścieżka A</b>tu przygotowujesz<br>katalogi zdjęć</div>
+    <div class="arr">Wyślij (PUSH)<span class="a">→</span><span class="a">←</span>Cofnij (PULL)</div>
+    <div class="node"><b>Miejsce docelowe</b>stąd zdjęcia trafiają<br>do PIM i sklepu</div>
+    <div class="arr"><span class="a">↻</span>Aktualizuj katalog<br>(UPDATE)</div>
+  </div>
+
+  <table>
+    <tr><th style="width:24%">Pojęcie</th><th>Co to znaczy</th></tr>
+    <tr><td><b>Katalog</b></td><td>Folder ze zdjęciami jednego produktu. Jego nazwa to nazwa produktu, np. <b>TORBA HB0788 FA0542-910 SILVER</b>.</td></tr>
+    <tr><td><b>Ścieżka A</b></td><td>Folder sieciowy, w którym przygotowujesz katalogi. W aplikacji jego początek oznaczony jest jako <span class="path">A:</span>, a dalsze foldery po ukośniku, np. <span class="path">A:/tester</span>. W środowisku testowym to udział <span class="path">\\192.168.100.4\DaneFoto-test</span>.</td></tr>
+    <tr><td><span class="tag push">PUSH</span> – przycisk <span class="ui">Wyślij →</span></td><td>Kopiuje katalog do miejsca docelowego i <b>usuwa go ze Ścieżki A</b>. System PIM dostaje automatyczne powiadomienie o nowym katalogu.</td></tr>
+    <tr><td><span class="tag pull">PULL</span> – przycisk <span class="ui">← Cofnij</span></td><td>Odwrotność wysłania: kopiuje katalog z powrotem do Ścieżki A (w to samo miejsce, z którego był wysłany) i usuwa go z miejsca docelowego. PIM dostaje powiadomienie o wycofaniu.</td></tr>
+    <tr><td><span class="tag update">UPDATE</span> – przycisk <span class="ui">Aktualizuj katalog</span></td><td>Zmienia pliki w katalogu, który <b>już został wysłany</b>: zmiana nazwy, usunięcie, zastąpienie, dodanie pliku. Nie trzeba niczego cofać. PIM dostaje powiadomienie o zmianie.</td></tr>
+    <tr><td><b>Historia operacji</b></td><td>Lista wszystkich wysłań, cofnięć i aktualizacji (także innych osób). Stąd wybierasz katalog do cofnięcia lub aktualizacji.</td></tr>
+  </table>
+
+  <div class="box info"><span class="t">Nazwy w aplikacji</span>Przyciski mają polskie nazwy (<b>Wyślij</b>, <b>Cofnij</b>, <b>Aktualizuj katalog</b>), a w historii operacji i w oknach potwierdzeń pojawiają się angielskie skróty <b>PUSH</b>, <b>PULL</b>, <b>UPDATE</b> oraz nazwy <b>PATH_B</b> (miejsce docelowe) i <b>PATH_C</b> (archiwum). Oznaczają dokładnie to samo.</div>
+
+  <h3>Typowy dzień pracy</h3>
+  <ol class="steps">
+    <li>Przygotowujesz folder produktu ze zdjęciami <code>1.jpg</code>, <code>2.jpg</code>… w Ścieżce A.</li>
+    <li>Klikasz folder prawym przyciskiem w Eksploratorze Windows → <b>Przygotuj zaznaczone do wysłania przez RFM</b> (albo sam wyszukujesz go w aplikacji).</li>
+    <li>W aplikacji klikasz <span class="ui primary">Wyślij →</span> i potwierdzasz.</li>
+    <li>Jeśli trzeba coś poprawić – wybierasz katalog w historii i klikasz <span class="ui">Aktualizuj katalog</span>.</li>
+    <li>Jeśli katalog w ogóle nie powinien być wysłany – wybierasz go w historii i klikasz <span class="ui">← Cofnij</span>.</li>
+  </ol>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="chapter" id="r2">
+  <h2><span class="num">2</span>Zasady dobrego katalogu</h2>
+  <p class="lead">Zanim cokolwiek zostanie wysłane lub zaktualizowane, aplikacja sprawdza katalog. Jeśli któraś zasada nie jest spełniona, operacja się nie wykona i nic nie zostanie zmienione. Oto zasady obowiązujące w chwili pisania instrukcji:</p>
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:37%">Zasada</th><th>Przykład</th></tr>
+    <tr><td>1</td><td><b>Nazwa folderu = nazwa istniejącego produktu</b> w systemie (PolkaSQL).</td><td><b>OZDOBA PS261403 0-BRASS</b> ✓. Przy literówce aplikacja może podpowiedzieć podobne nazwy produktów.</td></tr>
+    <tr><td>2</td><td>Co najmniej <b>2 pliki ze zdjęciami</b>.</td><td>Dozwolone formaty: jpg, jpeg, png, gif, bmp, tif, tiff, webp.</td></tr>
+    <tr><td>3</td><td>Pliki nazwane <b>samym numerem</b> i rozszerzeniem.</td><td><code>1.jpg</code>, <code>2.png</code>, <code>10.jpg</code> ✓ &nbsp;·&nbsp; <code>okladka.png</code>, <code>zdjecie 1.jpg</code>, <code>1a.jpg</code> ✗</td></tr>
+    <tr><td>4</td><td>Plik musi <b>naprawdę być zdjęciem</b> w podanym formacie.</td><td>Dokument ze zmienioną końcówką na <code>.jpg</code> zostanie odrzucony.</td></tr>
+    <tr><td>5</td><td>Pliki systemowe są <b>pomijane i usuwane</b>.</td><td><code>Thumbs.db</code>, <code>desktop.ini</code>, <code>ehthumbs.db</code>, <code>.DS_Store</code>, <code>._*</code>, <code>.localized</code>, <code>.apdisk</code> – nie liczą się do zdjęć i nie są wysyłane.</td></tr>
+  </table>
+  <div class="box tip"><span class="t">Dobra praktyka</span>Trzymaj w katalogu wyłącznie ponumerowane zdjęcia, bez podfolderów i innych plików. Wtedy wysyłka zawsze przejdzie za pierwszym razem.</div>
+
+  <h3>Jak wygląda odmowa</h3>
+  <p>Gdy zasada nie jest spełniona, pojawi się okno <b>„Nie można kontynuować”</b> z nazwą katalogu, powodem i podsumowaniem. Poniżej przykład z testu: próbowaliśmy zmienić nazwę pliku <code>1.png</code> na <code>okladka.png</code>. Aplikacja odmówiła, a katalog pozostał bez zmian.</p>
+  <figure class="s"><img src="img/validation_error.jpg"><figcaption><b>Rys. 1.</b> Odmowa z powodu złej nazwy pliku. Wiersz „7 z 2 wymaganych plików graficznych” znaczy: jest 7 zdjęć, a wymagane są co najmniej 2.</figcaption></figure>
+  <table>
+    <tr><th style="width:44%">Komunikat w oknie</th><th>Co zrobić</th></tr>
+    <tr><td>„Nierozpoznana nazwa katalogu” / „… nie odpowiada żadnemu produktowi w PolkaSQL”</td><td>Popraw nazwę folderu. Jeśli pod spodem są podpowiedzi („Czy chodziło o jedną z tych nazw?”), użyj właściwej.</td></tr>
+    <tr><td>„Ten folder zawiera X plików graficznych; wymagane są co najmniej 2.”</td><td>Dodaj zdjęcia.</td></tr>
+    <tr><td>„PIM przyjmuje tylko pliki o nazwie &lt;numer&gt;.&lt;rozszerzenie&gt;…”</td><td>Zmień nazwy wymienionych plików na numery albo je usuń.</td></tr>
+    <tr><td>„Niektóre pliki nie są w rzeczywistości obrazami…”</td><td>Usuń lub podmień wymienione pliki na prawdziwe zdjęcia.</td></tr>
+    <tr><td>„Nie można połączyć się z PolkaSQL…” / „…nie odpowiedział w wyznaczonym czasie”</td><td>Spróbuj ponownie za chwilę. Gdy się powtarza – zgłoś administratorowi.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="chapter" id="r3">
+  <h2><span class="num">3</span>Logowanie i ekran główny</h2>
+  <div class="two">
+    <figure style="margin-top:0"><img src="img/login_filled.jpg" style="max-width:88%"><figcaption><b>Rys. 2.</b> Ekran logowania</figcaption></figure>
+    <div>
+      <ol class="steps">
+        <li>Otwórz adres Menedżera plików w przeglądarce (środowisko testowe: <b>https://dev.ff.vitkac.local</b>).</li>
+        <li>Wpisz <b>Nazwę użytkownika</b> i <b>Hasło</b>. Ikona oka pokazuje wpisane hasło.</li>
+        <li>Wybierz <b>Metodę uwierzytelniania</b>:
+          <ul>
+            <li><b>PolkaSQL</b> – logowanie kontem z systemu PolkaSQL,</li>
+            <li><b>Lokalna</b> – konto założone bezpośrednio w Menedżerze plików (np. konto <b>tester</b>).</li>
+          </ul>Jeśli nie wiesz, którą wybrać – zapytaj administratora.</li>
+        <li>Opcjonalnie zaznacz <b>Zapamiętaj mnie</b>.</li>
+        <li>Kliknij <span class="ui primary">Zaloguj się</span>.</li>
+      </ol>
+      <table>
+        <tr><th>„Zapamiętaj mnie”</th><th>Co się dzieje</th></tr>
+        <tr><td>nie zaznaczone</td><td>Wylogujesz się po zamknięciu karty lub przeglądarki.</td></tr>
+        <tr><td>zaznaczone</td><td>Pozostajesz zalogowany do 30 dni, także po zamknięciu przeglądarki. Opcja nie działa dla kont administratorów.</td></tr>
+      </table>
+      <p class="small">Przełącznik <b>EN / PL</b> na dole zmienia język ekranu logowania.</p>
+    </div>
+  </div>
+
+  <h3>Ekran główny – co gdzie jest</h3>
+  <p>Ekran ma trzy części: po lewej <b>Ścieżka A</b> (Twoje foldery), w środku <b>przyciski operacji</b>, po prawej <b>Historia operacji</b>.</p>
+  <figure>
+    <div class="annot">
+      <img src="img/main_tester.jpg" style="border:1px solid #cbd5e1;border-radius:5px">
+      <span class="mk" style="left:17.2%;top:10.4%">1</span>
+      <span class="mk" style="left:40.3%;top:15.4%">2</span>
+      <span class="mk" style="left:39.6%;top:10.3%">3</span>
+      <span class="mk" style="left:44.2%;top:8%">4</span>
+      <span class="mk" style="left:4.4%;top:26.6%">5</span>
+      <span class="mk" style="left:21.3%;top:30.2%">6</span>
+      <span class="mk" style="left:10.8%;top:41.4%">7</span>
+      <span class="mk" style="left:45.4%;top:40.4%">8</span>
+      <span class="mk" style="left:13.9%;top:10.4%;display:none"></span>
+      <span class="mk" style="left:73%;top:14.6%">9</span>
+      <span class="mk" style="left:84.6%;top:10.3%">10</span>
+      <span class="mk" style="left:60.3%;top:19.4%">11</span>
+      <span class="mk" style="left:76.4%;top:24.4%">12</span>
+      <span class="mk" style="left:89.2%;top:6.8%">13</span>
+    </div>
+    <figcaption><b>Rys. 3.</b> Ekran główny po przejściu do folderu <span class="path">A:/tester</span></figcaption>
+  </figure>
+  <ol class="legend" style="list-style:none;padding:0">
+    <li><span class="n">1</span><b>Ścieżka A</b> – lista folderów i plików.</li>
+    <li><span class="n">2</span><b>Pasek ścieżki</b> – gdzie jesteś; kliknij, aby przejść wyżej lub wpisać ścieżkę.</li>
+    <li><span class="n">3</span><b>Szukaj katalogów…</b> – zawęża listę do pasujących nazw.</li>
+    <li><span class="n">4</span><b>↻ Odśwież</b> listę Ścieżki A.</li>
+    <li><span class="n">5</span><b>Pola wyboru</b> – zaznaczasz foldery do wysłania.</li>
+    <li><span class="n">6</span><b>Nazwa folderu</b> – kliknięcie otwiera folder.</li>
+    <li><span class="n">7</span><b>Pliki</b> – widoczne na szaro, nie można ich wysłać osobno.</li>
+    <li><span class="n">8</span><b>Wyślij / Cofnij / Aktualizuj katalog</b>.</li>
+    <li><span class="n">9</span><b>Szukaj operacji…</b> w historii.</li>
+    <li><span class="n">10</span><b>Filtry</b> statusu i typu operacji.</li>
+    <li><span class="n">11</span><b>Wybierz / ID</b> – kółko wyboru operacji i jej numer (klik = szczegóły).</li>
+    <li><span class="n">12</span><b>Status</b> i znaczki PIM / synchronizacji.</li>
+    <li><span class="n">13</span><b>Ustawienia</b> i <b>Wyloguj się</b>.</li>
+  </ol>
+  <p class="small">Każdą z tych części szczegółowo opisuje rozdział <a href="#r9">9</a>.</p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="chapter" id="r4">
+  <h2><span class="num">4</span>Przygotowanie katalogów prosto z Eksploratora Windows</h2>
+  <p class="lead">Na komputerach z zainstalowanym dodatkiem <b>RFM</b> (program RFMLauncher) nie musisz szukać folderów w aplikacji. Wystarczy kliknąć je prawym przyciskiem myszy w zwykłym Eksploratorze Windows.</p>
+
+  <figure class="m"><img src="img/windows_menu.jpg"><figcaption><b>Rys. 4.</b> Ilustracja poglądowa: dwa foldery zaznaczone w Eksploratorze Windows i menu z pozycjami RFM. Pozostałe pozycje menu i jego wygląd zależą od wersji Windows.</figcaption></figure>
+
+  <h3>Krok po kroku</h3>
+  <ol class="steps">
+    <li>Otwórz w Eksploratorze Windows folder sieciowy ze zdjęciami (ten sam, który w aplikacji jest Ścieżką A), np. <span class="path">\\192.168.100.4\DaneFoto-test\tester</span>.</li>
+    <li>Zaznacz <b>jeden lub kilka folderów produktów</b> (kilka: przytrzymaj <b>Ctrl</b> i klikaj).</li>
+    <li>Kliknij zaznaczenie <b>prawym przyciskiem myszy</b>. W <b>Windows 11</b> najpierw kliknij <b>Pokaż więcej opcji</b> (albo od razu użyj <b>Shift + prawy przycisk</b>).</li>
+    <li>Wybierz <b>Przygotuj zaznaczone do wysłania przez RFM</b>.</li>
+    <li>Otworzy się przeglądarka z Menedżerem plików. Aplikacja sama przejdzie do właściwego folderu i <b>zaznaczy wybrane katalogi</b> (Rys. 5). Jeśli nie byłeś zalogowany w przeglądarce, zaloguje Cię automatycznie.</li>
+    <li>Sprawdź zaznaczenie i kliknij <span class="ui primary">Wyślij →</span> – dalej jak w rozdziale <a href="#r5">5</a>.</li>
+  </ol>
+  <figure><img src="img/prepare_deeplink.jpg"><figcaption><b>Rys. 5.</b> Prawdziwy efekt „Przygotuj…” dla folderów OZDOBA i TORBA: aplikacja otworzyła <span class="path">A:/tester</span> i zaznaczyła oba katalogi. Przycisk <b>Wyślij</b> jest aktywny.</figcaption></figure>
+
+  <table>
+    <tr><th style="width:36%">Pozycja menu</th><th>Co robi</th></tr>
+    <tr><td><b>Przygotuj zaznaczone do wysłania przez RFM</b></td><td>Otwiera aplikację i zaznacza katalogi. <b>Nic nie wysyła</b> – decyzję podejmujesz przyciskiem <b>Wyślij</b>. Zalecana.</td></tr>
+    <tr><td><b>Wyślij zaznaczone przez RFM</b></td><td>Robi to samo, a następnie od razu uruchamia wysyłanie. Zobaczysz zwykłe okno potwierdzenia wysyłki (chyba że wyłączyłeś je w Ustawieniach – wtedy wysyłka ruszy bez pytania).</td></tr>
+  </table>
+
+  <div class="box warn"><span class="t">Kiedy pozycji RFM nie ma w menu</span>
+    <ul>
+      <li>Zaznaczyłeś choć jeden <b>plik</b> – menu RFM pojawia się tylko, gdy zaznaczone są wyłącznie foldery.</li>
+      <li>Folder leży <b>poza dozwolonym miejscem</b> ustawionym przez administratora (np. na pulpicie).</li>
+      <li>W Windows 11 nie kliknąłeś <b>Pokaż więcej opcji</b>.</li>
+    </ul>
+    Przy kilku folderach naraz wszystkie muszą leżeć <b>w tym samym folderze nadrzędnym</b> – foldery z innego miejsca zostaną pominięte.
+  </div>
+
+  <h3>Pierwsze użycie – autoryzacja urządzenia</h3>
+  <div class="two">
+    <div>
+      <p>Przy pierwszym użyciu menu (albo gdy zapisane logowanie wygaśnie) komputer musi zostać połączony z Twoim kontem:</p>
+      <ol class="steps">
+        <li>Po wybraniu pozycji RFM przeglądarka otworzy stronę <b>Autoryzacja urządzenia</b> z kodem (Rys. 6).</li>
+        <li>Kliknij <span class="ui primary">Zatwierdź urządzenie</span>. Jeśli nie jesteś zalogowany, aplikacja najpierw poprosi o zalogowanie, a potem wróci na tę stronę – kliknij przycisk ponownie.</li>
+        <li>Pojawi się komunikat „Urządzenie zostało pomyślnie autoryzowane! Możesz zamknąć to okno.”</li>
+        <li>Chwilę później otworzy się Menedżer plików z zaznaczonymi katalogami.</li>
+      </ol>
+      <p>Kolejne użycia nie wymagają tego kroku. Logowanie jest bezpiecznie zapisane w Windows.</p>
+      <div class="box stop"><span class="t">Uwaga</span>Klikaj <b>Zatwierdź urządzenie</b> tylko wtedy, gdy sam przed chwilą użyłeś menu RFM. Jeśli strona z kodem otworzyła się bez Twojej akcji – kliknij <b>Odrzuć</b>. Kod jest ważny ograniczony czas; po wygaśnięciu po prostu użyj menu ponownie.</div>
+    </div>
+    <figure style="margin-top:0"><img src="img/device_card.jpg" style="max-width:92%"><figcaption><b>Rys. 6.</b> Strona autoryzacji urządzenia (kod przykładowy)</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ 5 PUSH ============ -->
+<section class="chapter" id="r5">
+  <h2><span class="num">5</span>Wysyłanie katalogu – <span class="tag push" style="font-size:14pt">PUSH</span></h2>
+  <p class="lead">Przykład: wysyłamy katalogi <b>OZDOBA PS261403 0-BRASS</b> i <b>TORBA HB0788 FA0542-910 SILVER</b> z folderu <span class="path">A:/tester</span>.</p>
+
+  <ol class="steps">
+    <li><b>Przejdź do folderu z katalogami.</b> Kliknij nazwę folderu na liście (np. <b>tester</b>) albo wpisz ścieżkę w pasku (Rys. 7). Jeśli użyłeś menu Windows (rozdział 4), ten krok i następne dwa masz już zrobione.</li>
+  </ol>
+  <figure class="m"><img src="img/path_edit.jpg"><figcaption><b>Rys. 7.</b> Wpisywanie ścieżki: kliknij pasek, wpisz <span class="path">A:/tester</span> i naciśnij Enter lub <b>Przejdź</b></figcaption></figure>
+  <ol class="steps" start="2" style="counter-reset:s 1">
+    <li><b>(Opcjonalnie) zajrzyj do środka.</b> Kliknięcie nazwy katalogu pokazuje jego pliki. Wrócisz, klikając <b>..</b> lub nazwę folderu wyżej w pasku ścieżki.</li>
+  </ol>
+  <figure class="m"><img src="img/ozdoba_contents.jpg"><figcaption><b>Rys. 8.</b> Zawartość katalogu OZDOBA przed wysłaniem: 7 zdjęć o nazwach numerowych</figcaption></figure>
+  <ol class="steps" style="counter-reset:s 2">
+    <li><b>Zaznacz pole wyboru</b> przy katalogu (albo kliknij puste miejsce w jego wierszu, np. w kolumnie „Rozmiar”). Zaznaczony wiersz jest podświetlony, a przycisk <span class="ui primary">Wyślij →</span> staje się aktywny. Możesz zaznaczyć kilka katalogów naraz.</li>
+  </ol>
+  <figure><img src="img/selected_two.jpg"><figcaption><b>Rys. 9.</b> Zaznaczone dwa katalogi – przycisk „Wyślij” jest aktywny</figcaption></figure>
+  <div class="box info"><span class="t">Klikanie nazwy a zaznaczanie</span>Kliknięcie <b>nazwy</b> katalogu otwiera go (nie zaznacza). Aby zaznaczyć, klikaj <b>pole wyboru</b> lub inne miejsce wiersza.</div>
+
+  <ol class="steps" style="counter-reset:s 3">
+    <li><b>Kliknij <span class="ui primary">Wyślij →</span></b> i przeczytaj okno potwierdzenia.</li>
+  </ol>
+  <div class="two">
+    <figure style="margin-top:0"><img src="img/push_confirm_single.jpg"><figcaption><b>Rys. 10.</b> Potwierdzenie dla jednego katalogu</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/push_confirm_multi.jpg"><figcaption><b>Rys. 11.</b> Potwierdzenie dla dwóch katalogów – z ich listą</figcaption></figure>
+  </div>
+  <table>
+    <tr><th style="width:46%">Punkt w oknie</th><th>Po ludzku</th></tr>
+    <tr><td>Skopiowanie wszystkich plików i podkatalogów do PATH_B</td><td>Katalog zostanie skopiowany do miejsca docelowego.</td></tr>
+    <tr><td>Zniszczenie ignorowanych plików (Thumbs.db, .DS_Store, …) w źródle</td><td>Pliki systemowe nie są wysyłane i zostaną usunięte.</td></tr>
+    <tr><td>Usunięcie katalogu źródłowego</td><td>Po udanym skopiowaniu katalog <b>zniknie ze Ścieżki A</b>.</td></tr>
+    <tr><td>Uwaga: Katalog źródłowy zostanie trwale usunięty (archiwizacja jest wyłączona).</td><td>Nie powstaje dodatkowa kopia w archiwum. Katalog odzyskasz tylko przez <b>Cofnij (PULL)</b>.</td></tr>
+  </table>
+  <p class="small">Treść okna zależy od ustawień administratora. Gdy archiwizacja jest włączona, zamiast „Usunięcie katalogu źródłowego” zobaczysz „Zarchiwizowanie źródła w PATH_C”. Pole <b>Nie pytaj ponownie</b> wyłącza to okno na przyszłość (włączysz je z powrotem w Ustawieniach).</p>
+
+  <ol class="steps" style="counter-reset:s 4">
+    <li><b>Kliknij <span class="ui primary">Potwierdź</span>.</b> W prawym dolnym rogu pojawi się zielony komunikat, np. „Rozpoczęto wysyłanie dla 2 katalogów”. Katalogi znikną ze Ścieżki A, a w historii pojawią się nowe wiersze <span class="tag push">PUSH</span>. Przycisk <b>Wyślij</b> znów jest nieaktywny, bo nic nie jest zaznaczone.</li>
+  </ol>
+  <figure><img src="img/push_done.jpg"><figcaption><b>Rys. 12.</b> Po wysłaniu: w Ścieżce A nie ma już OZDOBA i TORBA, w historii są operacje PUSH #35 (OZDOBA) i #36 (TORBA) ze statusem „Zakończone”</figcaption></figure>
+
+  <h3>Co się dzieje po wysłaniu</h3>
+  <p>Status <b>Zakończone</b> oznacza, że pliki są już w miejscu docelowym. Pod statusem aplikacja pokazuje dalsze, automatyczne kroki:</p>
+  <table>
+    <tr><th style="width:36%">Znaczek</th><th>Znaczenie</th></tr>
+    <tr><td><b>PIM: powiadomiono</b></td><td>System PIM dostał informację o katalogu. Gdy PIM chwilowo nie odpowiada, widać <b>PIM: ponawianie (1)</b> – aplikacja sama spróbuje ponownie.</td></tr>
+    <tr><td><b>Synchronizacja: czeka na PIM</b> → <b>Synchronizacja: 2/7</b> → <b>Zsynchronizowano 7/7</b></td><td>Aplikacja co kilka minut sprawdza, ile zdjęć pojawiło się już na serwerze zdjęć sklepu (np. 2 z 7). Sprawdzanie trwa maksymalnie 3 godziny.</td></tr>
+  </table>
+  <p>Wszystkie znaczki opisuje punkt <a href="#r9-5">9.5</a>. Nie musisz na nie czekać – możesz od razu wysyłać kolejne katalogi.</p>
+
+  <div class="box warn"><span class="t">Gdy część katalogów zostanie odrzucona</span>Przy wysyłaniu kilku katalogów każdy jest sprawdzany osobno. Poprawne zostaną wysłane, a dla każdego odrzuconego pojawi się okno „Nie można kontynuować — <i>ścieżka katalogu</i>” z powodem (patrz rozdział <a href="#r2">2</a>). Odrzucony katalog zostaje w Ścieżce A bez zmian.</div>
+</section>
+
+<!-- ============ 6 PULL before update ============ -->
+<section class="chapter" id="r6">
+  <h2><span class="num">6</span>Cofanie katalogu, który nie był aktualizowany – <span class="tag pull" style="font-size:14pt">PULL</span></h2>
+  <p class="lead">Przykład: cofamy wysłanie katalogu <b>TORBA HB0788 FA0542-910 SILVER</b> (operacja PUSH #36). Katalog nie był zmieniany po wysłaniu.</p>
+  <p>Cofnij, gdy katalog został wysłany przez pomyłkę albo wymaga większych poprawek, które wolisz zrobić na spokojnie w Ścieżce A.</p>
+
+  <ol class="steps">
+    <li><b>W Historii operacji zaznacz kółko</b> w kolumnie „Wybierz” przy operacji <span class="tag push">PUSH</span> tego katalogu. Aktywują się przyciski <span class="ui">← Cofnij</span> i <span class="ui">Aktualizuj katalog</span>.</li>
+  </ol>
+  <figure><img src="img/pull_selected.jpg"><figcaption><b>Rys. 13.</b> Wybrana operacja PUSH #36 (TORBA). Kółko wyboru jest tylko przy wysłaniach, które się zakończyły i nie zostały jeszcze cofnięte.</figcaption></figure>
+  <div class="two">
+    <div>
+      <ol class="steps" style="counter-reset:s 1">
+        <li><b>Kliknij <span class="ui">← Cofnij</span>.</b> Okno potwierdzenia pokazuje numer operacji i dokładne miejsce, do którego wróci katalog: <span class="path" style="white-space:normal">A:/tester/TORBA HB0788 FA0542-910 SILVER</span>.
+          <br>„Skopiowanie z PATH_B z powrotem do…” = katalog wraca do Ścieżki A.
+          <br>„Usunięcie z PATH_B” = katalog znika z miejsca docelowego.</li>
+        <li><b>Kliknij <span class="ui primary">Potwierdź</span>.</b> Pojawi się komunikat „Operacja cofania rozpoczęta”.</li>
+      </ol>
+    </div>
+    <figure style="margin-top:0"><img src="img/pull_confirm.jpg" style="max-width:92%"><figcaption><b>Rys. 14.</b> Potwierdzenie cofnięcia</figcaption></figure>
+  </div>
+
+  <h3>Efekt</h3>
+  <figure><img src="img/pull_done.jpg"><figcaption><b>Rys. 15.</b> Po cofnięciu: TORBA jest z powrotem w <span class="path">A:/tester</span>, w historii jest PULL #37. Przy PUSH #36 nie ma już kółka wyboru, synchronizacja ma stan „anulowano”, a przyciski „Cofnij” i „Aktualizuj katalog” znów są nieaktywne.</figcaption></figure>
+  <div class="two">
+  <ul>
+    <li>Katalog wraca <b>w to samo miejsce</b>, z którego został wysłany, ze wszystkimi plikami (tu: 7 zdjęć).</li>
+    <li>PIM dostaje powiadomienie o wycofaniu katalogu (<b>PIM: powiadomiono</b> przy PULL).</li>
+    <li>Sprawdzanie serwera zdjęć dla tego wysłania zostaje zakończone (<b>Synchronizacja: anulowano</b>).</li>
+    <li>Tego wysłania nie można już cofnąć ani aktualizować. Aby wysłać katalog ponownie, zaznacz go w Ścieżce A i kliknij <b>Wyślij</b> – powstanie nowa operacja PUSH.</li>
+  </ul>
+<figure style="margin-top:0" class="tall"><img src="img/pull_details.jpg"><figcaption><b>Rys. 16.</b> Szczegóły PULL #37 (kliknij numer operacji w historii): skąd i dokąd przeniesiono katalog oraz powiązane wysłanie PUSH #36</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ 7 UPDATE ============ -->
+<section class="chapter" id="r7">
+  <h2><span class="num">7</span>Aktualizacja wysłanego katalogu – <span class="tag update" style="font-size:14pt">UPDATE</span></h2>
+  <p class="lead">Aktualizacja pozwala poprawić katalog, który już jest w miejscu docelowym – bez cofania go i wysyłania od nowa. Przykłady w tym rozdziale dotyczą katalogu <b>OZDOBA PS261403 0-BRASS</b> (wysłanie PUSH #35).</p>
+
+  <table>
+    <tr><th style="width:18%">Opcja</th><th>Co robi</th><th style="width:30%">Skąd nowy plik</th></tr>
+    <tr><td><b>Zmień nazwę</b></td><td>Nadaje plikowi nową nazwę, np. <code>6.png</code> → <code>8.png</code>.</td><td>–</td></tr>
+    <tr><td><b>Usuń</b></td><td>Usuwa plik z katalogu.</td><td>–</td></tr>
+    <tr><td><b>Zastąp</b></td><td>Podmienia zawartość pliku; nazwa zostaje ta sama.</td><td>Ścieżka A <i>lub</i> Twój komputer</td></tr>
+    <tr><td><b>Dodaj pliki</b></td><td>Dokłada nowe pliki do katalogu.</td><td>Ścieżka A <i>lub</i> Twój komputer</td></tr>
+  </table>
+  <p>W jednej aktualizacji możesz połączyć dowolnie wiele zmian. Pokażemy trzy aktualizacje, które razem wykorzystują wszystkie opcje i oba źródła plików:</p>
+  <table>
+    <tr><th style="width:12%">Operacja</th><th style="width:30%">Źródło plików</th><th>Zmiany</th></tr>
+    <tr><td><span class="tag update">UPDATE</span> #38</td><td>Ścieżka A</td><td>Dodaj <code>7.jpg</code> ze Ścieżki A · Zmień nazwę <code>6.png</code> → <code>8.png</code></td></tr>
+    <tr><td><span class="tag update">UPDATE</span> #39</td><td>Komputer (przesłanie)</td><td>Zastąp <code>7.jpg</code> plikiem z komputera · Dodaj <code>10.jpg</code> z komputera · Zmień nazwę <code>8.png</code> → <code>6.png</code></td></tr>
+    <tr><td><span class="tag update">UPDATE</span> #40</td><td>Ścieżka A</td><td>Zastąp <code>10.jpg</code> plikiem ze Ścieżki A · Usuń <code>7.jpg</code></td></tr>
+  </table>
+
+  <h3 id="r7-1">7.1 Otwieranie okna aktualizacji</h3>
+  <ol class="steps">
+    <li>W <b>Historii operacji</b> zaznacz kółko przy operacji <span class="tag push">PUSH</span> katalogu, który chcesz zmienić (status „Zakończone”, jeszcze niecofnięty).</li>
+    <li>Kliknij <span class="ui">Aktualizuj katalog</span>.</li>
+  </ol>
+  <figure class="s"><img src="img/update_selected.jpg"><figcaption><b>Rys. 17.</b> Wybrane wysłanie PUSH #35 (OZDOBA) – przyciski „Cofnij” i „Aktualizuj katalog” są aktywne</figcaption></figure>
+  <div class="two">
+    <figure style="margin-top:0" class="tall"><img src="img/update_modal_open.jpg"><figcaption><b>Rys. 18.</b> Okno „Aktualizuj katalog”</figcaption></figure>
+    <div>
+      <p>Okno ma trzy części:</p>
+      <ul>
+        <li><b>Zawartość</b> – wszystkie pliki katalogu w miejscu docelowym. Przy każdym jest lista wyboru: <b>Bez zmian</b>, <b>Zmień nazwę</b>, <b>Zastąp</b>, <b>Usuń</b>. (Przy podfolderze – oznaczonym znakiem „/” – nie ma opcji „Zastąp”).</li>
+        <li><b>Dodaj pliki</b> – przyciski <span class="ui">Dodaj ze ścieżki A…</span> i <span class="ui">Prześlij nowe pliki…</span>.</li>
+        <li><b>Oczekujące zmiany</b> – podsumowanie wszystkiego, co wybrałeś. Na razie nic nie jest zmieniane.</li>
+      </ul>
+      <p>Zmiany zostaną wprowadzone dopiero po kliknięciu <span class="ui primary">Zastosuj zmiany</span> i potwierdzeniu.</p>
+      <div class="box info"><span class="t">Anulowanie</span><b>Anuluj</b> lub <b>×</b> zamyka okno bez zmian. Jeśli coś już wybrałeś, aplikacja zapyta: „Odrzucić niezastosowane zmiany i przesłane pliki?”.</div>
+    </div>
+  </div>
+</section>
+
+<section id="r7-2" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">7.2 Sposób 1: pliki ze Ścieżki A &nbsp;<span class="tag update">UPDATE #38</span></h3>
+  <p>Używaj, gdy nowe zdjęcie leży już w folderze sieciowym (Ścieżce A). W przykładzie dodajemy plik <span class="path">A:/tester/7.jpg</span> jako <code>7.jpg</code> i zmieniamy nazwę <code>6.png</code> na <code>8.png</code>.</p>
+
+  <h4>Zmiana nazwy</h4>
+  <ol class="steps">
+    <li>Przy pliku <code>6.png</code> wybierz z listy <b>Zmień nazwę</b>.</li>
+    <li>Obok pojawi się pole – wpisz nową nazwę <code>8.png</code> (pamiętaj: numer + rozszerzenie).</li>
+  </ol>
+
+  <h4>Dodanie pliku ze Ścieżki A</h4>
+  <ol class="steps" style="counter-reset:s 2">
+    <li>Kliknij <span class="ui">Dodaj ze ścieżki A…</span>. Otworzy się okno „Wybierz pliki ze ścieżki A” pokazujące folder, w którym jesteś w panelu Ścieżka A.</li>
+    <li>Niebieskie nazwy to foldery – kliknij, aby wejść; <b>..</b> cofa o poziom. Zaznacz pola przy plikach, które chcesz dodać (możesz kilka).</li>
+    <li>Kliknij <span class="ui primary">Wybierz</span> (przy kilku plikach: „Wybierz pliki (N)”).</li>
+  </ol>
+  <div class="two">
+    <figure style="margin-top:0"><img src="img/picker_multi.jpg"><figcaption><b>Rys. 19.</b> Okno wyboru – nic jeszcze nie zaznaczono, „Wybierz” jest nieaktywny</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/picker_checked.jpg"><figcaption><b>Rys. 20.</b> Zaznaczony plik 7.jpg</figcaption></figure>
+  </div>
+  <ol class="steps" style="counter-reset:s 5">
+    <li>Plik pojawi się w części <b>Dodaj pliki</b>:
+      <ul>
+        <li><b>pole z nazwą</b> – pod taką nazwą plik znajdzie się w katalogu; możesz ją zmienić,</li>
+        <li><b>skąd pochodzi</b> – tu <span class="path">A:/tester/7.jpg</span>,</li>
+        <li><b>Usuń ze ścieżki A po aktualizacji</b> – zaznacz, jeśli plik źródłowy ma zniknąć ze Ścieżki A po udanej aktualizacji (w przykładzie nie zaznaczamy),</li>
+        <li><b>×</b> – rezygnacja z dodania tego pliku.</li>
+      </ul></li>
+  </ol>
+  <figure class="tall"><img src="img/update1_draft.jpg"><figcaption><b>Rys. 21.</b> Gotowy zestaw zmian: zmiana nazwy 6.png → 8.png oraz dodanie 7.jpg ze Ścieżki A. Obie zmiany widać w „Oczekujących zmianach”.</figcaption></figure>
+  <div class="two">
+    <div>
+      <ol class="steps" style="counter-reset:s 6">
+        <li>Kliknij <span class="ui primary">Zastosuj zmiany</span>. Pojawi się potwierdzenie z listą zmian.</li>
+        <li>Kliknij <span class="ui primary">Potwierdź</span>. Zobaczysz komunikat „Katalog „OZDOBA PS261403 0-BRASS” został zaktualizowany”.</li>
+      </ol>
+    </div>
+    <figure style="margin-top:0"><img src="img/update1_confirm.jpg"><figcaption><b>Rys. 22.</b> Potwierdzenie aktualizacji #38</figcaption></figure>
+  </div>
+  <figure><img src="img/update1_done.jpg"><figcaption><b>Rys. 23.</b> W historii pojawiła się operacja UPDATE #38, a przy wysłaniu PUSH #35 dopisek „zaktualizowano w #38” (klik otwiera szczegóły)</figcaption></figure>
+</section>
+
+<section id="r7-3" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">7.3 Sposób 2: pliki z komputera &nbsp;<span class="tag update">UPDATE #39</span></h3>
+  <p>Używaj, gdy nowe zdjęcie masz na swoim komputerze (np. w Pobranych). Pliki są najpierw przesyłane do aplikacji, a trafiają do katalogu dopiero po zastosowaniu zmian. W przykładzie: zastępujemy <code>7.jpg</code> plikiem <b>zamiennik.jpg</b>, dodajemy plik <b>nowe-zdjecie.jpg</b> jako <code>10.jpg</code> (bo <code>9.jpg</code> już jest w katalogu) i przywracamy nazwę <code>8.png</code> → <code>6.png</code>.</p>
+
+  <h4>Zastąpienie pliku plikiem z komputera</h4>
+  <div class="two">
+    <div>
+      <ol class="steps">
+        <li>Ponownie otwórz okno aktualizacji (wybierz PUSH #35 → <b>Aktualizuj katalog</b>). Lista zawartości pokazuje już stan po poprzedniej aktualizacji.</li>
+        <li>Przy <code>7.jpg</code> wybierz <b>Zastąp</b>. Pojawią się dwa przyciski:
+          <ul>
+            <li><span class="ui">Ze ścieżki A…</span> – plik z folderu sieciowego (punkt 7.4),</li>
+            <li><span class="ui">Prześlij…</span> – plik z Twojego komputera.</li>
+          </ul></li>
+        <li>Kliknij <span class="ui">Prześlij…</span> i wskaż plik w oknie Windows.</li>
+        <li>Obok pojawi się postęp „Przesyłanie zamiennik.jpg… 45%”, a po chwili „Przesłano: zamiennik.jpg (25.7 KB)”.</li>
+      </ol>
+      <div class="box warn"><span class="t">Ten sam format</span>Plik zastępujący powinien mieć ten sam format co zastępowany (np. <code>.jpg</code> zastępuj zdjęciem JPG) – nazwa pliku w katalogu się nie zmienia. Aby zmienić format, usuń stary plik i dodaj nowy.</div>
+    </div>
+    <figure style="margin-top:0" class="tall"><img src="img/replace_choose.jpg"><figcaption><b>Rys. 24.</b> Opcja „Zastąp” – wybór źródła nowego pliku</figcaption></figure>
+  </div>
+
+  <h4>Dodanie plików z komputera</h4>
+  <ol class="steps" style="counter-reset:s 4">
+    <li>Kliknij <span class="ui">Prześlij nowe pliki…</span> i wskaż plik (możesz zaznaczyć kilka naraz).</li>
+    <li>Plik pojawi się w części <b>Dodaj pliki</b> z <b>oryginalną nazwą</b> – tu <code>nowe-zdjecie.jpg</code>.</li>
+    <li><b>Zmień nazwę w polu na numerową</b> – tu <code>10.jpg</code>. Z nazwą <code>nowe-zdjecie.jpg</code> aktualizacja zostałaby odrzucona (rozdział 2, zasada 3).</li>
+  </ol>
+  <div class="two">
+    <figure style="margin-top:0" class="tall"><img src="img/uploaded.jpg"><figcaption><b>Rys. 25.</b> Oba pliki przesłane. Dodawany plik ma jeszcze oryginalną nazwę – trzeba ją zmienić.</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/update2_draft.jpg"><figcaption><b>Rys. 26.</b> Gotowe: nazwa zmieniona na 10.jpg, dodatkowo zmiana nazwy 8.png → 6.png</figcaption></figure>
+  </div>
+  <div class="two">
+    <div>
+      <ol class="steps" style="counter-reset:s 7">
+        <li>Kliknij <span class="ui primary">Zastosuj zmiany</span>. Potwierdzenie zawiera ostrzeżenie <b>„Zastąpionych plików (1) nie będzie można przywrócić.”</b> – poprzednia wersja <code>7.jpg</code> przepadnie.</li>
+        <li>Kliknij <span class="ui primary">Potwierdź</span>.</li>
+      </ol>
+      <div class="box info"><span class="t">Ważne przy przesyłaniu</span>
+        <ul>
+          <li>Poczekaj, aż wszystkie pliki się prześlą – inaczej zobaczysz „Poczekaj, aż wszystkie pliki zostaną przesłane”.</li>
+          <li>Jeden plik może mieć najwyżej 200 MB.</li>
+          <li>Przesłane, ale niezastosowane pliki są odrzucane po zamknięciu okna.</li>
+          <li>Opcja „Usuń ze ścieżki A po aktualizacji” nie dotyczy plików z komputera.</li>
+        </ul></div>
+    </div>
+    <figure style="margin-top:0"><img src="img/update2_confirm.jpg"><figcaption><b>Rys. 27.</b> Potwierdzenie aktualizacji #39 z ostrzeżeniem o zastąpieniu</figcaption></figure>
+  </div>
+</section>
+
+<section id="r7-4" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">7.4 Zastąpienie plikiem ze Ścieżki A i usuwanie pliku &nbsp;<span class="tag update">UPDATE #40</span></h3>
+  <p>W przykładzie zastępujemy <code>10.jpg</code> plikiem <span class="path">A:/tester/7.jpg</span> i usuwamy z katalogu plik <code>7.jpg</code>.</p>
+  <h4>Zastąpienie plikiem ze Ścieżki A</h4>
+  <div class="two">
+    <div>
+      <ol class="steps">
+        <li>Przy <code>10.jpg</code> wybierz <b>Zastąp</b> i kliknij <span class="ui">Ze ścieżki A…</span>.</li>
+        <li>W oknie „Wybierz plik ze ścieżki A” można zaznaczyć <b>tylko jeden plik</b> (okrągłe pole). Zaznacz <code>7.jpg</code> i kliknij <span class="ui primary">Wybierz</span>.</li>
+        <li>W wierszu pojawi się ścieżka pliku i pole <b>Usuń ze ścieżki A po aktualizacji</b>.</li>
+      </ol>
+    </div>
+    <figure style="margin-top:0"><img src="img/picker_single.jpg"><figcaption><b>Rys. 28.</b> Wybór jednego pliku do zastąpienia</figcaption></figure>
+  </div>
+  <h4>Usunięcie pliku</h4>
+  <ol class="steps" style="counter-reset:s 3">
+    <li>Przy <code>7.jpg</code> wybierz <b>Usuń</b>. W „Oczekujących zmianach” pojawi się „Usuń 7.jpg”.</li>
+  </ol>
+  <div class="two">
+    <figure style="margin-top:0" class="tall"><img src="img/update3_draft.jpg"><figcaption><b>Rys. 29.</b> Zestaw zmian #40</figcaption></figure>
+    <div>
+      <ol class="steps" style="counter-reset:s 4">
+        <li>Kliknij <span class="ui primary">Zastosuj zmiany</span>. Potwierdzenie ostrzega o obu nieodwracalnych zmianach: <b>„1 usunięć nie będzie można cofnąć.”</b> oraz <b>„Zastąpionych plików (1) nie będzie można przywrócić.”</b></li>
+        <li>Kliknij <span class="ui primary">Potwierdź</span>.</li>
+      </ol>
+      <figure><img src="img/update3_confirm.jpg"><figcaption><b>Rys. 30.</b> Potwierdzenie zmian nieodwracalnych</figcaption></figure>
+    </div>
+  </div>
+  <div class="box stop"><span class="t">Usunięcia i zastąpienia są nieodwracalne</span>Usunięty lub zastąpiony plik nie trafia do żadnego kosza. Nawet <b>Cofnij (PULL)</b> go nie przywróci – PULL zwraca katalog w <b>obecnej</b> postaci (rozdział 8). Jeśli możesz potrzebować starego zdjęcia, zachowaj jego kopię przed aktualizacją.</div>
+</section>
+
+<section id="r7-5" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">7.5 Ściąga: wszystkie opcje aktualizacji</h3>
+  <table>
+    <tr><th style="width:18%">Chcę…</th><th style="width:34%">Co kliknąć</th><th style="width:22%">Czy można odwrócić?</th><th>Przykład z testów</th></tr>
+    <tr><td>zmienić nazwę pliku</td><td>przy pliku: <b>Zmień nazwę</b> → wpisz nazwę</td><td>tak – kolejną zmianą nazwy</td><td>#38: 6.png → 8.png; #39: 8.png → 6.png</td></tr>
+    <tr><td>usunąć plik</td><td>przy pliku: <b>Usuń</b></td><td><b>nie</b></td><td>#40: Usuń 7.jpg</td></tr>
+    <tr><td>podmienić zdjęcie z komputera</td><td>przy pliku: <b>Zastąp</b> → <b>Prześlij…</b></td><td><b>nie</b> (stara wersja przepada)</td><td>#39: Zastąp 7.jpg plikiem „zamiennik.jpg”</td></tr>
+    <tr><td>podmienić zdjęcie ze Ścieżki A</td><td>przy pliku: <b>Zastąp</b> → <b>Ze ścieżki A…</b></td><td><b>nie</b> (stara wersja przepada)</td><td>#40: Zastąp 10.jpg plikiem A:/tester/7.jpg</td></tr>
+    <tr><td>dodać zdjęcie z komputera</td><td><b>Prześlij nowe pliki…</b> → popraw nazwę</td><td>tak – usuwając je później</td><td>#39: Dodaj 10.jpg („nowe-zdjecie.jpg”)</td></tr>
+    <tr><td>dodać zdjęcie ze Ścieżki A</td><td><b>Dodaj ze ścieżki A…</b> → zaznacz → <b>Wybierz</b></td><td>tak – usuwając je później</td><td>#38: Dodaj 7.jpg z A:/tester/7.jpg</td></tr>
+  </table>
+
+  <h4>Co aplikacja sprawdza przy aktualizacji</h4>
+  <ul>
+    <li>Zasady z rozdziału <a href="#r2">2</a> dotyczą <b>stanu katalogu po zmianach</b>. Nie usuniesz np. zdjęć tak, by zostało mniej niż 2 („Po tych zmianach folder zawierałby X plików graficznych…”). Aktualizacja, która naprawia wcześniejszy problem, przejdzie.</li>
+    <li>Nazwy nie mogą się powtarzać: „„7.jpg” występowałby w katalogu dwukrotnie. Wybierz inną nazwę.”. Aby podmienić istniejący plik, użyj <b>Zastąp</b>, a nie „Dodaj”.</li>
+    <li>Nowe pliki są sprawdzane przed wprowadzeniem zmian. Jeśli któryś nie jest prawdziwym zdjęciem, zobaczysz np. „Nowy plik dla 7.jpg nie jest w rzeczywistości obrazem… Niczego nie zmieniono.”.</li>
+    <li>Jeśli przy „Zmień nazwę” nie wpiszesz nazwy albo przy „Zastąp” nie wybierzesz pliku, zmiany nie zostaną zastosowane – aplikacja napisze, czego brakuje.</li>
+  </ul>
+  <div class="box tip"><span class="t">Jeśli aktualizacja się nie uda</span>Gdy wystąpi błąd w trakcie, aplikacja wycofuje już wprowadzone zmiany, a operacja ma status <b>Nieudane</b>. Katalog zostaje taki jak przed aktualizacją. Przesłane pliki trzeba wtedy wybrać ponownie.</div>
+  <div class="box info"><span class="t">Po każdej udanej aktualizacji</span>PIM dostaje powiadomienie o zmianie katalogu. W historii przy wysłaniu PUSH pojawia się dopisek „zaktualizowano w #…”.</div>
+</section>
+
+<!-- ============ 8 PULL after update ============ -->
+<section class="chapter" id="r8">
+  <h2><span class="num">8</span>Cofanie katalogu po aktualizacji – <span class="tag pull" style="font-size:14pt">PULL</span></h2>
+  <p class="lead">Przykład: cofamy katalog <b>OZDOBA PS261403 0-BRASS</b> (PUSH #35), który po wysłaniu był trzykrotnie aktualizowany (#38, #39, #40).</p>
+  <div class="box warn"><span class="t">Najważniejsza różnica</span>Cofnięcie zwraca do Ścieżki A katalog <b>w obecnej, zaktualizowanej postaci</b> – nie w takiej, w jakiej był pierwotnie wysłany. Usunięte i zastąpione pliki nie wrócą.</div>
+
+  <ol class="steps">
+    <li>W historii zaznacz kółko przy <span class="tag push">PUSH</span> #35. Dopisek <b>„zaktualizowano w #38, #39, #40”</b> informuje, że katalog był zmieniany.</li>
+  </ol>
+  <figure class="m"><img src="img/pull2_selected.jpg"><figcaption><b>Rys. 31.</b> Wybrane wysłanie #35 z trzema aktualizacjami</figcaption></figure>
+  <div class="two">
+    <div>
+      <ol class="steps" style="counter-reset:s 1">
+        <li>Kliknij <span class="ui">← Cofnij</span>. Pojawi się <b>inne okno niż zwykle</b> – z ostrzeżeniem: „Ten katalog został zmieniony po wypchnięciu przez UPDATE #38, #39, #40. PULL przywraca OBECNĄ, zaktualizowaną wersję – nie pliki w postaci, w jakiej zostały pierwotnie wypchnięte.”</li>
+        <li>Kliknij <span class="ui primary">Potwierdź</span>.</li>
+      </ol>
+      <p class="small">To ostrzeżenie ma osobny przełącznik w Ustawieniach („Ostrzegaj przy cofaniu zaktualizowanego katalogu”).</p>
+    </div>
+    <figure style="margin-top:0"><img src="img/pull_after_update_confirm.jpg"><figcaption><b>Rys. 32.</b> Potwierdzenie cofnięcia zaktualizowanego katalogu</figcaption></figure>
+  </div>
+
+  <h3>Efekt</h3>
+  <figure><img src="img/pull2_done.jpg"><figcaption><b>Rys. 33.</b> Po cofnięciu: OZDOBA jest z powrotem w A:/tester, w historii jest PULL #41</figcaption></figure>
+  <div class="two">
+    <div>
+      <p>Porównanie zawartości katalogu w Ścieżce A:</p>
+      <table>
+        <tr><th>Przed wysłaniem (#35)</th><th>Po cofnięciu (#41)</th></tr>
+        <tr><td>1.png, 2.jpg, 3.jpg, 4.jpg, 5.jpg, 6.png, 9.jpg<br><b>7 plików</b></td><td>1.png, 2.jpg, 3.jpg, 4.jpg, 5.jpg, 6.png, 9.jpg, <b>10.jpg</b><br><b>8 plików</b></td></tr>
+      </table>
+      <p>Skąd różnica? Po drodze:</p>
+      <ul>
+        <li>#38 dodał <code>7.jpg</code> i zmienił <code>6.png</code> → <code>8.png</code>,</li>
+        <li>#39 podmienił <code>7.jpg</code>, dodał <code>10.jpg</code> i przywrócił nazwę <code>6.png</code>,</li>
+        <li>#40 podmienił <code>10.jpg</code> na kopię <span class="path">A:/tester/7.jpg</span> i usunął <code>7.jpg</code>.</li>
+      </ul>
+      <p>Wrócił więc katalog z plikiem <code>10.jpg</code> dodanym w aktualizacjach.</p>
+    </div>
+    <figure style="margin-top:0"><img src="img/ozdoba_after_pull.jpg"><figcaption><b>Rys. 34.</b> Zawartość OZDOBA po cofnięciu – widoczny dodany plik 10.jpg</figcaption></figure>
+  </div>
+  <figure class="tall2"><img src="img/pull2_details.jpg"><figcaption><b>Rys. 35.</b> Szczegóły PULL #41: „Przywrócono katalog razem z aktualizacjami #38, #39, #40.” Poniżej pełna historia: wysłanie #35 i wszystkie aktualizacje z listą zmian.</figcaption></figure>
+</section>
+
+<!-- ============ 9 ============ -->
+<section class="chapter" id="r9">
+  <h2><span class="num">9</span>Praca w aplikacji – wszystkie opcje dokładnie</h2>
+
+  <h3 id="r9-1">9.1 Górny pasek</h3>
+  <table>
+    <tr><th style="width:28%">Element</th><th>Opis</th></tr>
+    <tr><td>Inicjały, nazwa i rola</td><td>Kto jest zalogowany (np. <b>tester</b>, rola <b>USER</b>).</td></tr>
+    <tr><td><span class="ui">Panel administracyjny</span></td><td>Widoczny tylko dla administratorów.</td></tr>
+    <tr><td><span class="ui">Ustawienia</span></td><td>Wygląd, język, zapamiętywanie folderu, potwierdzenia – punkt <a href="#r9-7">9.7</a>.</td></tr>
+    <tr><td><span class="ui">Wyloguj się</span></td><td>Kończy sesję i wraca do ekranu logowania.</td></tr>
+  </table>
+
+  <h3 id="r9-2">9.2 Panel „Ścieżka A”</h3>
+  <h4>Poruszanie się po folderach</h4>
+  <ul>
+    <li><b>Kliknięcie nazwy folderu</b> – otwiera go.</li>
+    <li><b>..</b> (pierwszy wiersz) – przejście poziom wyżej.</li>
+    <li><b>Pasek ścieżki</b> pokazuje drogę, np. <b>A: › tester</b>. Kliknięcie części ścieżki (np. <b>A:</b>) przenosi do tego folderu.</li>
+    <li><b>Wpisanie ścieżki</b>: kliknij puste miejsce paska, wpisz ścieżkę zaczynającą się od <span class="path">A:</span> (np. <span class="path">A:/tester</span>) i naciśnij <b>Enter</b> lub <span class="ui">Przejdź</span>. Inne litery dysków są niedozwolone – pojawi się błąd.</li>
+    <li><span class="ui">↻</span> – ręczne odświeżenie. Lista i tak odświeża się sama co kilka sekund, więc zmiany zrobione w Eksploratorze Windows pojawią się bez klikania.</li>
+  </ul>
+  <h4>Lista</h4>
+  <ul>
+    <li>Kolumny <b>Nazwa</b>, <b>Rozmiar</b>, <b>Zmodyfikowano</b> – kliknięcie nagłówka sortuje (▲ rosnąco, ▼ malejąco; ponowne kliknięcie odwraca). Domyślnie najnowsze na górze.</li>
+    <li>Foldery mają rozmiar „-”. Pliki są wyszarzone i nie mają pola wyboru – wysyła się całe katalogi.</li>
+    <li>Czas modyfikacji jest pokazywany względnie: <b>Przed chwilą</b>, <b>5 min temu</b>, <b>4 godz. temu</b>, <b>1 dzień temu</b>, <b>3 dni temu</b>. Starsze niż tydzień pokazują datę i godzinę, np. <b>30 mar 2026, 13:06</b>.</li>
+    <li>Przy dużej liczbie pozycji na dole pojawia się <span class="ui">Załaduj więcej</span>.</li>
+  </ul>
+  <h4>Wyszukiwanie</h4>
+  <div class="two">
+    <div>
+      <p>Wpisz fragment nazwy w polu <b>Szukaj katalogów…</b> – po krótkiej chwili (albo po Enter) lista pokaże tylko pasujące pozycje z bieżącego folderu. Wyniki są widoczne, dopóki kursor jest w polu wyszukiwania – po kliknięciu w inne miejsce lista po kilku sekundach wraca do pełnej zawartości folderu (zaznaczenia zostają). Aby od razu wrócić do pełnej listy, wyczyść pole.</p>
+      <h4>Zaznaczanie</h4>
+      <p>Pole wyboru lub kliknięcie wiersza poza nazwą zaznacza katalog. Zaznaczenie zostaje po automatycznym odświeżeniu listy.</p>
+      <h4>Menu prawego przycisku (w aplikacji)</h4>
+      <p>Prawy przycisk na wierszu folderu pokazuje menu:</p><ul><li><b>Otwórz</b> – otwiera folder,</li><li><b>Wyślij &gt;</b> – wysyła <b>tylko ten folder</b> (inne zaznaczenia są usuwane). Pojawia się to samo okno potwierdzenia co po kliknięciu <span class="ui primary">Wyślij →</span>.</li></ul>
+    </div>
+    <div>
+      <figure style="margin-top:0"><img src="img/search.jpg"><figcaption><b>Rys. 36.</b> Wyszukiwanie „TORBA” w A:/tester</figcaption></figure>
+      <figure><img src="img/web_context_menu.jpg"><figcaption><b>Rys. 37.</b> Menu prawego przycisku na folderze TORBA</figcaption></figure>
+    </div>
+  </div>
+
+  <h3 id="r9-3">9.3 Przyciski środkowe</h3>
+  <div class="two">
+    <table style="margin-top:0">
+      <tr><th style="width:36%">Przycisk</th><th>Aktywny, gdy…</th></tr>
+      <tr><td><span class="ui primary">Wyślij →</span></td><td>w Ścieżce A zaznaczono co najmniej jeden katalog. Uruchamia PUSH (rozdział 5).</td></tr>
+      <tr><td><span class="ui">← Cofnij</span></td><td>w historii wybrano operację PUSH. Uruchamia PULL (rozdziały 6 i 8).</td></tr>
+      <tr><td><span class="ui">Aktualizuj katalog</span></td><td>w historii wybrano zakończoną operację PUSH. Otwiera okno UPDATE (rozdział 7).</td></tr>
+    </table>
+    <figure class="s" style="margin-top:0"><img src="img/buttons.jpg"><figcaption><b>Rys. 38.</b> Przyciski i podpowiedź pod nimi</figcaption></figure>
+  </div>
+  <p class="small">Przyciski same stają się nieaktywne, gdy zaznaczenie zniknie – np. po wysłaniu katalogu, przejściu do innego folderu albo po cofnięciu wybranej operacji.</p>
+</section>
+
+<section id="r9-4" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">9.4 Historia operacji</h3>
+  <p>Pokazuje operacje <b>wszystkich użytkowników</b>, od najnowszych. Odświeża się sama – nowe operacje i zmiany statusów pojawiają się bez klikania.</p>
+  <figure class="m"><img src="img/history_top.jpg"><figcaption><b>Rys. 39.</b> Historia operacji</figcaption></figure>
+  <table>
+    <tr><th style="width:22%">Kolumna</th><th>Opis</th></tr>
+    <tr><td><b>Wybierz</b></td><td>Kółko wyboru – tylko przy <span class="tag push">PUSH</span> ze statusem „Zakończone”, jeszcze niecofniętych. Wybraną operację można cofnąć lub zaktualizować. Operacji PULL i UPDATE nie wybiera się.</td></tr>
+    <tr><td><b>ID</b></td><td>Numer operacji. Kliknięcie otwiera <b>Szczegóły operacji</b> (punkt 9.6).</td></tr>
+    <tr><td><b>Typ</b></td><td><span class="tag push">PUSH</span> wysłanie · <span class="tag pull">PULL</span> cofnięcie · <span class="tag update">UPDATE</span> aktualizacja.</td></tr>
+    <tr><td><b>Status</b></td><td><b>Oczekujące</b> (czeka na wykonanie) · <b>W toku</b> · <b>Zakończone</b> · <b>Nieudane</b> (błąd – szczegóły po kliknięciu ID) · <b>Wycofano</b>. Pod statusem są znaczki PIM i synchronizacji (punkt 9.5).</td></tr>
+    <tr><td><b>Katalog</b></td><td>Nazwa katalogu (najedź kursorem, aby zobaczyć pełną ścieżkę). Dopisek <b>zaktualizowano w #…</b> przy PUSH – kliknięcie otwiera historię tego katalogu.</td></tr>
+    <tr><td><b>Użytkownik</b></td><td>Kto wykonał operację.</td></tr>
+    <tr><td><b>Znacznik czasu</b></td><td>Kiedy operację utworzono: <b>Przed chwilą</b>, <b>5 min temu</b>, <b>2 godz. temu</b>, <b>1 dzień temu</b>, <b>3 dni temu</b>; starsze – data i godzina. Najedź kursorem, aby zobaczyć dokładną datę i godzinę (np. 17.09.2026, 16:22:18). Na mniejszych ekranach tę kolumnę widać po przewinięciu tabeli w prawo.</td></tr>
+  </table>
+  <h4>Wyszukiwanie, filtry, sortowanie</h4>
+  <div class="two">
+    <figure style="margin-top:0"><img src="img/history_search.jpg"><figcaption><b>Rys. 40.</b> Wyszukanie „TORBA”</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/filter_update.jpg"><figcaption><b>Rys. 41.</b> Filtr typu „Aktualizacja”</figcaption></figure>
+  </div>
+  <ul>
+    <li><b>Szukaj operacji…</b> – wpisz np. nazwę katalogu i kliknij <span class="ui">Szukaj</span> lub Enter. <span class="ui">Wyczyść</span> wraca do pełnej listy.</li>
+    <li><b>Wszystkie statusy</b> – pokaż tylko: Oczekujące, W toku, Zakończone lub Nieudane.</li>
+    <li><b>Wszystkie typy</b> – pokaż tylko: Wyślij (PUSH), Cofnij (PULL) lub Aktualizacja (UPDATE).</li>
+    <li>Filtry i wyszukiwanie można łączyć. Kliknięcie nagłówka kolumny sortuje listę.</li>
+    <li><span class="ui">↻</span> odświeża listę; <span class="ui">Załaduj więcej</span> (na dole) pokazuje starsze operacje.</li>
+  </ul>
+</section>
+
+<section id="r9-5" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">9.5 Znaczki PIM i synchronizacji</h3>
+  <p>Pod statusem operacji mogą być dwa rodzaje znaczków. Najechanie kursorem pokazuje szczegóły (liczbę prób, godzinę dostarczenia, brakujące pliki, ostatni błąd).</p>
+  <h4>Powiadomienie PIM (przy PUSH, UPDATE i PULL)</h4>
+  <table>
+    <tr><th style="width:30%">Znaczek</th><th>Znaczenie</th><th style="width:30%">Co robić</th></tr>
+    <tr><td><b>PIM: wysyłanie</b></td><td>Powiadomienie jest właśnie wysyłane.</td><td>Poczekać.</td></tr>
+    <tr><td><b>PIM: ponawianie (N)</b></td><td>PIM nie przyjął powiadomienia; aplikacja sama ponawia próby (N = liczba prób, ponawianie nawet do 72 godzin).</td><td>Zwykle poczekać. Gdy trwa długo – zgłosić.</td></tr>
+    <tr><td><b>PIM: powiadomiono</b></td><td>PIM potwierdził odbiór.</td><td>Nic.</td></tr>
+    <tr><td><b>PIM: błąd</b></td><td>Nie udało się dostarczyć powiadomienia.</td><td>Szczegóły → „Wyślij ponownie do PIM” lub zgłosić.</td></tr>
+    <tr><td><b>PIM: zatrzymano</b></td><td>Ktoś ręcznie zatrzymał wysyłanie.</td><td>Można wysłać ponownie ze szczegółów.</td></tr>
+  </table>
+  <h4>Synchronizacja z serwerem zdjęć (tylko przy PUSH)</h4>
+  <table>
+    <tr><th style="width:30%">Znaczek</th><th>Znaczenie</th></tr>
+    <tr><td><b>Synchronizacja: czeka na PIM</b></td><td>Sprawdzanie ruszy po powiadomieniu PIM.</td></tr>
+    <tr><td><b>Synchronizacja: 2/7</b></td><td>Trwa sprawdzanie; na serwerze zdjęć sklepu jest już 2 z 7 plików.</td></tr>
+    <tr><td><b>Zsynchronizowano 7/7</b></td><td>Wszystkie zdjęcia są dostępne na serwerze zdjęć.</td></tr>
+    <tr><td><b>Synchronizacja: przekroczono czas 3/7</b></td><td>Po 3 godzinach nie wszystkie zdjęcia się pojawiły. Można sprawdzić ponownie ze szczegółów.</td></tr>
+    <tr><td><b>Synchronizacja: anulowano</b></td><td>Sprawdzanie zakończone, bo katalog został cofnięty (PULL).</td></tr>
+    <tr><td><b>Synchronizacja: zatrzymano 0/7</b></td><td>Ktoś ręcznie zatrzymał sprawdzanie.</td></tr>
+  </table>
+
+  <h3 id="r9-6">9.6 Okno szczegółów operacji</h3>
+  <div class="two">
+    <div>
+      <p>Otwierasz je, klikając <b>numer (ID)</b> operacji albo dopisek „zaktualizowano w #…”. Pokazuje:</p>
+      <ul>
+        <li><b>kto</b> i <b>kiedy</b> (Utworzono, Rozpoczęto, Zakończono),</li>
+        <li><b>Źródło</b> i <b>Cel</b> – skąd i dokąd (A: = Ścieżka A, B: = miejsce docelowe),</li>
+        <li><b>Pliki</b> – liczba plików; przy błędzie – pole <b>Błąd</b>,</li>
+        <li>dane powiadomienia PIM (eventType: <i>created</i> = wysłanie, <i>updated</i> = aktualizacja, <i>deleted</i> = cofnięcie; liczba prób, godzina dostarczenia),</li>
+        <li>stan synchronizacji z listą plików: <b>✓</b> jest na serwerze zdjęć, <b>✗</b> jeszcze nie ma,</li>
+        <li>przy UPDATE – listę wykonanych zmian,</li>
+        <li>powiązane operacje: <b>Wypchnięcie (PUSH)</b>, <b>Aktualizacje (N)</b>, <b>Cofnięcie (PULL)</b>.</li>
+      </ul>
+      <p>Przyciski (pokazują się tylko, gdy mają sens):</p>
+      <table>
+        <tr><th style="width:48%">Przycisk</th><th>Działanie</th></tr>
+        <tr><td>Zatrzymaj wysyłanie do PIM</td><td>Powiadomienie nie zostanie wysłane ani ponowione (z potwierdzeniem).</td></tr>
+        <tr><td>Wyślij ponownie do PIM</td><td>Wysyła powiadomienie jeszcze raz.</td></tr>
+        <tr><td>Zatrzymaj sprawdzanie serwera obrazów</td><td>Kończy sprawdzanie (z potwierdzeniem).</td></tr>
+        <tr><td>Sprawdź ponownie serwer zdjęć</td><td>Wznawia sprawdzanie.</td></tr>
+      </table>
+      <p class="small">Okno zamyka przycisk <b>Zamknij</b> lub <b>×</b>.</p>
+    </div>
+    <figure style="margin-top:0" class="tall2"><img src="img/push28_details.jpg"><figcaption><b>Rys. 42.</b> Szczegóły PUSH #35 w trakcie synchronizacji – na dole widoczne przyciski sprawdzania serwera</figcaption></figure>
+  </div>
+</section>
+
+<section id="r9-7" style="margin-top:7mm">
+  <h3 style="margin-top:0;font-size:15pt">9.7 Ustawienia</h3>
+  <div class="two">
+    <figure style="margin-top:0" class="tall2"><img src="img/settings.jpg"><figcaption><b>Rys. 43.</b> Okno „Ustawienia użytkownika”</figcaption></figure>
+    <div>
+      <p>Ustawienia są zapisane na Twoim koncie – działają na każdym komputerze.</p>
+      <h4>Preferencje wyświetlania</h4>
+      <ul>
+        <li><b>Motyw</b>: Systemowy (automatyczny) / Jasny / Ciemny.</li>
+        <li><b>Język</b>: Systemowy (automatyczny) / Angielski / Polski.</li>
+      </ul>
+      <h4>Preferencje sesji</h4>
+      <ul>
+        <li><b>Zapamiętaj ostatnio odwiedzony podkatalog Ścieżki A</b> – po zalogowaniu otworzy się ostatni folder (domyślnie włączone).</li>
+      </ul>
+      <h4>Potwierdzenia</h4>
+      <p>Przełącznik włączony = okno pytania jest pokazywane. Wyłączają się też same, gdy zaznaczysz „Nie pytaj ponownie”.</p>
+      <ul>
+        <li>Potwierdzaj przed wypchnięciem (PUSH)</li>
+        <li>Potwierdzaj przed cofnięciem (PULL)</li>
+        <li>Ostrzegaj przy cofaniu zaktualizowanego katalogu</li>
+        <li>Potwierdzaj przed zastosowaniem zmian w katalogu (zmiany nazw, dodane pliki)</li>
+        <li>Potwierdzaj zmiany w katalogu, których nie można cofnąć (usuwanie, zastępowanie, usuwanie plików ze Ścieżki A)</li>
+        <li>Potwierdzaj odrzucenie niezapisanych zmian w katalogu</li>
+        <li>Potwierdzaj przywracanie ustawień domyślnych</li>
+      </ul>
+      <div class="box warn"><span class="t">Zalecenie</span>Nie wyłączaj potwierdzeń PUSH, PULL i zmian nieodwracalnych. Po ich wyłączeniu operacja rusza od razu po kliknięciu przycisku (także z menu Windows „Wyślij zaznaczone przez RFM”).</div>
+      <p><span class="ui">Zapisz</span> zapisuje zmiany · <span class="ui">Anuluj</span> zamyka bez zmian · <span class="ui">Przywróć ustawienia domyślne</span> przywraca wszystko, w tym włącza wszystkie potwierdzenia.</p>
+    </div>
+  </div>
+
+  <h3 id="r9-8">9.8 Komunikaty</h3>
+  <p>Krótkie komunikaty pojawiają się na kilka sekund w prawym dolnym rogu ekranu:</p>
+  <ul>
+    <li><b style="color:#16a34a">zielone</b> – sukces, np. „Rozpoczęto wysyłanie dla 2 katalogów”, „Operacja cofania rozpoczęta”, „Katalog „…” został zaktualizowany”, „Ustawienia zapisane pomyślnie”,</li>
+    <li><b style="color:#dc2626">czerwone</b> – błąd lub ostrzeżenie, np. „Operacja wysyłania nie powiodła się: …”, „Katalog „…” został zaktualizowany, z ostrzeżeniami: …”.</li>
+  </ul>
+  <p>Odmowy z powodu zasad katalogu nie znikają same – pokazują się w oknie „Nie można kontynuować”, które zamykasz przyciskiem <b>Zamknij</b>.</p>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="chapter" id="r10">
+  <h2><span class="num">10</span>Problemy i pytania</h2>
+  <table>
+    <tr><th style="width:38%">Sytuacja</th><th>Rozwiązanie</th></tr>
+    <tr><td>Przycisk <b>Wyślij</b> jest szary.</td><td>Zaznacz pole wyboru przy katalogu. Pliki nie mają pól wyboru – wysyła się całe foldery.</td></tr>
+    <tr><td>Przy operacji w historii nie ma kółka wyboru.</td><td>Kółko jest tylko przy <b>PUSH</b> ze statusem „Zakończone”, które nie zostały cofnięte. Operacji PULL i UPDATE nie wybiera się – do aktualizacji wybierz PUSH danego katalogu.</td></tr>
+    <tr><td>Katalog zniknął ze Ścieżki A.</td><td>Tak działa wysłanie (PUSH). Aby go odzyskać – <b>Cofnij</b> w historii.</td></tr>
+    <tr><td>Po cofnięciu brakuje zdjęcia, które kiedyś było w katalogu.</td><td>Zostało usunięte lub zastąpione w aktualizacji. PULL zwraca obecny stan katalogu (rozdział 8). Sprawdź listę zmian w szczegółach PUSH.</td></tr>
+    <tr><td>„Nie można kontynuować”.</td><td>Katalog nie spełnia zasad – przeczytaj powód w oknie i porównaj z rozdziałem <a href="#r2">2</a>.</td></tr>
+    <tr><td>„Poczekaj, aż wszystkie pliki zostaną przesłane”.</td><td>Przesyłanie z komputera jeszcze trwa – poczekaj na napis „Przesłano: …”.</td></tr>
+    <tr><td>„… przesyłanie nie powiodło się lub wygasło – wybierz plik ponownie”.</td><td>Wybierz plik jeszcze raz przyciskiem „Prześlij…”.</td></tr>
+    <tr><td>„Brak aktywnych workerów…” / „Brak dostępnego workera…”.</td><td>Usługa wykonująca operacje na plikach nie działa. Zgłoś administratorowi.</td></tr>
+    <tr><td>„Operacje na Ścieżce A muszą używać ścieżek zaczynających się od „A:”…”.</td><td>Wpisując ścieżkę, zaczynaj od <span class="path">A:</span>, np. <span class="path">A:/tester</span>.</td></tr>
+    <tr><td>Wyłączyłem okno potwierdzenia („Nie pytaj ponownie”) i chcę je przywrócić.</td><td><b>Ustawienia</b> → sekcja <b>Potwierdzenia</b> → włącz przełącznik → <b>Zapisz</b>.</td></tr>
+    <tr><td>Nie widzę pozycji RFM w menu Windows.</td><td>Zaznacz tylko foldery; w Windows 11 kliknij „Pokaż więcej opcji”; folder musi leżeć w dozwolonej lokalizacji. Jeśli nadal brak – dodatek RFM nie jest zainstalowany; zgłoś administratorowi.</td></tr>
+    <tr><td>Menu Windows otworzyło aplikację, ale nic nie jest zaznaczone („Wybrana ścieżka nie jest skonfigurowana dla operacji RFM”).</td><td>Folder leży poza Ścieżką A albo został w międzyczasie przeniesiony. Sprawdź, gdzie jest folder.</td></tr>
+    <tr><td>Status <b>PIM: ponawianie</b> lub <b>PIM: błąd</b> długo się nie zmienia.</td><td>Otwórz szczegóły operacji; możesz użyć „Wyślij ponownie do PIM”. Gdy problem się powtarza – zgłoś administratorowi.</td></tr>
+    <tr><td>Synchronizacja: przekroczono czas.</td><td>W szczegółach sprawdź, których plików brakuje (✗), i użyj „Sprawdź ponownie serwer zdjęć”.</td></tr>
+  </table>
+  <div class="box info"><span class="t">Zgłaszając problem, podaj</span>numer operacji (ID), nazwę katalogu, godzinę oraz treść komunikatu (najlepiej zrzut ekranu okna szczegółów operacji).</div>
+</section>
+
+</body>
+</html>
