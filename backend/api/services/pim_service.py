@@ -5,7 +5,7 @@ Second, independent signalling target alongside ROSAPI. Notifies the PIM
 system whenever a catalog operation completes:
 
     PUSH   -> eventType "created"
-    PULL   -> eventType "updated"
+    PULL   -> eventType "deleted"
     UPDATE -> eventType "updated"
 
 Delivery is reliable (transactional outbox):
@@ -89,7 +89,7 @@ DEFAULT_TEMPLATE = (
 # Operation type -> (toggle key, eventType key, default eventType)
 _EVENT_TOGGLES = {
     "PUSH": ('pim_push_enabled', 'pim_push_event_type', 'created'),
-    "PULL": ('pim_pull_enabled', 'pim_pull_event_type', 'updated'),
+    "PULL": ('pim_pull_enabled', 'pim_pull_event_type', 'deleted'),
     "UPDATE": ('pim_update_enabled', 'pim_update_event_type', 'updated'),
 }
 

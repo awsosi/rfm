@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     pim_push_enabled: bool = True
     pim_push_event_type: str = "created"
     pim_pull_enabled: bool = True
-    pim_pull_event_type: str = "updated"
+    pim_pull_event_type: str = "deleted"
     pim_update_enabled: bool = True
     pim_update_event_type: str = "updated"
 

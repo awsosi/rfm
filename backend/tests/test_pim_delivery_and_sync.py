@@ -553,12 +553,12 @@ async def test_push_update_pull_through_the_endpoints(session, db_manager, setti
     assert details.operation.pim_delivery.status == "DELIVERED"
     assert details.updates[0].pim_delivery.event_type == "updated"
 
-    # PULL: PIM hears "updated" with the PUSH's tgId; a finished check stays as the record
+    # PULL: PIM hears "deleted" with the PUSH's tgId; a finished check stays as the record
     pulled = await pull_operation(FilePullRequest(operation_id=push.id, worker_id=worker.id),
                                   fake_request(), user, session, settings)
     assert pulled.status == OperationStatus.COMPLETED
     received = await remote.wait_for_pim(3)
-    assert received[2]["body"]["tgId"] == TORBA_TG and received[2]["body"]["eventType"] == "updated"
+    assert received[2]["body"]["tgId"] == TORBA_TG and received[2]["body"]["eventType"] == "deleted"
     assert (await check_of(db_manager, push.id)).status == "SYNCED"
 
 

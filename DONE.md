@@ -6,6 +6,16 @@
 
 ---
 
+## 2026-09-17 - PULL reports eventType "deleted" to PIM
+
+**Bug.** Dev PULL #21 (`OZDOBA PS261403 0-BRASS`) sent PIM `eventType "updated"` (event 13, delivered 200). PULL removes the catalog from PATH_B, so PIM must hear `deleted`. The code default, `Settings`, the env sync fallback, `.env.example` and the value seeded by migration 012 all said `updated` (the original mapping); PIM keys sync from env only when set, so the seeded DB value was what counted.
+
+**Fix.** Default `deleted` in `pim_service._EVENT_TOGGLES`, `config.py`, `app.py`, `.env.example` and the Admin Panel placeholder. Migration `019` switches `pim_pull_event_type` from `updated` to `deleted`; any other operator-set value is kept (downgrade reverses only `deleted`). PUSH (`created`) and UPDATE (`updated`) unchanged.
+
+**Tests.** 105 passed, 17 errors (pre-existing `test_auth.py` fixture), PostgreSQL 16; the PULL assertions in `test_pim_delivery_and_sync.py` and `test_update_uploads.py` now expect `deleted`. Migration 019 downgrade/upgrade round-trip, custom value left alone.
+
+---
+
 ## 2026-09-17 - Stop pending PIM deliveries and image host checks
 
 **What.** Queued background jobs can now be stopped instead of retrying for up to 72 h (e.g. dev event 1, PUSH #9, stuck on 422).

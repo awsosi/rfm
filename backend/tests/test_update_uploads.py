@@ -432,7 +432,7 @@ async def test_update_replace_add_reaches_pim_history_and_pull(session, db_manag
     assert pulled.params_json["update_operation_ids"] == [result.id]
     assert setup["fake"].files["A:/CAT/a.jpg"] == b"uploaded-a"  # the updated version came back
     received = await pim.wait_for(2)
-    assert received[1]["body"]["eventType"] == "updated"
+    assert received[1]["body"]["eventType"] == "deleted"
     details = await get_operation_details(result.id, setup["user"], session)
     assert details.push.id == setup["push"].id and details.pull.id == pulled.id
 

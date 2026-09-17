@@ -122,7 +122,7 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "pim_push_enabled": (("PIM_PUSH_ENABLED",), str(settings.pim_push_enabled).lower()),
         "pim_push_event_type": (("PIM_PUSH_EVENT_TYPE",), settings.pim_push_event_type or "created"),
         "pim_pull_enabled": (("PIM_PULL_ENABLED",), str(settings.pim_pull_enabled).lower()),
-        "pim_pull_event_type": (("PIM_PULL_EVENT_TYPE",), settings.pim_pull_event_type or "updated"),
+        "pim_pull_event_type": (("PIM_PULL_EVENT_TYPE",), settings.pim_pull_event_type or "deleted"),
         "pim_update_enabled": (("PIM_UPDATE_ENABLED",), str(settings.pim_update_enabled).lower()),
         "pim_update_event_type": (("PIM_UPDATE_EVENT_TYPE",), settings.pim_update_event_type or "updated"),
         "pim_payload_template": (("PIM_PAYLOAD_TEMPLATE",), settings.pim_payload_template or ""),
