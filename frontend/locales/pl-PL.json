@@ -199,7 +199,7 @@
       "tooFewImages": "Ten folder zawiera {images} plików graficznych; wymagane są co najmniej {required}.",
       "tooFewImagesAfterUpdate": "Po tych zmianach folder zawierałby {images} plików graficznych; wymagane są co najmniej {required}.",
       "typeMismatch": "Niektóre pliki nie są w rzeczywistości obrazami mimo swojego rozszerzenia: {names}. Usuń je lub zastąp.",
-      "invalidFileNames": "PIM przyjmuje tylko pliki o nazwie <numer>.<rozszerzenie>, np. 3.png. Zmień nazwę lub usuń: {names}.",
+      "invalidFileNames": "PIM przyjmuje tylko pliki o nazwach w postaci {forms}. Zmień nazwę lub usuń: {names}.",
       "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
       "listFailed": "Nie udało się odczytać zawartości folderu.",
       "stagedTypeMismatch": "Nowy plik dla {names} nie jest w rzeczywistości obrazem mimo swojego rozszerzenia. Niczego nie zmieniono.",

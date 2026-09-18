@@ -3013,6 +3013,23 @@ async function openOperationDetails(operationId) {
 }
 
 /**
+ * The file name forms PIM accepts, as examples the user can copy.
+ *
+ * ``allowed_name_suffixes`` is configurable (Admin Panel -> Directory Content
+ * Validation), so the message must be built from what the server sent rather
+ * than hard-coding "3.png" in every locale.
+ *
+ * @param {Object} content - the content gate result from the 422 detail
+ * @returns {string} e.g. "3.png, 3_ai.png"
+ */
+function acceptedNameForms(content) {
+    const suffixes = Array.isArray(content?.allowed_name_suffixes)
+        ? content.allowed_name_suffixes
+        : [];
+    return ['3.png', ...suffixes.map(suffix => `3${suffix}.png`)].join(', ');
+}
+
+/**
  * Turn a structured validation rejection into readable, localised text.
  *
  * The backend returns i18n keys (never English prose) plus the numbers and
@@ -3058,6 +3075,7 @@ function formatValidationFailure(validation) {
         lines.push(t('validation.contentTitle'));
         const badNames = content.invalid_names || [];
         const nameRule = 'contentValidation.invalidFileNames';
+        const forms = acceptedNameForms(content);
         if (content.reason) {
             const names = content.reason === nameRule
                 ? badNames.join(', ')
@@ -3065,12 +3083,16 @@ function formatValidationFailure(validation) {
             lines.push(t(`validation.${content.reason}`, {
                 images: content.image_count ?? 0,
                 required: content.min_required ?? 0,
-                names: names
+                names: names,
+                forms: forms
             }));
         }
         if (content.reason !== nameRule && badNames.length > 0) {
             // Reported alongside another failure, so the user can fix both at once
-            lines.push(t(`validation.${nameRule}`, { names: badNames.join(', ') }));
+            lines.push(t(`validation.${nameRule}`, {
+                names: badNames.join(', '),
+                forms: forms
+            }));
         }
         lines.push('');
         lines.push(t('validation.summary', {

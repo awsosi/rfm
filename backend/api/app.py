@@ -204,6 +204,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
             ("ENABLE_PUSH_VALIDATION_FILE_NAMES", "PUSH_VALIDATION_FILE_NAMES"),
             str(settings.push_validation_file_names).lower(),
         ),
+        "push_validation_name_suffixes": (
+            ("PUSH_VALIDATION_NAME_SUFFIXES",),
+            settings.push_validation_name_suffixes or "",
+        ),
         # UPDATE behaviour
         "enable_update_archive_mirror": (
             ("ENABLE_UPDATE_ARCHIVE_MIRROR",),
@@ -510,7 +514,8 @@ async def run_catalog_preflight(
     1. The catalog name must match a real product in PolkaSQL.
     2. The directory must hold at least the configured number of genuine
        image files and, while ``push_validation_file_names`` is on, only files
-       named ``<number>.<extension>`` (the form PIM accepts).
+       named ``<number>[<suffix>].<extension>`` (the forms PIM accepts, where
+       the suffixes come from ``push_validation_name_suffixes``).
 
     Returns ``(catalog_result, content_result)``. Both gates are evaluated even
     when the first fails, so the user sees every problem at once instead of
@@ -573,7 +578,9 @@ async def run_catalog_preflight(
         )
         content_result.total_files = len(content_result.files)
         if content_result.check_file_names:
-            content_result.invalid_names = invalid_file_names(content_result.files)
+            content_result.invalid_names = invalid_file_names(
+                content_result.files, content_result.allowed_name_suffixes
+            )
         if content_result.image_count < content_result.min_required:
             content_result.valid = False
             content_result.reason = "contentValidation.tooFewImagesAfterUpdate"

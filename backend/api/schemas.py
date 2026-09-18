@@ -405,7 +405,11 @@ class ContentValidationResponse(BaseModel):
     invalid_files: list[dict[str, Any]] = Field(default_factory=list)
     invalid_names: list[str] = Field(
         default_factory=list,
-        description='Files not named "<number>.<extension>", the only form PIM accepts',
+        description='Files not named "<number>[<suffix>].<extension>", the only form PIM accepts',
+    )
+    allowed_name_suffixes: list[str] = Field(
+        default_factory=list,
+        description='Suffixes accepted between the number and the extension, e.g. ["_ai"]',
     )
     min_required: int = 0
     allowed_extensions: list[str] = Field(default_factory=list)

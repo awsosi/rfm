@@ -17,8 +17,10 @@ operating systems' metadata files while ``push_ignore_system_files`` is on
 neither count nor be announced to PIM.
 
 When ``push_validation_file_names`` is on (default), every remaining file must
-be named ``<number>.<extension>`` (e.g. ``3.png``), the only form PIM accepts.
-Otherwise PIM answers 422 after the files were already copied.
+be named ``<number>.<extension>`` (e.g. ``3.png``), optionally with one of the
+``push_validation_name_suffixes`` between the two (e.g. ``3_ai.png`` for an
+AI-generated image). Those are the forms PIM accepts; anything else makes PIM
+answer 422 after the files were already copied.
 
 The listing happens once, on the worker, via the ``validate_dir`` command, and
 its result feeds both this validation and the PIM ``files`` array.
@@ -49,6 +51,7 @@ _CONFIG_KEYS = [
     'push_validation_allowed_extensions',
     'push_validation_verify_content',
     'push_validation_file_names',
+    'push_validation_name_suffixes',
 ]
 
 # Every setting that decides which files PUSH ignores (and destroys at source)
@@ -63,8 +66,14 @@ SYSTEM_FILE_MASKS = [
     "Thumbs.db", "ehthumbs.db", "desktop.ini",      # Windows
 ]
 
-# The file name form PIM accepts: "<number>.<extension>", e.g. "3.png"
-_PIM_FILE_NAME_RE = re.compile(r"[0-9]+\.[A-Za-z0-9]+")
+# Suffixes allowed between the number and the extension, e.g. "1_ai.png" for
+# an AI-generated image. Matched case-insensitively, so "_ai", "_AI", "_Ai" and
+# "_aI" all pass. An empty setting means numbers only.
+DEFAULT_NAME_SUFFIXES = "_ai"
+
+# A suffix ends up inside a file name, so only these characters are accepted.
+# An operator's typo is dropped with a warning rather than breaking every PUSH.
+_SUFFIX_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 @dataclass
@@ -80,8 +89,11 @@ class ContentValidationResult:
     non_image_files: List[str] = field(default_factory=list)
     # Files whose extension disagrees with their real content
     invalid_files: List[dict] = field(default_factory=list)
-    # Files not named "<number>.<extension>" (only filled while the rule is on)
+    # Files whose name PIM rejects (only filled while the rule is on)
     invalid_names: List[str] = field(default_factory=list)
+    # Suffixes accepted between the number and the extension, e.g. ["_ai"];
+    # the WebUI shows the accepted forms, and UPDATE re-judges names with them
+    allowed_name_suffixes: List[str] = field(default_factory=list)
     min_required: int = 0
     allowed_extensions: List[str] = field(default_factory=list)
     # i18n key resolved by the frontend, never a user-facing English string
@@ -101,6 +113,7 @@ class ContentValidationResult:
             "non_image_files": self.non_image_files,
             "invalid_files": self.invalid_files,
             "invalid_names": self.invalid_names,
+            "allowed_name_suffixes": self.allowed_name_suffixes,
             "min_required": self.min_required,
             "allowed_extensions": self.allowed_extensions,
             "reason": self.reason,
@@ -150,9 +163,61 @@ def matches_ignore_mask(name: str, masks: List[str]) -> bool:
     return False
 
 
-def invalid_file_names(files: List[str]) -> List[str]:
-    """Names PIM rejects: anything not ``<number>.<extension>``."""
-    return [name for name in files if not _PIM_FILE_NAME_RE.fullmatch(name)]
+def name_suffixes_from_config(config: dict) -> List[str]:
+    """
+    The suffixes allowed between the number and the extension.
+
+    ``config`` holds the ``push_validation_name_suffixes`` row. The bare
+    ``<number>.<extension>`` form is always accepted, so an empty setting means
+    numbers only. Entries that could not appear in a file name are dropped: a
+    typo in the Admin Panel must not block every PUSH.
+    """
+    value = config.get('push_validation_name_suffixes')
+    if value is None:
+        value = DEFAULT_NAME_SUFFIXES
+
+    suffixes: List[str] = []
+    seen = set()
+    for raw in (value or "").split(','):
+        suffix = raw.strip()
+        if not suffix:
+            continue
+        if not _SUFFIX_RE.fullmatch(suffix):
+            logger.warning(
+                f"Ignoring push_validation_name_suffixes entry {suffix!r}: "
+                f"only letters, digits, '_' and '-' are allowed"
+            )
+            continue
+        # Matching is case-insensitive, so "_ai" and "_AI" are one suffix
+        if suffix.lower() in seen:
+            continue
+        seen.add(suffix.lower())
+        suffixes.append(suffix)
+    return suffixes
+
+
+def file_name_pattern(suffixes: Optional[List[str]] = None):
+    """
+    Compile the file name form PIM accepts: ``<number>[<suffix>].<extension>``.
+
+    The suffix group is ASCII case-insensitive (``(?ai:...)``) while the rest
+    of the pattern stays exact, so ``1_AI.png`` passes but non-ASCII digits and
+    Unicode case folding (e.g. the Kelvin sign for ``k``) do not sneak through.
+    """
+    if suffixes is None:
+        suffixes = name_suffixes_from_config({})
+    group = ""
+    if suffixes:
+        group = "(?ai:" + "|".join(re.escape(s) for s in suffixes) + ")?"
+    return re.compile(r"[0-9]+" + group + r"\.[A-Za-z0-9]+")
+
+
+def invalid_file_names(
+    files: List[str], suffixes: Optional[List[str]] = None
+) -> List[str]:
+    """Names PIM rejects: anything ``file_name_pattern`` does not match."""
+    pattern = file_name_pattern(suffixes)
+    return [name for name in files if not pattern.fullmatch(name)]
 
 
 async def validate_directory_content(
@@ -181,6 +246,7 @@ async def validate_directory_content(
     ]
     verify_content = _truthy(config.get('push_validation_verify_content'), default=True)
     check_file_names = _truthy(config.get('push_validation_file_names'), default=True)
+    name_suffixes = name_suffixes_from_config(config)
     ignore_masks = ignore_masks_from_config(config)
 
     if not _truthy(config.get('push_validation_enabled'), default=True):
@@ -190,6 +256,7 @@ async def validate_directory_content(
             path=path,
             min_required=min_files,
             allowed_extensions=allowed_extensions,
+            allowed_name_suffixes=name_suffixes,
             skipped=True,
         )
 
@@ -270,11 +337,12 @@ async def validate_directory_content(
         invalid_files=invalid_files,
         min_required=min_files,
         allowed_extensions=allowed_extensions,
+        allowed_name_suffixes=name_suffixes,
         check_file_names=check_file_names,
     )
     if check_file_names:
         # Filled even when another rule fails, so the user sees every problem
-        result.invalid_names = invalid_file_names(files)
+        result.invalid_names = invalid_file_names(files, name_suffixes)
 
     if image_count < min_files:
         result.valid = False
@@ -303,7 +371,8 @@ async def validate_directory_content(
         result.reason = "contentValidation.invalidFileNames"
         logger.warning(
             f"Content validation failed for {path!r}: "
-            f"{len(result.invalid_names)} file(s) not named <number>.<extension>: "
+            f"{len(result.invalid_names)} file(s) PIM would reject "
+            f"(accepted: <number>[{'|'.join(name_suffixes) or '-'}].<extension>): "
             f"{result.invalid_names[:10]}"
         )
         return result

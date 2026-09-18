@@ -581,7 +581,7 @@ async def test_pull_cancels_an_active_check(session, db_manager, remote, configu
 
 
 # ---------------------------------------------------------------------------
-# PIM file name rule: only "<number>.<extension>" reaches PIM
+# PIM file name rule: only "<number>[<suffix>].<extension>" reaches PIM
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
@@ -659,6 +659,45 @@ async def test_name_rule_refuses_push_before_anything_is_copied(
     received = await remote.wait_for_pim(1)
     assert received[0]["body"]["files"] == ["1.png", "2.png"]
     assert sorted(p for p in fake.files if p.startswith("B:/")) == [f"B:/{TORBA}/1.png", f"B:/{TORBA}/2.png"]
+
+
+async def test_ai_suffix_is_accepted_and_configurable(session, db_manager, settings, remote, name_rule_setup):
+    """End users append "_ai" to AI-generated images, in whatever case. Those
+    names must push, and the accepted list must follow the Admin Panel."""
+    from api.app import preflight_catalog, push_operation
+    from api.schemas import FilePushRequest
+
+    user, worker, fake = name_rule_setup["user"], name_rule_setup["worker"], name_rule_setup["fake"]
+    source = f"A:/{TORBA}"
+    fake.files.update({f"{source}/1.png": PNG, f"{source}/2_ai.png": PNG, f"{source}/3_AI.png": PNG})
+    request = FilePushRequest(source_path=source, worker_id=worker.id)
+
+    # The default list carries "_ai", and the WebUI is told so it can name the
+    # accepted forms instead of hard-coding "3.png" in every locale
+    preflight = await preflight_catalog(request, user, session, settings)
+    assert preflight.ok is True
+    assert preflight.content.invalid_names == []
+    assert preflight.content.allowed_name_suffixes == ["_ai"]
+
+    # Cleared, the setting means numbers only: the same catalog is refused
+    # before anything is copied, exactly as it was before suffixes existed
+    await set_config(session, push_validation_name_suffixes="")
+    with pytest.raises(HTTPException) as refused:
+        await push_operation(request, fake_request(), user, session, settings)
+    assert refused.value.status_code == 422
+    content = refused.value.detail["content"]
+    assert content["reason"] == "contentValidation.invalidFileNames"
+    assert content["invalid_names"] == ["2_ai.png", "3_AI.png"]
+    assert content["allowed_name_suffixes"] == []
+    assert not any(p.startswith("B:/") for p in fake.files)
+    assert remote.pim_received == []
+
+    # Put "_ai" back and the whole catalog pushes, suffixes and all
+    await set_config_value(session, push_validation_name_suffixes="_ai")
+    push = await push_operation(request, fake_request(), user, session, settings)
+    assert push.status == OperationStatus.COMPLETED
+    received = await remote.wait_for_pim(1)
+    assert received[0]["body"]["files"] == ["1.png", "2_ai.png", "3_AI.png"]
 
 
 async def test_name_rule_can_be_switched_off(session, db_manager, settings, remote, name_rule_setup):

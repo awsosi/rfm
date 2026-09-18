@@ -2,7 +2,48 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-09-17
+> **Last Updated:** 2026-09-18
+
+---
+
+## 2026-09-18 - Configurable file name suffixes (`1_ai.png`)
+
+**Why.** End users append `_ai` to AI-generated images (`1_ai.png`). The PIM file
+name rule accepted only `<number>.<extension>`, so those catalogs were refused at
+preflight. Rather than widening the hard-coded regex, the accepted suffixes are
+now a setting, since the next batch of suffixes will not be `_ai`.
+
+**New setting `push_validation_name_suffixes`** (Admin Panel -> System Settings ->
+Directory Content Validation -> "Allowed File Name Suffixes"), default `_ai`:
+- Comma-separated suffixes accepted between the number and the extension, so
+  `1.png` and `1_ai.png` both pass while `front.jpg` and `1_bi.png` do not.
+- Matching is ASCII case-insensitive, so `_ai`, `_AI`, `_Ai` and `_aI` all pass
+  and are one entry, not four. The rest of the name stays exact: non-ASCII digits
+  (Arabic-Indic and friends) and Unicode case folding (the Kelvin sign for `k`) still fail.
+- Letters, digits, `_` and `-` only. An entry that could not appear in a file name
+  is dropped with a warning instead of breaking every PUSH.
+- Empty means numbers only, i.e. the rule exactly as it behaved before.
+- Applies to PUSH and to UPDATE, which re-judges names against the post-action
+  file list, so an added `4_ai.png` passes and an added `front.jpg` does not.
+
+**Where it lives.** `_PIM_FILE_NAME_RE` is gone; `file_name_pattern()` compiles the
+rule from the configured suffixes and `invalid_file_names(files, suffixes)` is the
+single enforcement point (`backend/api/services/content_validation_service.py`).
+The result carries `allowed_name_suffixes`, so the WebUI message names the accepted
+forms ("PIM accepts only files named like 3.png, 3_ai.png") instead of hard-coding
+`3.png` in each locale. EN + PL updated.
+
+**Migration `021`** seeds the key (`ON CONFLICT DO NOTHING`, so an operator's value
+is never clobbered) and corrects the now-wrong `push_validation_file_names`
+description. `PUSH_VALIDATION_NAME_SUFFIXES` seeds/forces it from `.env`; like the
+other content-validation keys it syncs only when the variable is actually present,
+so the Admin Panel stays authoritative.
+
+**Verified.** 32 unit tests in `backend/tests/test_content_validation.py` (suffix
+parsing, the case table, dropped typos, the empty list) and an end-to-end PUSH in
+`backend/tests/test_pim_delivery_and_sync.py`: `1.png`/`2_ai.png`/`3_AI.png` push
+and reach PIM with the default, are refused with `invalid_names` when the setting
+is cleared, and push again when it is restored.
 
 ---
 

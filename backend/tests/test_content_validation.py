@@ -189,7 +189,11 @@ async def test_command_sent_matches_the_worker_contract():
 
 from types import SimpleNamespace
 
-from api.services.content_validation_service import invalid_file_names, matches_ignore_mask
+from api.services.content_validation_service import (
+    invalid_file_names,
+    matches_ignore_mask,
+    name_suffixes_from_config,
+)
 
 
 class _ConfigDb:
@@ -232,9 +236,38 @@ def test_ignore_masks_match_like_the_worker(name, masks, expected):
 
 
 def test_pim_file_name_rule():
-    ok = ["1.png", "03.JPG", "12.jpeg", "7.webp"]
-    bad = ["Thumbs.db", "front.jpg", "1.png.bak", "1", ".png", "1 .png", "1_2.png", "\u0663.png", "1.pn g", "-1.png"]
+    # The default suffix list ("_ai") applies when none is passed
+    ok = ["1.png", "03.JPG", "12.jpeg", "7.webp", "1_ai.png", "2_AI.JPG", "3_Ai.png", "4_aI.webp"]
+    bad = ["Thumbs.db", "front.jpg", "1.png.bak", "1", ".png", "1 .png", "1_2.png", "\u0663.png", "1.pn g",
+           "-1.png", "_ai.png", "1_bi.png", "1_ai_ai.png", "ai_1.png", "1-ai.png"]
     assert invalid_file_names(ok + bad) == bad
+
+
+def test_name_suffixes_are_parsed_from_config():
+    assert name_suffixes_from_config({}) == ["_ai"]
+    # An operator's own list replaces the default, whitespace and all
+    assert name_suffixes_from_config({"push_validation_name_suffixes": " _ai , _gen "}) == ["_ai", "_gen"]
+    # Matching is case-insensitive, so these are one suffix, not two
+    assert name_suffixes_from_config({"push_validation_name_suffixes": "_ai,_AI"}) == ["_ai"]
+    # Empty means numbers only: the rule as it behaved before suffixes existed
+    assert name_suffixes_from_config({"push_validation_name_suffixes": ""}) == []
+    assert name_suffixes_from_config({"push_validation_name_suffixes": " , "}) == []
+    # A typo must not break every PUSH: the bad entry is dropped, the rest stand
+    assert name_suffixes_from_config({"push_validation_name_suffixes": "_ai,.png,a b,_ok"}) == ["_ai", "_ok"]
+
+
+@pytest.mark.parametrize("suffixes, name, accepted", [
+    (["_ai"], "1_ai.png", True),
+    (["_ai"], "1_AI.png", True),
+    (["_ai"], "1_gen.png", False),
+    (["_gen"], "1_ai.png", False),
+    (["_ai", "_gen"], "1_gen.png", True),
+    ([], "1_ai.png", False),
+    ([], "1.png", True),
+    (["_ai"], "1.png", True),
+])
+def test_configured_suffixes_decide_which_names_pass(suffixes, name, accepted):
+    assert (invalid_file_names([name], suffixes) == []) is accepted
 
 
 @pytest.mark.asyncio
@@ -257,6 +290,41 @@ async def test_name_rule_is_on_by_default_and_ignores_masked_files():
     assert result.reason == "contentValidation.invalidFileNames"
     assert result.invalid_names == ["front.jpg"]
     assert result.to_dict()["invalid_names"] == ["front.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_ai_suffix_passes_by_default():
+    """End users name AI-generated images "1_ai.png"; those must not be
+    refused, and the accepted suffixes travel to the WebUI for the message."""
+    payload = {"files": ["1.png", "2_ai.png", "3_AI.PNG"], "total_files": 3, "image_count": 3,
+               "non_image_files": [], "invalid_files": []}
+    result = await _validate_with(payload)
+
+    assert result.valid is True and result.invalid_names == []
+    assert result.allowed_name_suffixes == ["_ai"]
+    assert result.to_dict()["allowed_name_suffixes"] == ["_ai"]
+
+
+@pytest.mark.asyncio
+async def test_suffix_list_is_configurable():
+    payload = {"files": ["1.png", "2_ai.png", "3_gen.png"], "total_files": 3, "image_count": 3,
+               "non_image_files": [], "invalid_files": []}
+
+    # A different list: _ai no longer passes, _gen does
+    result = await _validate_with(payload, push_validation_name_suffixes="_gen")
+    assert result.valid is False
+    assert result.reason == "contentValidation.invalidFileNames"
+    assert result.invalid_names == ["2_ai.png"]
+    assert result.allowed_name_suffixes == ["_gen"]
+
+    # Both listed: the catalog passes
+    both = await _validate_with(payload, push_validation_name_suffixes="_ai,_gen")
+    assert both.valid is True and both.invalid_names == []
+
+    # Empty: numbers only, the behaviour before suffixes were configurable
+    numbers_only = await _validate_with(payload, push_validation_name_suffixes="")
+    assert numbers_only.invalid_names == ["2_ai.png", "3_gen.png"]
+    assert numbers_only.allowed_name_suffixes == []
 
 
 @pytest.mark.asyncio

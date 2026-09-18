@@ -536,7 +536,13 @@
                                         <input type="checkbox" class="custom-control-input" id="config-push-validation-file-names" name="push_validation_file_names">
                                         <label class="custom-control-label" for="config-push-validation-file-names">Require PIM File Names</label>
                                     </div>
-                                    <small>Every file must be named &lt;number&gt;.&lt;extension&gt; (e.g. 3.png), the only form PIM accepts. Any other name blocks the operation. Files matching Ignored File Masks are not checked.</small>
+                                    <small>Every file must be named &lt;number&gt;.&lt;extension&gt; (e.g. 3.png), optionally with one of the suffixes below (e.g. 3_ai.png). Any other name blocks the operation. Files matching Ignored File Masks are not checked.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-push-validation-name-suffixes">Allowed File Name Suffixes</label>
+                                    <input type="text" id="config-push-validation-name-suffixes" name="push_validation_name_suffixes" class="form-control" placeholder="_ai">
+                                    <small>Comma-separated suffixes accepted between the number and the extension, so <code>_ai</code> lets 1_ai.png through next to 1.png. Case-insensitive (_ai, _AI, _Ai, _aI all match). Letters, digits, <code>_</code> and <code>-</code> only; leave empty to accept numbers alone.</small>
                                 </div>
 
                                 <h4 class="mt-4">UPDATE Behaviour</h4>
