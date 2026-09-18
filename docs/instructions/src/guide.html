@@ -182,7 +182,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><th style="width:5%">#</th><th style="width:37%">Zasada</th><th>Przykład</th></tr>
     <tr><td>1</td><td><b>Nazwa folderu = nazwa istniejącego produktu</b> w systemie (PolkaSQL).</td><td><b>OZDOBA PS261403 0-BRASS</b> ✓. Przy literówce aplikacja może podpowiedzieć podobne nazwy produktów.</td></tr>
     <tr><td>2</td><td>Co najmniej <b>2 pliki ze zdjęciami</b>.</td><td>Dozwolone formaty: jpg, jpeg, png, gif, bmp, tif, tiff, webp.</td></tr>
-    <tr><td>3</td><td>Pliki nazwane <b>samym numerem</b> i rozszerzeniem.</td><td><code>1.jpg</code>, <code>2.png</code>, <code>10.jpg</code> ✓ &nbsp;·&nbsp; <code>okladka.png</code>, <code>zdjecie 1.jpg</code>, <code>1a.jpg</code> ✗</td></tr>
+    <tr><td>3</td><td>Pliki nazwane <b>numerem</b> i rozszerzeniem (grafiki AI: <code>_ai</code>).</td><td><code>1.jpg</code>, <code>2.png</code>, <code>10.jpg</code>, <code>3_ai.png</code>, <code>4_AI.jpg</code> ✓ &nbsp;·&nbsp; <code>okladka.png</code>, <code>zdjecie 1.jpg</code>, <code>1a.jpg</code> ✗</td></tr>
     <tr><td>4</td><td>Plik musi <b>naprawdę być zdjęciem</b> w podanym formacie.</td><td>Dokument ze zmienioną końcówką na <code>.jpg</code> zostanie odrzucony.</td></tr>
     <tr><td>5</td><td>Pliki systemowe są <b>pomijane i usuwane</b>.</td><td><code>Thumbs.db</code>, <code>desktop.ini</code>, <code>ehthumbs.db</code>, <code>.DS_Store</code>, <code>._*</code>, <code>.localized</code>, <code>.apdisk</code> – nie liczą się do zdjęć i nie są wysyłane.</td></tr>
   </table>
@@ -195,7 +195,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><th style="width:44%">Komunikat w oknie</th><th>Co zrobić</th></tr>
     <tr><td>„Nierozpoznana nazwa katalogu” / „… nie odpowiada żadnemu produktowi w PolkaSQL”</td><td>Popraw nazwę folderu. Jeśli pod spodem są podpowiedzi („Czy chodziło o jedną z tych nazw?”), użyj właściwej.</td></tr>
     <tr><td>„Ten folder zawiera X plików graficznych; wymagane są co najmniej 2.”</td><td>Dodaj zdjęcia.</td></tr>
-    <tr><td>„PIM przyjmuje tylko pliki o nazwie &lt;numer&gt;.&lt;rozszerzenie&gt;…”</td><td>Zmień nazwy wymienionych plików na numery albo je usuń.</td></tr>
+    <tr><td>„PIM przyjmuje tylko pliki o nazwach w postaci <code>3.png</code>, <code>3_ai.png</code>…”</td><td>Zmień nazwy wymienionych plików na dopuszczalne albo je usuń. Okno zawsze wymienia przykłady nazw przyjmowanych w danej chwili.</td></tr>
     <tr><td>„Niektóre pliki nie są w rzeczywistości obrazami…”</td><td>Usuń lub podmień wymienione pliki na prawdziwe zdjęcia.</td></tr>
     <tr><td>„Nie można połączyć się z PolkaSQL…” / „…nie odpowiedział w wyznaczonym czasie”</td><td>Spróbuj ponownie za chwilę. Gdy się powtarza – zgłoś administratorowi.</td></tr>
   </table>
@@ -452,7 +452,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <h4>Zmiana nazwy</h4>
   <ol class="steps">
     <li>Przy pliku <code>6.png</code> wybierz z listy <b>Zmień nazwę</b>.</li>
-    <li>Obok pojawi się pole – wpisz nową nazwę <code>8.png</code> (pamiętaj: numer + rozszerzenie).</li>
+    <li>Obok pojawi się pole – wpisz nową nazwę <code>8.png</code> (pamiętaj: numer + rozszerzenie, dla grafik z AI także <code>8_ai.png</code>).</li>
   </ol>
 
   <h4>Dodanie pliku ze Ścieżki A</h4>
@@ -513,7 +513,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <ol class="steps" style="counter-reset:s 4">
     <li>Kliknij <span class="ui">Prześlij nowe pliki…</span> i wskaż plik (możesz zaznaczyć kilka naraz).</li>
     <li>Plik pojawi się w części <b>Dodaj pliki</b> z <b>oryginalną nazwą</b> – tu <code>nowe-zdjecie.jpg</code>.</li>
-    <li><b>Zmień nazwę w polu na numerową</b> – tu <code>10.jpg</code>. Z nazwą <code>nowe-zdjecie.jpg</code> aktualizacja zostałaby odrzucona (rozdział 2, zasada 3).</li>
+    <li><b>Zmień nazwę w polu na numerową</b> – tu <code>10.jpg</code> (dla grafiki z AI: <code>10_ai.jpg</code>). Z nazwą <code>nowe-zdjecie.jpg</code> aktualizacja zostałaby odrzucona (rozdział 2, zasada 3).</li>
   </ol>
   <div class="two">
     <figure style="margin-top:0" class="tall"><img src="img/uploaded.jpg"><figcaption><b>Rys. 25.</b> Oba pliki przesłane. Dodawany plik ma jeszcze oryginalną nazwę – trzeba ją zmienić.</figcaption></figure>
