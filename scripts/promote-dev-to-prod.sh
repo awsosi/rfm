@@ -273,10 +273,16 @@ seeded="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -t
 ok "$seeded integration config rows present"
 
 log "Smoke-testing the API"
-curl -fsS --max-time 15 "$PROD_API_URL/health" >/dev/null || die "/health did not respond"
+health="$(curl -fsS --max-time 15 "$PROD_API_URL/health")" || die "/health did not respond"
 ok "/health responds"
+# /health answers 200 even without Redis; the context-menu tab hand-off needs it
+if printf '%s' "$health" | grep -q '"redis": *true'; then
+    ok "redis reachable"
+else
+    warn "api cannot reach Redis: the context menu will open a new tab every time. Check REDIS_URL."
+fi
 
-for route in /api/operations/update /api/operations/preflight; do
+for route in /api/operations/update /api/operations/preflight /api/client-actions; do
     curl -fsS --max-time 15 "$PROD_API_URL/openapi.json" \
         | grep -q "\"$route\"" || die "Route $route missing from OpenAPI"
     ok "route present: $route"
@@ -320,6 +326,15 @@ Remaining manual steps:
      when the variable is present, leaving them unset keeps the Admin Panel
      authoritative across restarts.
   4. Deploy the rebuilt worker to the Windows host and re-pair it.
+     Roll out the new RFM-Setup.msi (clients/windows) to the workstations:
+       - The context menu now runs in the RFM tab that is already open instead of
+         opening a new one (needs the api to reach Redis, checked above).
+       - RFM Tray pushes finished folders from watched folders under the user's
+         own login. For the hand-off folders install with, e.g.:
+           msiexec /i RFM-Setup.msi WATCH_FOLDERS="\\\\hv2012r2\DaneFoto\DO KATALOGU\Ewa"
+         or let each user pick the folder in RFM Tray -> Settings.
+     Names with Polish letters (RĘKAWICZKI ...) now pass catalog validation;
+     no PolkaSQL change is needed.
   5. Workers that the old health check left SUSPENDED stay SUSPENDED (they
      cannot be told apart from administrator suspensions). Reactivate each
      one once in Admin Panel -> Workers; from then on a worker that misses
