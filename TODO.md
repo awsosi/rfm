@@ -2,7 +2,7 @@
 
 > **Project:** File operation management system with microservices architecture
 > **Status:** Active Development
-> **Last Updated:** 2026-09-17
+> **Last Updated:** 2026-09-24
 
 ---
 
@@ -86,6 +86,20 @@
 
 ### Future Work (General)
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
+
+### Follow-ups from RFM Tray, tab hand-off and the PolkaSQL charset fix (2026-09-24)
+- [ ] **Decide: refuse every re-PUSH of a published catalog, not only RFM Tray's.** The worker's
+      copy merges into an existing `B:/<name>` (`File.Copy(..., overwrite: true)`). With
+      `enable_push_archive` on, the archive move then fails because `C:/<name>` exists, and the
+      step-2 rollback deletes `B:/<name>` recursively: the published catalog is gone. The WebUI
+      still allows this; `refuse_existing` (HTTP 409 `catalog_exists`) is opt-in and only RFM Tray
+      sets it. Making it the default for the WebUI would show "use Update" instead.
+- [ ] Install the MSI (elevated) on a workstation: task `RFM\RFM Tray` registered, tray starts at
+      the next sign-in, exits at once for a user with no watched folder.
+- [ ] Pilot RFM Tray with Ewa, Lena and Natalia on `\\hv2012r2\DaneFoto\DO KATALOGU\<name>`;
+      check the 60 s quiet period against their real copy speeds.
+- [ ] Move `ws_manager.broadcast` onto the Redis relay (`api/services/user_events.py`) so
+      broadcasts reach every API process (see the `operation_integration_update` item below).
 
 ### Follow-ups from PIM delivery / tgId / image host sync (2026-09-16)
 - [ ] **DBA: deploy the updated `RFM_sp_ValidateProductName`** (`docs/polkasql/RFM_ValidateProductName.sql`,

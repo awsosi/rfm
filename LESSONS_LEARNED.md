@@ -2,9 +2,30 @@
 
 > **Critical patterns and anti-patterns discovered during development**
 > **Purpose:** Prevent recurring bugs and document invisible failure modes
-> **Last Updated:** 2026-09-17
+> **Last Updated:** 2026-09-24
 
 ---
+
+## PolkaSQL Answers in Windows-1250, Not UTF-8
+
+**Problem:** PUSH of `RĘKAWICZKI 7X000310 AF29587-UC001` was refused with "cannot connect to PolkaSQL". PolkaSQL had answered `valid: true`, but SQL Anywhere sends RAW web service bodies in the database character set (cp1250, `Ę` = byte `0xCA`), and `httpx.Response.json()` always decodes UTF-8. The `UnicodeDecodeError` landed in the catch-all `except` and was reported as `catalogValidation.serviceUnavailable`.
+
+**Why it is invisible:** Only names with Polish letters fail, and the message blames the network. Every ASCII product name works.
+
+**Rules:**
+1. Decode PolkaSQL bodies with `api/services/polka.py:polka_json()` (declared charset, else UTF-8, else cp1250) and send `POLKA_HEADERS`; never `response.json()`.
+2. Test external services with non-ASCII data in the encoding they really use (`tests/test_polka_charset.py`).
+3. A catch-all that maps every exception to "unreachable" hides bugs; the log line (`'utf-8' codec can't decode byte 0xca`) was the only clue.
+
+## `ws_manager` Only Reaches Sockets of Its Own Process
+
+**Problem:** The API runs `API_WORKERS` (4) uvicorn processes, each with its own `WebSocketManager`. A message sent from a request only reaches tabs connected to the process that took the request, about one in four.
+
+**Why it is invisible:** With one worker in development everything arrives. The explorer also polls operation history every 10 s, which hides missed `operation_update` broadcasts.
+
+**Rules:**
+1. Anything that must reach a specific user's tab goes through Redis: `api/services/user_events.py:publish_to_user()`; every process relays it to its own sockets.
+2. When exactly one party must act (a tab or the launcher), claim with one atomic `SET NX`, never "check, then act" (`api/routes/client_actions.py`).
 
 ## UI State Derived From a Selection Must Be Recomputed After Every Re-render
 

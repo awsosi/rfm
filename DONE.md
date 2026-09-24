@@ -2,7 +2,80 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-09-18
+> **Last Updated:** 2026-09-24
+
+---
+
+## 2026-09-24 - RFM Tray, context menu reuses the open tab, Polish names in PolkaSQL validation
+
+### 1. Polish letters broke catalog validation ("cannot connect to PolkaSQL")
+
+**Symptom.** PUSH of `RĘKAWICZKI 7X000310 AF29587-UC001` was refused with
+`catalogValidation.serviceUnavailable` on every workstation; other products worked.
+The log said `'utf-8' codec can't decode byte 0xca in position 63`.
+
+**Cause.** Not the procedure: PolkaSQL matched the name and answered `valid: true`.
+SQL Anywhere sends RAW web service bodies in the database charset (cp1250, where
+`Ę` is `0xCA`, exactly at position 63 of `{"success": true,"valid": true,"error": null,"catalog_name": "R`),
+and `httpx.Response.json()` always decodes UTF-8. The catch-all `except` reported
+the decode error as "unreachable".
+
+**Fix.** `api/services/polka.py`: `polka_json()` decodes with the declared charset,
+else UTF-8, else cp1250, and `POLKA_HEADERS` asks for UTF-8 (`Accept-Charset`).
+Used by catalog validation, the PIM tgId lookup (`lookup_tg_id`, same bug) and
+PolkaSQL login. No DBA change needed. Tests: `tests/test_polka_charset.py` serves
+the exact cp1250 body; without the fix it reproduces the production error.
+
+### 2. Context menu reuses the open RFM tab
+
+Every "Prepare/Send with RFM" opened a new tab. RFMLauncher now first posts the
+action to `POST /api/client-actions`: the backend relays it to the user's open
+Explorer tabs, the first tab to claim it (`POST /api/client-actions/{id}/claim`,
+one atomic Redis `SET NX`) runs the same prepare/push code as the deep link, and
+the launcher only opens a new tab when no tab claims within 3 s (or on any error,
+e.g. an older server). A background tab flashes its title; the launcher brings the
+browser window to the front when RFM is its active tab (`browser_window_titles`).
+
+Because the API runs 4 uvicorn processes with separate WebSocket connections,
+the event goes through Redis pub/sub (`api/services/user_events.py`, relay started
+in `lifespan`, `ws_manager.send_to_user()`). Tests: `tests/test_client_actions.py`
+(fakeredis, real relay): a tab takes it, only one of several tabs acts, other users'
+tabs see nothing, a late tab loses to the launcher.
+
+### 3. RFM Tray (`clients/windows/Tray/`)
+
+Grzegorz Gutek's request: folders dropped into `DO KATALOGU\Ewa|Lena|Natalia` should
+be pushed without clicking through the WebUI, while RFM keeps validation, logging
+and accountability. RFM Tray is a tray app, started at sign-in by the scheduled task
+`RFM\RFM Tray`, that watches the user's folders and PUSHes each finished folder
+through the normal API under the user's own RFM sign-in (shared with the launcher).
+
+- **No premature pushes:** a folder is sent only with at least one file, no partial
+  files, no change for the quiet period (60 s) and every file openable while denying
+  writers. Rescanned every 10 s; file notifications only trigger early rescans.
+  Queue of one at a time; 30 folders at once form a queue.
+- **Silent on success; notification when the user must act:** rejected name/contents
+  (same text as the WebUI, RFM's suggestions, **Rename and send**), already published
+  (UPDATE is done in RFM), outage after 3 failed retries, sign-in needed.
+  A refused folder waits until it changes.
+- **Never re-pushes a published catalog:** new opt-in `refuse_existing` on
+  `POST /api/operations/push` returns 409 `catalog_exists` under the path lock
+  (`tests/test_push_refuse_existing.py`). The WebUI's behaviour is unchanged.
+- Audit log user agent `RFMTray/<version>`.
+- Installer: `RFMTray.exe`, Start menu shortcut, `--install-task`/`--uninstall-task`
+  custom actions, optional `WATCH_FOLDERS` preset (`watch_folders` in `config.json`).
+- Shared with RFMLauncher by linking: `AuthenticationManager.cs` (+ `SignOut()`),
+  `ConfigurationManager.cs`, `LocalizationManager.cs`, `PathRules.cs` (moved out of
+  the launcher's `Program.cs`), locales (`tray.*`, `validation.*` copied from the WebUI).
+
+Verified with a headless harness against a mock RFM API: a file held open for 20 s
+is not sent, sent after it closes; rejected name notified once, not retried while
+unchanged, renamed to a Polish suggestion and sent; 409 and 503 handled; 30 folders
+all sent (36 pushes for 36 attempts); empty and partial folders wait. Dialogs
+rendered and checked. The task XML parses in Task Scheduler; registering it needs
+elevation, so the installed task is still to be tried on a workstation (TODO).
+
+See `clients/windows/Tray/README.md`.
 
 ---
 

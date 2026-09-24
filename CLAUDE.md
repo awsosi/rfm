@@ -37,6 +37,8 @@ Multi-tier distributed system with three main components:
 - **Backend ↔ Workers**: mTLS mutual authentication, command queue via Redis
 - **Frontend ↔ Backend**: API calls to `API_URL` (internal) or `API_URL_PUBLIC` (external)
 - **Windows Client ↔ Backend**: OAuth device flow with Windows Credential Manager storage
+- **RFMLauncher → open WebUI tab**: `/api/client-actions` relays context-menu actions to the user's tabs via Redis pub/sub (`api/services/user_events.py`); `ws_manager` alone only reaches sockets of its own uvicorn process (`API_WORKERS`=4)
+- **RFM Tray** (`clients/windows/Tray/`): pushes finished folders from watched hand-off folders via the normal PUSH API (`refuse_existing`)
 
 ---
 
