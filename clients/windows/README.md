@@ -264,6 +264,11 @@ For issues or questions:
 
 ## Version History
 
+### 1.1.0 (2026-09-24)
+- Context menu runs in the RFM tab that is already open instead of opening a new one
+- RFM Tray: sends finished folders from watched folders (`WATCH_FOLDERS`), started at sign-in
+- Upgrades 1.0.0 in place (the version must rise with every release, or MSI installs side by side)
+
 ### 1.0.0 (2026-02-08)
 - Initial release
 - OAuth device flow authentication
