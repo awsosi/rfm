@@ -619,6 +619,21 @@ def preflight_failure_detail(catalog_result, content_result) -> dict:
     }
 
 
+async def published_catalog_path(
+    source_path: str, worker_id: int, db: AsyncSession, settings: Settings
+) -> Optional[str]:
+    """``B:/<name>`` when the catalog of a Path A directory is already published, else None."""
+    import os as _os
+
+    worker = await get_worker_by_id(worker_id, db)
+    if not worker:
+        raise HTTPException(status_code=404, detail=f"Worker {worker_id} not found")
+
+    catalog_path = f"B:/{_os.path.basename(source_path.rstrip('/'))}"
+    response = await WorkerService(settings).list_directory(worker, catalog_path, db, 0, 1)
+    return catalog_path if response.status == "success" else None
+
+
 @app.get("/api/files/list", response_model=DirectoryListResponse)
 async def list_directory(
     worker_id: int,
@@ -1016,6 +1031,18 @@ async def push_operation(
     # where two users try to push the same directory concurrently
     async with operation_service._get_path_lock(request_data.source_path):
         try:
+            # A second PUSH of a published catalog would merge into it
+            # unannounced; RFM Tray asks for a refusal so the user updates it.
+            if request_data.refuse_existing:
+                catalog_path = await published_catalog_path(
+                    request_data.source_path, request_data.worker_id, db, settings
+                )
+                if catalog_path:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={"error": "catalog_exists", "catalog_path": catalog_path},
+                    )
+
             # Gate 1+2: catalog name must match a PolkaSQL product, and the
             # directory must hold enough genuine image files. Hard block.
             catalog_result, content_result = await run_catalog_preflight(

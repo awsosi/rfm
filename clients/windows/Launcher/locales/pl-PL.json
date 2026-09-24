@@ -14,5 +14,106 @@
     "invalidConfig": "Nieprawidłowy plik konfiguracji",
     "networkError": "Błąd sieci: {error}",
     "authTimeout": "Przekroczono czas uwierzytelnienia po 15 minutach"
+  },
+  "tray": {
+    "alreadyRunning": "RFM Tray już działa – jego ikona jest obok zegara.",
+    "noWorker": "Brak aktywnego workera RFM.",
+    "menu": {
+      "activity": "Pokaż aktywność",
+      "pause": "Wstrzymaj automatyczne wysyłanie",
+      "openRfm": "Otwórz RFM",
+      "settings": "Ustawienia…",
+      "signIn": "Zaloguj…",
+      "signOut": "Wyloguj",
+      "exit": "Zakończ"
+    },
+    "notify": {
+      "signInTitle": "RFM: wymagane logowanie",
+      "signIn": "Zaloguj się do RFM, aby foldery mogły zostać wysłane. Kliknij tutaj.",
+      "manyTitle": "RFM: {count} folderów wymaga uwagi"
+    },
+    "status": {
+      "signingIn": "Oczekiwanie na zatwierdzenie logowania w przeglądarce…",
+      "signedIn": "Zalogowano jako {user}",
+      "signedOut": "Nie zalogowano",
+      "paused": "Automatyczne wysyłanie wstrzymane",
+      "notConfigured": "Brak obserwowanego folderu – otwórz Ustawienia",
+      "counts": "W toku: {waiting} • wymaga uwagi: {attention}"
+    },
+    "state": {
+      "empty": "Pusty – czeka na pliki",
+      "copying": "Kopiowanie…",
+      "waiting": "Czeka na zakończenie kopiowania ({seconds} s)",
+      "checking": "Sprawdzanie, czy kopiowanie się zakończyło…",
+      "paused": "Gotowy – wysyłanie wstrzymane",
+      "queued": "Gotowy – w kolejce",
+      "pushing": "Wysyłanie do RFM…",
+      "pushed": "Wysłano o {time}",
+      "retrying": "RFM niedostępny – kolejna próba o {time}",
+      "rejected": "Odrzucony – popraw nazwę lub zawartość (kliknij dwukrotnie)",
+      "alreadyPublished": "Już jest w RFM – użyj Aktualizacji w RFM (kliknij dwukrotnie)",
+      "failed": "Nie wysłano – kliknij dwukrotnie, aby zobaczyć szczegóły"
+    },
+    "activity": {
+      "title": "RFM Tray – aktywność",
+      "folder": "Folder",
+      "status": "Stan",
+      "files": "Pliki",
+      "details": "Szczegóły…",
+      "sendNow": "Wyślij teraz",
+      "openFolder": "Otwórz folder",
+      "openRfm": "Otwórz w RFM",
+      "unreachable": "Brak dostępu: {folders}",
+      "watching": "Obserwowane: {folders}"
+    },
+    "issue": {
+      "rename": "Zmień nazwę folderu",
+      "renameAndSend": "Zmień nazwę i wyślij",
+      "footer": "Nic nie zostało wysłane. Folder zostaje na miejscu do czasu poprawienia; po zmianie zostanie ponownie sprawdzony i wysłany automatycznie.",
+      "close": "Zamknij",
+      "retry": "Spróbuj ponownie",
+      "alreadyPublished": "„{name}” jest już opublikowany w RFM ({catalog}).\r\n\r\nPonowne wysłanie zmieniłoby opublikowany katalog, dlatego RFM Tray nie robi tego samodzielnie. Aby zmienić zdjęcia, otwórz RFM i użyj Aktualizacji tego katalogu. Jeśli folder trafił tu przez pomyłkę, usuń go.",
+      "unavailable": "Nie udało się połączyć z RFM po {attempts} próbach; RFM Tray próbuje dalej.\r\n\r\n{error}",
+      "failed": "RFM nie wysłał tego folderu.\r\n\r\n{error}",
+      "invalidName": "Nazwa folderu nie może zawierać znaków \\ / : * ? \" < > |",
+      "renameFailed": "Nie udało się zmienić nazwy folderu: {error}"
+    },
+    "settings": {
+      "title": "RFM Tray – ustawienia",
+      "foldersHelp": "Foldery, do których wrzucasz katalogi. Każdy skopiowany do nich folder jest sprawdzany przez RFM i wysyłany w Twoim imieniu po zakończeniu kopiowania.",
+      "add": "Dodaj…",
+      "remove": "Usuń",
+      "quiet": "Wyślij po braku zmian przez (sekundy):",
+      "quietHelp": "Folder jest wysyłany dopiero, gdy nic się w nim nie zmieniło przez ten czas i żaden plik nie jest już zapisywany. Zwiększ tę wartość, jeśli kopiowanie przez wolne łącze robi dłuższe przerwy.",
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "pick": "Wybierz folder do obserwowania",
+      "notAllowed": "RFM może wysyłać foldery tylko z:\n{paths}"
+    }
+  },
+  "validation": {
+    "catalogTitle": "Nierozpoznana nazwa katalogu",
+    "contentTitle": "Odrzucona zawartość folderu",
+    "suggestionsHeader": "Czy chodziło o jedną z tych nazw?",
+    "noSuggestions": "Nie znaleziono podobnych nazw produktów.",
+    "summary": "{images} z {required} wymaganych plików graficznych • łącznie {total} plików",
+    "catalogValidation": {
+      "noMatch": "„{name}” nie odpowiada żadnemu produktowi w PolkaSQL. Zmień nazwę folderu na nazwę istniejącego produktu.",
+      "emptyName": "Nazwa folderu katalogu jest pusta.",
+      "notConfigured": "Weryfikacja nazwy katalogu jest włączona, ale nieskonfigurowana. Skontaktuj się z administratorem.",
+      "serviceUnavailable": "Nie można połączyć się z PolkaSQL, więc nazwa katalogu nie może zostać zweryfikowana. Spróbuj ponownie za chwilę lub skontaktuj się z administratorem.",
+      "serviceError": "PolkaSQL odrzucił żądanie weryfikacji. Skontaktuj się z administratorem.",
+      "timeout": "PolkaSQL nie odpowiedział w wyznaczonym czasie. Spróbuj ponownie za chwilę."
+    },
+    "contentValidation": {
+      "tooFewImages": "Ten folder zawiera {images} plików graficznych; wymagane są co najmniej {required}.",
+      "tooFewImagesAfterUpdate": "Po tych zmianach folder zawierałby {images} plików graficznych; wymagane są co najmniej {required}.",
+      "typeMismatch": "Niektóre pliki nie są w rzeczywistości obrazami mimo swojego rozszerzenia: {names}. Usuń je lub zastąp.",
+      "invalidFileNames": "PIM przyjmuje tylko pliki o nazwach w postaci {forms}. Zmień nazwę lub usuń: {names}.",
+      "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
+      "listFailed": "Nie udało się odczytać zawartości folderu.",
+      "stagedTypeMismatch": "Nowy plik dla {names} nie jest w rzeczywistości obrazem mimo swojego rozszerzenia. Niczego nie zmieniono.",
+      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono."
+    }
   }
 }

@@ -29,6 +29,8 @@
     <Property Id="ALLOWED_PATHS" Value="C:\" />
     <Property Id="UI_LANGUAGE" Value="en-US" />
     <Property Id="CREDENTIAL_PREFIX" Value="RFM_ContextMenu" />
+    <!-- RFM Tray: folders watched until each user picks their own (semicolon-separated) -->
+    <Property Id="WATCH_FOLDERS" Secure="yes" />
 
     <!-- Ensure .NET Framework 4.8 is installed -->
     <PropertyRef Id="WIX_IS_NETFRAMEWORK_48_OR_LATER_INSTALLED"/>
@@ -73,6 +75,13 @@
 
             <File Id="Microsoft.IdentityModel.JsonWebTokens.dll"
                   Source="$(var.RFMLauncher.TargetDir)Microsoft.IdentityModel.JsonWebTokens.dll" />
+          </Component>
+
+          <!-- RFM Tray: sends finished catalog folders, started at sign-in by a scheduled task -->
+          <Component Id="TrayComponent" Guid="3E8A1C5B-7D24-4F96-A0B3-6C9E2D41F578">
+            <File Id="RFMTray.exe"
+                  Source="$(var.RFMTray.TargetPath)"
+                  KeyPath="yes" />
           </Component>
 
           <!-- Locales Directory -->
@@ -120,6 +129,12 @@
                       Arguments="/x [ProductCode]"
                       Description="Uninstalls RFM Windows Integration" />
 
+            <Shortcut Id="TrayShortcut"
+                      Name="RFM Tray"
+                      Target="[INSTALLFOLDER]RFMTray.exe"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Description="Sends finished catalog folders to RFM" />
+
             <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
 
             <RegistryValue Root="HKCU"
@@ -136,6 +151,7 @@
     <!-- Features -->
     <Feature Id="ProductFeature" Title="RFM Windows Integration" Level="1">
       <ComponentRef Id="LauncherComponent" />
+      <ComponentRef Id="TrayComponent" />
       <ComponentRef Id="LocalesComponent" />
       <ComponentRef Id="ShellExtComponent" />
       <ComponentRef Id="ApplicationShortcutComponent" />
@@ -157,7 +173,7 @@
 
     <CustomAction Id="SetGenerateConfigData"
                   Property="GenerateConfigJson"
-                  Value="[INSTALLFOLDER]|[API_URL]|[FRONTEND_BASE_URL]|[ALLOWED_PATHS]|[UI_LANGUAGE]|[CREDENTIAL_PREFIX]" />
+                  Value="[INSTALLFOLDER]|[API_URL]|[FRONTEND_BASE_URL]|[ALLOWED_PATHS]|[UI_LANGUAGE]|[CREDENTIAL_PREFIX]|[WATCH_FOLDERS]" />
 
     <CustomAction Id="GenerateConfigJson"
                   BinaryKey="GenerateConfigVbs"
@@ -189,6 +205,21 @@
                   Impersonate="no"
                   Return="ignore" />
 
+    <!-- RFM Tray sign-in task (any user, own session, least privilege) -->
+    <CustomAction Id="InstallTrayTask"
+                  FileKey="RFMTray.exe"
+                  ExeCommand="--install-task"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <CustomAction Id="UninstallTrayTask"
+                  FileKey="RFMTray.exe"
+                  ExeCommand="--uninstall-task"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
     <!-- Install Sequence -->
     <InstallExecuteSequence>
       <Custom Action="SetGenerateConfigData" Before="GenerateConfigJson">
@@ -204,6 +235,13 @@
       </Custom>
       <Custom Action="RegisterShellExt" After="GenerateConfigJson">
         NOT REMOVE
+      </Custom>
+
+      <Custom Action="InstallTrayTask" After="RegisterShellExt">
+        NOT REMOVE
+      </Custom>
+      <Custom Action="UninstallTrayTask" Before="RemoveFiles">
+        REMOVE="ALL"
       </Custom>
 
       <!-- Unregister Shell Extension DLL on uninstall -->

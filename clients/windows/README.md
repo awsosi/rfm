@@ -8,6 +8,7 @@ The RFM Windows Client provides seamless integration between Windows Explorer an
 
 - **Shell Extension**: Right-click context menu in Windows Explorer
 - **Launcher Application**: OAuth device flow authentication and deep linking
+- **RFM Tray**: sends catalog folders dropped into watched folders automatically ([Tray/README.md](Tray/README.md))
 - **MSI Installer**: Easy deployment and configuration
 
 ## Architecture
@@ -22,15 +23,22 @@ The RFM Windows Client provides seamless integration between Windows Explorer an
 2. **Launcher Application** (C# .NET 4.8 Console)
    - Handles OAuth device flow authentication
    - Stores/retrieves tokens from Windows Credential Manager
-   - Builds deep link URLs with action, path, and token
-   - Opens default browser with deep link
+   - Hands the action to an RFM tab that is already open and signed in
+     (`POST /api/client-actions`); only when no tab takes it within 3 s does it
+     build a deep link URL and open a new tab
 
-3. **Configuration File** (JSON)
+3. **RFM Tray** (C# .NET 4.8 WinForms, `Tray/`)
+   - Tray icon started at sign-in by a scheduled task
+   - Watches the user's hand-off folders and PUSHes each finished folder under the user's sign-in
+   - Shows RFM's refusals (name, suggestions, contents) and renames a folder in one click
+
+4. **Configuration File** (JSON)
    - Stores allowed path prefixes, API URL, language preference
    - Per-machine configuration
 
-4. **Installer** (WiX Toolset)
-   - Deploys shell extension DLL and launcher EXE
+5. **Installer** (WiX Toolset)
+   - Deploys shell extension DLL, launcher EXE and RFM Tray
+   - Registers the `RFM\RFM Tray` sign-in task
    - Prompts for language during installation
    - Registers COM shell extension
 
@@ -70,6 +78,11 @@ Edit `C:\Program Files\RFM\config.json` after installation:
 }
 ```
 
+Optional keys:
+- `watch_folders`: RFM Tray's watched folders until a user picks their own (installer: `WATCH_FOLDERS="path1;path2"`)
+- `browser_window_titles`: parts of the RFM tab title used to bring its browser window to the front
+  (default: the Explorer page title in English and Polish)
+
 **Important**: Restart Windows Explorer after editing `config.json`:
 ```batch
 taskkill /f /im explorer.exe
@@ -81,6 +94,9 @@ start explorer.exe
 ### Context Menu Options
 
 When you right-click on a folder in an allowed path:
+
+If RFM is already open and signed in, both options run in that tab instead of
+opening a new one; its title flashes if it is in the background.
 
 1. **"Prepare selected to be sent with RFM"**
    - Always available

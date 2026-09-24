@@ -244,6 +244,17 @@ namespace RFMLauncher
         }
 
         /// <summary>
+        /// Forget the saved sign-in (shared by RFMLauncher and RFM Tray)
+        /// </summary>
+        public void SignOut()
+        {
+            using (var cred = new Credential { Target = _config.CredentialTargetPrefix })
+            {
+                cred.Delete();
+            }
+        }
+
+        /// <summary>
         /// Refresh access token using refresh token
         /// </summary>
         private string RefreshToken(string refreshToken)

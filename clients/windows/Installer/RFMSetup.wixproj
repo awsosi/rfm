@@ -50,6 +50,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\Tray\RFMTray.csproj">
+      <Name>RFMTray</Name>
+      <Project>{c7d8e9f0-a1b2-4c3d-8e4f-5a6b7c8d9e0f}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\ShellExtension\RFMShellExt.vcxproj">
       <Name>RFMShellExt</Name>
       <Project>{b1c2d3e4-f5a6-7890-bcde-f12345678901}</Project>

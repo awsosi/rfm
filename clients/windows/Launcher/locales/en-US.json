@@ -14,5 +14,106 @@
     "invalidConfig": "Invalid configuration file",
     "networkError": "Network error: {error}",
     "authTimeout": "Authentication timed out after 15 minutes"
+  },
+  "tray": {
+    "alreadyRunning": "RFM Tray is already running – look for its icon next to the clock.",
+    "noWorker": "No active RFM worker is available.",
+    "menu": {
+      "activity": "Show activity",
+      "pause": "Pause automatic sending",
+      "openRfm": "Open RFM",
+      "settings": "Settings…",
+      "signIn": "Sign in…",
+      "signOut": "Sign out",
+      "exit": "Exit"
+    },
+    "notify": {
+      "signInTitle": "RFM: sign-in needed",
+      "signIn": "Sign in to RFM so your folders can be sent. Click here.",
+      "manyTitle": "RFM: {count} folders need your attention"
+    },
+    "status": {
+      "signingIn": "Waiting for sign-in approval in the browser…",
+      "signedIn": "Signed in as {user}",
+      "signedOut": "Not signed in",
+      "paused": "Automatic sending paused",
+      "notConfigured": "No watched folder – open Settings",
+      "counts": "{waiting} in progress • {attention} need attention"
+    },
+    "state": {
+      "empty": "Empty – waiting for files",
+      "copying": "Copying…",
+      "waiting": "Waiting for copying to finish ({seconds} s)",
+      "checking": "Checking that copying has finished…",
+      "paused": "Ready – sending is paused",
+      "queued": "Ready – in queue",
+      "pushing": "Sending to RFM…",
+      "pushed": "Sent at {time}",
+      "retrying": "RFM unavailable – next try at {time}",
+      "rejected": "Rejected – fix the name or contents (double-click)",
+      "alreadyPublished": "Already in RFM – use Update in RFM (double-click)",
+      "failed": "Not sent – double-click for details"
+    },
+    "activity": {
+      "title": "RFM Tray – activity",
+      "folder": "Folder",
+      "status": "Status",
+      "files": "Files",
+      "details": "Details…",
+      "sendNow": "Send now",
+      "openFolder": "Open folder",
+      "openRfm": "Open in RFM",
+      "unreachable": "Cannot reach: {folders}",
+      "watching": "Watching: {folders}"
+    },
+    "issue": {
+      "rename": "Rename the folder",
+      "renameAndSend": "Rename and send",
+      "footer": "Nothing was sent. The folder stays where it is until it is fixed; after a change it is checked and sent again automatically.",
+      "close": "Close",
+      "retry": "Try again",
+      "alreadyPublished": "“{name}” is already published in RFM ({catalog}).\r\n\r\nSending it again would change the published catalog, so RFM Tray does not do it on its own. To change the photos, open RFM and use Update on this catalog. If the folder is here by mistake, remove it.",
+      "unavailable": "RFM could not be reached after {attempts} attempts; RFM Tray keeps trying.\r\n\r\n{error}",
+      "failed": "RFM did not send this folder.\r\n\r\n{error}",
+      "invalidName": "A folder name cannot contain \\ / : * ? \" < > |",
+      "renameFailed": "The folder could not be renamed: {error}"
+    },
+    "settings": {
+      "title": "RFM Tray – settings",
+      "foldersHelp": "Folders you drop catalogs into. Every folder copied into one of these is checked by RFM and sent under your name once copying has finished.",
+      "add": "Add…",
+      "remove": "Remove",
+      "quiet": "Send after no changes for (seconds):",
+      "quietHelp": "A folder is sent only when nothing in it has changed for this long and no file is still being written. Raise it if uploads over a slow connection pause for longer.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "pick": "Choose a folder to watch",
+      "notAllowed": "RFM can only send folders from:\n{paths}"
+    }
+  },
+  "validation": {
+    "catalogTitle": "Catalog name not recognised",
+    "contentTitle": "Folder contents rejected",
+    "suggestionsHeader": "Did you mean one of these?",
+    "noSuggestions": "No similar product names were found.",
+    "summary": "{images} of {required} required image files • {total} files in total",
+    "catalogValidation": {
+      "noMatch": "“{name}” does not match any product in PolkaSQL. Rename the folder to an existing product name.",
+      "emptyName": "The catalog folder name is empty.",
+      "notConfigured": "Catalog name validation is enabled but not configured. Contact an administrator.",
+      "serviceUnavailable": "PolkaSQL could not be reached, so the catalog name cannot be verified. Try again shortly or contact an administrator.",
+      "serviceError": "PolkaSQL rejected the validation request. Contact an administrator.",
+      "timeout": "PolkaSQL did not respond in time. Try again shortly."
+    },
+    "contentValidation": {
+      "tooFewImages": "This folder holds {images} image file(s); at least {required} are required.",
+      "tooFewImagesAfterUpdate": "After these changes the folder would hold {images} image file(s); at least {required} are required.",
+      "typeMismatch": "Some files are not really images despite their extension: {names}. Remove or replace them.",
+      "invalidFileNames": "PIM accepts only files named like {forms}. Rename or remove: {names}.",
+      "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
+      "listFailed": "The folder contents could not be read.",
+      "stagedTypeMismatch": "The new file for {names} is not really an image despite its extension. Nothing was changed.",
+      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed."
+    }
   }
 }

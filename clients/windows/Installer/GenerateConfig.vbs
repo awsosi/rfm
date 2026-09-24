@@ -1,7 +1,7 @@
 On Error Resume Next
 
-' Get CustomActionData (format: "INSTALLFOLDER|API_URL|FRONTEND_URL|ALLOWED_PATHS|UI_LANGUAGE|CREDENTIAL_PREFIX")
-Dim customData, dataParts, installFolder, apiUrl, frontendUrl, allowedPaths, language, credPrefix
+' Get CustomActionData (format: "INSTALLFOLDER|API_URL|FRONTEND_URL|ALLOWED_PATHS|UI_LANGUAGE|CREDENTIAL_PREFIX|WATCH_FOLDERS")
+Dim customData, dataParts, installFolder, apiUrl, frontendUrl, allowedPaths, language, credPrefix, watchFolders
 Dim fso, configFile, json, pathArray, i, pathCount, currentPath
 
 customData = Session.Property("CustomActionData")
@@ -17,6 +17,8 @@ If UBound(dataParts) >= 5 Then
     allowedPaths = dataParts(3)
     language = dataParts(4)
     credPrefix = dataParts(5)
+    watchFolders = ""
+    If UBound(dataParts) >= 6 Then watchFolders = dataParts(6)
 Else
     installFolder = "C:\Program Files\RFM"
     apiUrl = "https://rfm.company.com"
@@ -24,6 +26,7 @@ Else
     allowedPaths = "C:\"
     language = "en-US"
     credPrefix = "RFM_ContextMenu"
+    watchFolders = ""
 End If
 
 ' Parse allowed paths (split by semicolon)
@@ -58,6 +61,11 @@ Next
 
 json = json & vbCrLf & "  ]," & vbCrLf
 json = json & "  ""language"": """ & EscapeJson(language) & """," & vbCrLf
+
+' RFM Tray's initial watched folders (semicolon-separated), if given
+If Trim(watchFolders) <> "" Then
+    json = json & "  ""watch_folders"": " & JsonArray(watchFolders) & "," & vbCrLf
+End If
 json = json & "  ""credential_target_prefix"": """ & EscapeJson(credPrefix) & """" & vbCrLf
 json = json & "}"
 
@@ -70,6 +78,22 @@ configFile.Close
 If Err.Number <> 0 Then
     Session.Property("CA_ERROR") = "VBScript Error: " & Err.Description
 End If
+
+' Semicolon-separated list to a JSON string array
+Function JsonArray(list)
+    Dim items, item, result, count
+    items = Split(list, ";")
+    result = "["
+    count = 0
+    For Each item In items
+        If Trim(item) <> "" Then
+            If count > 0 Then result = result & ", "
+            result = result & """" & EscapeJson(Trim(item)) & """"
+            count = count + 1
+        End If
+    Next
+    JsonArray = result & "]"
+End Function
 
 ' Function to escape JSON strings
 Function EscapeJson(str)

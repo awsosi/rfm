@@ -280,6 +280,13 @@ class FilePushRequest(BaseModel):
 
     source_path: str = Field(..., min_length=1, description="Source directory path from Path A")
     worker_id: int = Field(..., description="Worker ID to execute operation")
+    refuse_existing: bool = Field(
+        False,
+        description=(
+            "Refuse with 409 catalog_exists when B:/<name> already exists, "
+            "since changing a published catalog is an UPDATE. Set by RFM Tray."
+        ),
+    )
 
 
 class UpdateAction(BaseModel):
