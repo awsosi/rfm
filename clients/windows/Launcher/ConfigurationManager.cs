@@ -25,6 +25,20 @@ namespace RFMLauncher
 
         [JsonProperty("credential_target_prefix")]
         public string CredentialTargetPrefix { get; set; }
+
+        /// <summary>
+        /// Optional: parts of the RFM tab title used to find its browser window.
+        /// Defaults to the Explorer page title in English and Polish.
+        /// </summary>
+        [JsonProperty("browser_window_titles")]
+        public List<string> BrowserWindowTitles { get; set; }
+
+        /// <summary>
+        /// Optional, RFM Tray: folders watched for new catalogs when the user
+        /// has not chosen any yet (each user can change theirs in Settings).
+        /// </summary>
+        [JsonProperty("watch_folders")]
+        public List<string> WatchFolders { get; set; }
     }
 
     /// <summary>

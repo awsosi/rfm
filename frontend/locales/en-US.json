@@ -24,6 +24,7 @@
   },
   "explorer": {
     "pageTitle": "Explorer - File Manager",
+    "clientActionTitle": "● RFM: folder from Windows Explorer",
     "adminPanel": "Admin Panel",
     "settings": "Settings",
     "logout": "Logout",

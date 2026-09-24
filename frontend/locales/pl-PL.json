@@ -24,6 +24,7 @@
   },
   "explorer": {
     "pageTitle": "Eksplorator – Menedżer plików",
+    "clientActionTitle": "● RFM: folder z Eksploratora Windows",
     "adminPanel": "Panel administracyjny",
     "settings": "Ustawienia",
     "logout": "Wyloguj się",

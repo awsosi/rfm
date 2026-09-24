@@ -65,9 +65,11 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AuthenticationManager.cs" />
+    <Compile Include="ClientHandoff.cs" />
     <Compile Include="ConfigurationManager.cs" />
     <Compile Include="DeepLinkBuilder.cs" />
     <Compile Include="LocalizationManager.cs" />
+    <Compile Include="PathRules.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

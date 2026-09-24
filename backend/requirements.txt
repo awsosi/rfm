@@ -112,6 +112,7 @@ pytest-asyncio==0.23.3
 
 # Mock/fixtures
 pytest-mock==3.12.0
+fakeredis==2.38.0
 
 # Coverage reporting
 pytest-cov==4.1.0

@@ -1390,6 +1390,13 @@ function handleWebSocketEvent(data) {
             case 'heartbeat':
                 // Heartbeat/ping from server (no action needed)
                 break;
+
+            case 'client_action':
+                // Explorer context-menu action handed over by RFMLauncher
+                handleClientAction(data).catch(err => {
+                    console.error('Client action failed:', err);
+                });
+                break;
         }
     } else {
         // Legacy dual-pane event handling
@@ -3434,6 +3441,61 @@ async function resolveWindowsPath(targetPath) {
             worker_id: state.workerId
         })
     });
+}
+
+/**
+ * Perform a context-menu action RFMLauncher handed to the open tabs instead
+ * of opening a new one. Every Explorer tab of the user receives it; only the
+ * tab whose claim succeeds acts, the others (and the launcher) stand down.
+ *
+ * @param {Object} data - { action_id, action: 'prepare'|'push', paths }
+ */
+async function handleClientAction(data) {
+    // Let a visible tab win over a background one
+    if (document.hidden) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    try {
+        const claim = await apiRequest(`/api/client-actions/${encodeURIComponent(data.action_id)}/claim`, {
+            method: 'POST'
+        });
+        if (!claim.claimed) {
+            return;
+        }
+    } catch (error) {
+        // The launcher falls back to a new tab when nobody claims in time
+        console.error('Client action claim failed:', error);
+        return;
+    }
+
+    drawAttention(t('explorer.clientActionTitle'));
+
+    if (data.action === 'push') {
+        await handlePushAction(data.paths);
+    } else {
+        await handlePrepareAction(data.paths);
+    }
+}
+
+/**
+ * Flash the tab title until the user looks at the tab.
+ */
+function drawAttention(message) {
+    window.focus();
+    if (!document.hidden) {
+        return;
+    }
+    const original = document.title;
+    let flashed = false;
+    const timer = setInterval(() => {
+        flashed = !flashed;
+        document.title = flashed ? message : original;
+    }, 1000);
+    document.addEventListener('visibilitychange', () => {
+        clearInterval(timer);
+        document.title = original;
+    }, { once: true });
 }
 
 async function handlePrepareAction(targetPaths) {

@@ -49,6 +49,7 @@ from api.routes.preferences import router as preferences_router
 from api.routes.worker import router as worker_router
 from api.routes.path import router as path_router
 from api.routes.uploads import router as uploads_router
+from api.routes.client_actions import router as client_actions_router
 
 
 async def _sync_env_config_to_db(settings: Settings) -> None:
@@ -341,6 +342,10 @@ async def lifespan(app: FastAPI):
     from api.websocket_manager import ws_manager
     await ws_manager.start()
 
+    # Relay per-user events (client action hand-off) from any API process
+    from api.services.user_events import forward_user_events
+    user_events_task = asyncio.create_task(forward_user_events())
+
     # Start background tasks (command cleanup, worker health checks)
     from api.background_tasks import start_background_tasks
     await start_background_tasks(settings)
@@ -351,6 +356,8 @@ async def lifespan(app: FastAPI):
     # Stop background tasks
     from api.background_tasks import stop_background_tasks
     await stop_background_tasks()
+
+    user_events_task.cancel()
 
     # Stop WebSocket manager
     from api.websocket_manager import ws_manager
@@ -398,6 +405,7 @@ app.include_router(preferences_router)
 app.include_router(worker_router)
 app.include_router(path_router)
 app.include_router(uploads_router)
+app.include_router(client_actions_router)
 
 
 # =============================================================================

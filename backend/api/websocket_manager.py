@@ -246,6 +246,19 @@ class WebSocketManager:
             await self.disconnect(connection_id)
             return False
 
+    async def send_to_user(self, user_id: int, data: Dict[str, Any]) -> int:
+        """Send data to every connection of one user held by this process."""
+        targets = [
+            connection_id
+            for connection_id, meta in list(self.connection_metadata.items())
+            if meta.get("user_id") == user_id
+        ]
+        sent_count = 0
+        for connection_id in targets:
+            if await self.send_to_connection(connection_id, data):
+                sent_count += 1
+        return sent_count
+
     async def broadcast(
         self,
         data: Dict[str, Any],
