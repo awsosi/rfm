@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import get_settings, Settings
 from api.middleware.auth import get_current_user, get_session_policy, session_expiry
 from api.middleware.logging import AuditLogger, get_client_ip
+from api.services.polka import POLKA_HEADERS, polka_json
 from api.schemas import (
     LoginRequest,
     LoginResponse,
@@ -116,11 +117,11 @@ async def verify_polka_credentials(
             response = await client.get(
                 polka_url,
                 params=params,
-                headers={"Accept": "application/json"},
+                headers=POLKA_HEADERS,
             )
 
             if response.status_code == 200:
-                result = response.json()
+                result = polka_json(response)
 
                 # Check if API call was successful
                 if not result.get("success"):

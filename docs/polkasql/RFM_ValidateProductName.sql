@@ -193,6 +193,11 @@ END;
 --                  "suggestions": ["...", "..."]}
 --                  Porownanie jest case-insensitive.
 
+-- Character set: SQL Anywhere sends the body in the database charset (cp1250),
+-- so names like 'RĘKAWICZKI ...' are not UTF-8. RFM decodes the declared
+-- charset, else UTF-8, else cp1250 (backend/api/services/polka.py); no change
+-- is needed here.
+
 CREATE SERVICE "RFM_ValidateProductName"
   TYPE 'RAW'
   AUTHORIZATION OFF

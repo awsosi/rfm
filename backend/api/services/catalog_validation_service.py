@@ -43,6 +43,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.polka import POLKA_HEADERS, polka_json
 from models import Config
 
 _CONFIG_KEYS = [
@@ -132,11 +133,11 @@ async def lookup_tg_id(catalog_name: str, db: AsyncSession) -> tuple:
             response = await client.get(
                 url,
                 params={"ApiKey": api_key, "CatalogName": name, "MaxSuggestions": 1},
-                headers={"Accept": "application/json"},
+                headers=POLKA_HEADERS,
             )
         if response.status_code != 200:
             return None, f"RFM_ValidateProductName returned HTTP {response.status_code}"
-        data = response.json()
+        data = polka_json(response)
     except Exception as exc:
         return None, f"RFM_ValidateProductName unreachable: {type(exc).__name__}: {exc}"
 
@@ -214,7 +215,7 @@ async def validate_catalog_name(
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(
-                url, params=params, headers={"Accept": "application/json"}
+                url, params=params, headers=POLKA_HEADERS
             )
 
         if response.status_code != 200:
@@ -228,7 +229,7 @@ async def validate_catalog_name(
                 error_detail=f"HTTP {response.status_code}",
             )
 
-        data = response.json()
+        data = polka_json(response)
 
         if not data.get("success"):
             err = data.get("error") or "unknown error"
