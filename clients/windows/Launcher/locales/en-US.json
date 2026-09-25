@@ -88,7 +88,12 @@
       "cancel": "Cancel",
       "save": "Save",
       "pick": "Choose a folder to watch",
-      "notAllowed": "RFM can only send folders from:\n{paths}"
+      "notAllowed": "RFM can only send folders from:\n{paths}",
+      "log": "Diagnostic log:",
+      "logOff": "Off",
+      "logInfo": "Basic",
+      "logDebug": "Detailed",
+      "openLog": "Open log folder"
     }
   },
   "validation": {

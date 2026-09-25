@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using RFMLauncher;
@@ -16,6 +18,7 @@ namespace RFMTray
         private readonly ListBox _folders;
         private readonly NumericUpDown _quiet;
         private readonly CheckBox _paused;
+        private readonly ComboBox _logLevel;
 
         public SettingsForm(Config config, TraySettings settings)
         {
@@ -26,16 +29,17 @@ namespace RFMTray
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterScreen;
             Font = SystemFonts.MessageBoxFont;
-            Size = new Size(620, 440);
-            MinimumSize = new Size(480, 380);
+            Size = new Size(620, 480);
+            MinimumSize = new Size(480, 420);
             MinimizeBox = false;
             MaximizeBox = false;
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(12) };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7, Padding = new Padding(12) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -80,13 +84,26 @@ namespace RFMTray
             layout.Controls.Add(_paused, 0, 4);
             layout.SetColumnSpan(_paused, 2);
 
+            // Diagnostics for support: off unless someone asks for it
+            var logRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
+            _logLevel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+            _logLevel.Items.AddRange(new object[] { L.T("tray.settings.logOff"), L.T("tray.settings.logInfo"), L.T("tray.settings.logDebug") });
+            _logLevel.SelectedIndex = (int)settings.LogLevel;
+            var openLog = new Button { Text = L.T("tray.settings.openLog"), AutoSize = true };
+            openLog.Click += (s, e) => { Directory.CreateDirectory(Log.FolderPath); Process.Start("explorer.exe", $"\"{Log.FolderPath}\""); };
+            logRow.Controls.Add(new Label { Text = L.T("tray.settings.log"), AutoSize = true, Margin = new Padding(3, 6, 3, 0) });
+            logRow.Controls.Add(_logLevel);
+            logRow.Controls.Add(openLog);
+            layout.Controls.Add(logRow, 0, 5);
+            layout.SetColumnSpan(logRow, 2);
+
             var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
             var cancel = new Button { Text = L.T("tray.settings.cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
             var save = new Button { Text = L.T("tray.settings.save"), AutoSize = true };
             save.Click += (s, e) => Save();
             buttons.Controls.Add(cancel);
             buttons.Controls.Add(save);
-            layout.Controls.Add(buttons, 0, 5);
+            layout.Controls.Add(buttons, 0, 6);
             layout.SetColumnSpan(buttons, 2);
 
             AcceptButton = save;
@@ -122,6 +139,7 @@ namespace RFMTray
             _settings.WatchFolders = _folders.Items.Cast<string>().ToList();
             _settings.QuietSeconds = (int)_quiet.Value;
             _settings.Paused = _paused.Checked;
+            _settings.LogLevel = (LogLevel)_logLevel.SelectedIndex;
             DialogResult = DialogResult.OK;
         }
     }

@@ -87,7 +87,13 @@ namespace RFMTray
         public bool SignedIn
         {
             get => _signedIn;
-            set { _signedIn = value; _wake.Set(); }
+            set
+            {
+                if (_signedIn != value)
+                    Log.Info($"Signed in: {value}");
+                _signedIn = value;
+                _wake.Set();
+            }
         }
 
         /// <summary>Watched folders that cannot be reached right now.</summary>
@@ -122,9 +128,10 @@ namespace RFMTray
                         watcher.EnableRaisingEvents = true;
                         _watchers.Add(watcher);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         // Share offline: the periodic rescan still covers it
+                        Log.Info($"No change notifications for {root}: {ex.Message}");
                     }
                 }
             }
@@ -192,9 +199,10 @@ namespace RFMTray
                         continue;
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     // Never let one bad folder stop the watcher
+                    Log.Error("Watcher loop", ex);
                 }
 
                 if (_wake.WaitOne(ScanInterval))
@@ -208,6 +216,7 @@ namespace RFMTray
         private void ScanAll()
         {
             var now = DateTime.UtcNow;
+            var started = System.Diagnostics.Stopwatch.StartNew();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var unreachable = new List<string>();
             var quiet = TimeSpan.FromSeconds(_settings.QuietSeconds);
@@ -222,8 +231,10 @@ namespace RFMTray
                                     && !d.Name.StartsWith(".") && !d.Name.StartsWith("~"))
                         .ToList();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    if (!UnreachableRoots.Contains(root))
+                        Log.Info($"Watched folder unreachable: {root}: {ex.Message}");
                     unreachable.Add(root);
                     continue;
                 }
@@ -235,8 +246,9 @@ namespace RFMTray
                     {
                         snapshot = ScanFolder(folder);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
+                        Log.Info($"{folder.Name}: cannot be read: {ex.Message}");
                         continue; // Being moved or deleted right now
                     }
                     seen.Add(folder.FullName);
@@ -265,9 +277,17 @@ namespace RFMTray
                         continue;
                     // Pushed catalogs leave the folder; keep them a while as history
                     if (catalog.State != CatalogState.Pushed || now - catalog.StateUtc > KeepPushedFor)
+                    {
+                        if (catalog.State != CatalogState.Pushed)
+                            Log.Info($"{catalog.Name}: no longer in the watched folder ({catalog.State})");
                         _catalogs.Remove(catalog.Path);
+                    }
                 }
+                Log.Debug($"Scan: {seen.Count} folders in {started.ElapsedMilliseconds} ms; " +
+                          string.Join(", ", _catalogs.Values.GroupBy(c => c.State).Select(g => $"{g.Key} {g.Count()}")));
             }
+            foreach (var root in UnreachableRoots.Except(unreachable))
+                Log.Info($"Watched folder reachable again: {root}");
             UnreachableRoots = unreachable;
         }
 
@@ -277,12 +297,14 @@ namespace RFMTray
             if (!_catalogs.TryGetValue(path, out var catalog))
             {
                 catalog = new Catalog { Path = path, Signature = snapshot.Signature, ChangedUtc = now };
+                Log.Info($"{catalog.Name}: found in {root} ({snapshot.Signature})");
                 SetState(catalog, CatalogState.Waiting);
                 _catalogs[path] = catalog;
             }
             else if (catalog.Signature != snapshot.Signature)
             {
                 // New or changed files: whatever was decided before no longer holds
+                Log.Debug($"{catalog.Name}: changed {catalog.Signature} -> {snapshot.Signature}");
                 catalog.Signature = snapshot.Signature;
                 catalog.ChangedUtc = now;
                 catalog.SkipQuiet = false;
@@ -303,11 +325,16 @@ namespace RFMTray
 
         private Catalog NextToPush()
         {
-            if (_settings.Paused || !_signedIn)
-                return null;
             var now = DateTime.UtcNow;
             lock (_lock)
             {
+                if (_settings.Paused || !_signedIn)
+                {
+                    int held = _catalogs.Values.Count(c => c.State == CatalogState.Queued || c.State == CatalogState.Retrying);
+                    if (held > 0)
+                        Log.Debug($"{held} ready, held: {(_settings.Paused ? "paused" : "not signed in")}");
+                    return null;
+                }
                 return _catalogs.Values
                     .Where(c => c.State == CatalogState.Queued
                                 || (c.State == CatalogState.Retrying && now >= c.NextAttemptUtc))
@@ -321,11 +348,14 @@ namespace RFMTray
             lock (_lock)
                 SetState(catalog, CatalogState.Pushing);
 
+            var started = System.Diagnostics.Stopwatch.StartNew();
             var result = Directory.Exists(catalog.Path)
                 ? _client.Push(catalog.Path)
                 : new PushResult { Outcome = PushOutcome.Gone };
             if (result.Outcome != PushOutcome.Pushed && !Directory.Exists(catalog.Path))
                 result = new PushResult { Outcome = PushOutcome.Gone };
+            Log.Info($"{catalog.Name}: {result.Outcome} after {started.Elapsed.TotalSeconds:0.0} s" +
+                     (result.Message != null ? $": {result.Message}" : ""));
 
             bool notify = false;
             lock (_lock)
@@ -372,6 +402,8 @@ namespace RFMTray
 
         private static void SetState(Catalog catalog, CatalogState state)
         {
+            if (catalog.State != state)
+                Log.Info($"{catalog.Name}: {catalog.State} -> {state}");
             catalog.State = state;
             catalog.StateUtc = DateTime.UtcNow;
         }
@@ -422,11 +454,17 @@ namespace RFMTray
                     {
                         // Not readable by this user; the worker reads it under its own account
                     }
+                    catch (IOException ex)
+                    {
+                        Log.Debug($"{folder.Name}: {file.Name} still open: {ex.Message}");
+                        return false;
+                    }
                 }
                 return true;
             }
-            catch (IOException)
+            catch (IOException ex)
             {
+                Log.Debug($"{folder.Name}: lock check failed: {ex.Message}");
                 return false;
             }
         }

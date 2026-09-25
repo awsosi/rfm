@@ -60,6 +60,23 @@ quiet period for one folder.
 - If two PCs watch the same folder, RFM's path lock lets one push win; the other
   sees the folder gone and drops it silently.
 
+## Diagnostic log
+
+Off by default. **Settings → Diagnostic log** turns it on for one user
+(`log_level` in `tray.json`: `off`, `info`, `debug`); **Open log folder** opens
+`%LOCALAPPDATA%\RFM\Logs`. `RFMTray.log` is capped at 5 MB, the previous one kept
+as `RFMTray.log.1`.
+
+- **Basic** (`info`): start-up (user, PC, API URL, watched folders), sign-in
+  changes, each folder's state changes, every API call with status and time,
+  each PUSH (Windows path → virtual path → operation id and status, outcome,
+  duration, RFM's error), unreachable watched folders, errors.
+- **Detailed** (`debug`): also every scan (folder count, duration, states),
+  content changes, the file a lock check found still open, why ready folders are
+  held (paused / not signed in), and the token checks of the shared sign-in code.
+
+Folder and file names appear in the log; tokens do not.
+
 ## Start at sign-in
 
 The installer runs `RFMTray.exe --install-task` (elevated), registering the

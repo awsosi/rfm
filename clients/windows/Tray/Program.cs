@@ -43,6 +43,14 @@ namespace RFMTray
             if (args.Contains("--autostart") && settings.WatchFolders.Count == 0)
                 return 0;
 
+            Log.Level = settings.LogLevel;
+            Console.SetOut(new Log.ConsoleWriter());
+            Application.ThreadException += (s, e) => Log.Error("Unhandled UI exception", e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Error("Unhandled exception", e.ExceptionObject as Exception);
+            Log.Info($"RFM Tray {typeof(Program).Assembly.GetName().Version} starting as {Environment.UserDomainName}\\{Environment.UserName} " +
+                     $"on {Environment.MachineName}; API {config.ApiBaseUrl}; watching {string.Join(", ", settings.WatchFolders)}; " +
+                     $"quiet {settings.QuietSeconds} s; paused {settings.Paused}; args {string.Join(" ", args)}");
+
             // One instance per signed-in user session
             using (var mutex = new Mutex(true, @"Local\RFMTray", out bool first))
             {

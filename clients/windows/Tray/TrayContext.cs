@@ -121,6 +121,9 @@ namespace RFMTray
                 if (form.ShowDialog() == DialogResult.OK)
                 {
                     _settings.Save();
+                    Log.Level = _settings.LogLevel;
+                    Log.Info($"Settings saved: watching {string.Join(", ", _settings.WatchFolders)}; " +
+                             $"quiet {_settings.QuietSeconds} s; paused {_settings.Paused}; log {_settings.LogLevel}");
                     _pauseItem.Checked = _settings.Paused;
                     _watcher.RestartWatchers();
                     RefreshStatus();
@@ -147,6 +150,7 @@ namespace RFMTray
         {
             _settings.Paused = _pauseItem.Checked;
             _settings.Save();
+            Log.Info($"Paused: {_settings.Paused}");
             _watcher.Wake();
             RefreshStatus();
         }
@@ -154,12 +158,17 @@ namespace RFMTray
         private void CheckSignIn(bool notify)
         {
             Task.Run(() => _client.CurrentUser()).ContinueWith(t =>
-                OnUi(() => SetSignedIn(t.IsFaulted ? null : t.Result, notify)));
+            {
+                if (t.IsFaulted)
+                    Log.Error("Reading the saved sign-in", t.Exception);
+                OnUi(() => SetSignedIn(t.IsFaulted ? null : t.Result, notify));
+            });
         }
 
         private void SetSignedIn(string user, bool notify)
         {
             _user = user;
+            Log.Info($"RFM user: {user ?? "(none)"}");
             _watcher.SignedIn = user != null;
             RefreshStatus();
             if (user == null && notify && !_signingIn)

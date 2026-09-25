@@ -6,6 +6,21 @@
 
 ---
 
+## 2026-09-25 - RFM Tray diagnostic log
+
+**Why.** Ewa and Natalia (remote) report folders that stay in the watched folder,
+"in the queue", while Lena's (office) are sent. Nothing on the PC said why: RFM Tray
+had no log, and the shared sign-in code writes only to a console a Windows app has not.
+
+**What.** `Tray/Log.cs`: an optional log, off by default, `%LOCALAPPDATA%\RFM\Logs\RFMTray.log`
+(5 MB, one `.1` kept). Settings has a **Diagnostic log** choice (Off / Basic / Detailed,
+`log_level` in `tray.json`) and **Open log folder**. Basic logs start-up, sign-in,
+state changes, every API call with status and time, and each PUSH's paths, operation
+and outcome. Detailed adds each scan, lock-check failures, why ready folders are held,
+and the token checks (console output of `AuthenticationManager` is routed to the log).
+
+---
+
 ## 2026-09-25 - Polish names in PolkaSQL validation, second round
 
 **Symptom.** PUSH of `RĘKAWICZKI 104458 0-12L` was refused from the WebUI and RFM Tray

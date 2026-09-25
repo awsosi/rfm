@@ -88,7 +88,12 @@
       "cancel": "Anuluj",
       "save": "Zapisz",
       "pick": "Wybierz folder do obserwowania",
-      "notAllowed": "RFM może wysyłać foldery tylko z:\n{paths}"
+      "notAllowed": "RFM może wysyłać foldery tylko z:\n{paths}",
+      "log": "Dziennik diagnostyczny:",
+      "logOff": "Wyłączony",
+      "logInfo": "Podstawowy",
+      "logDebug": "Szczegółowy",
+      "openLog": "Otwórz folder dziennika"
     }
   },
   "validation": {

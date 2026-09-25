@@ -99,14 +99,16 @@ namespace RFMTray
             {
                 int workerId = WorkerId();
 
+                string canonicalPath = PathRules.NormalizeToCanonicalPath(windowsPath, _config);
                 var resolve = Send(HttpMethod.Post, "/api/path/resolve", new
                 {
-                    windows_path = PathRules.NormalizeToCanonicalPath(windowsPath, _config),
+                    windows_path = canonicalPath,
                     worker_id = workerId,
                 });
                 if (resolve.StatusCode != HttpStatusCode.OK)
                     return Failure(resolve);
                 string virtualPath = (string)ReadJson(resolve)["virtual_path"];
+                Log.Info($"PUSH {windowsPath} as {canonicalPath} -> {virtualPath} (worker {workerId})");
 
                 var push = Send(HttpMethod.Post, "/api/operations/push", new
                 {
@@ -117,6 +119,7 @@ namespace RFMTray
                 if (push.StatusCode == HttpStatusCode.OK)
                 {
                     var operation = ReadJson(push);
+                    Log.Info($"PUSH operation {operation["id"]}: {operation["status"]}");
                     return (string)operation["status"] == "failed"
                         ? new PushResult { Outcome = PushOutcome.Failed, Message = (string)operation["error_msg"] }
                         : new PushResult { Outcome = PushOutcome.Pushed };
@@ -145,6 +148,7 @@ namespace RFMTray
             }
             catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is AggregateException)
             {
+                Log.Debug($"PUSH {windowsPath}: {ex}");
                 return new PushResult { Outcome = PushOutcome.Transient, Message = (ex.InnerException ?? ex).Message };
             }
         }
@@ -178,13 +182,20 @@ namespace RFMTray
 
         private HttpResponseMessage Send(HttpMethod method, string path, object body)
         {
-            string token = _auth.GetValidToken() ?? throw new SignInRequiredException();
+            string token = _auth.GetValidToken();
+            if (token == null)
+            {
+                Log.Info($"{method} {path}: no valid saved sign-in (missing, or expired and not refreshed)");
+                throw new SignInRequiredException();
+            }
             var request = new HttpRequestMessage(method, _config.ApiBaseUrl.TrimEnd('/') + path);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             if (body != null)
                 request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
 
+            var started = System.Diagnostics.Stopwatch.StartNew();
             var response = _http.SendAsync(request).Result;
+            Log.Info($"{method} {path} -> {(int)response.StatusCode} in {started.ElapsedMilliseconds} ms");
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 throw new SignInRequiredException();
             return response;

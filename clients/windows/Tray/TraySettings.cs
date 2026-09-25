@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
 using RFMLauncher;
 
 namespace RFMTray
@@ -25,6 +27,11 @@ namespace RFMTray
 
         [JsonProperty("paused")]
         public bool Paused { get; set; }
+
+        /// <summary>Diagnostic log (off, info, debug), see <see cref="Log"/>.</summary>
+        [JsonProperty("log_level")]
+        [JsonConverter(typeof(StringEnumConverter), typeof(CamelCaseNamingStrategy))]
+        public LogLevel LogLevel { get; set; }
 
         private static string FilePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RFM", "tray.json");
