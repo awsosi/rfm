@@ -107,6 +107,8 @@ const state = {
     },
     operations: new Map(),
     refreshInterval: null,
+    // A PUSH request is running (the push button shows it and stays disabled)
+    pushInProgress: false,
     // VF Redesign: Operation queue state
     operationQueue: {
         operations: [],
@@ -3167,6 +3169,10 @@ async function handlePushOperation() {
     }
 
     try {
+        // Validation alone can take several seconds (a name PolkaSQL does not
+        // know runs its suggestion search), and the request also waits for the
+        // copy, so the button shows that work is going on
+        setPushInProgress(true);
         updateOperationStatus(t('operations.pushingDirectory'), 'info');
 
         const sourcePaths = selectedFiles.map(file => joinPath(state.panes.a.currentPath, file.name));
@@ -3217,7 +3223,17 @@ async function handlePushOperation() {
         }
     } finally {
         clearOperationStatus();
+        setPushInProgress(false);
     }
+}
+
+function setPushInProgress(inProgress) {
+    state.pushInProgress = inProgress;
+    const label = document.querySelector('#push-btn [data-i18n="explorer.pushButton"]');
+    if (label) {
+        label.textContent = t(inProgress ? 'operations.pushingDirectory' : 'explorer.pushButton');
+    }
+    updateVFButtonStates();
 }
 
 /**
@@ -3347,7 +3363,7 @@ function updateVFButtonStates() {
     const hasDirectorySelection =
         selectedFiles.length > 0 &&
         selectedFiles.every(file => file.is_directory);
-    updatePushButtonState(hasDirectorySelection);
+    updatePushButtonState(hasDirectorySelection && !state.pushInProgress);
 
     // Update Pull button
     const selectedOperationId = getSelectedOperationId();
