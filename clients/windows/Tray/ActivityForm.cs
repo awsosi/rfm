@@ -14,6 +14,9 @@ namespace RFMTray
         private readonly TrayContext _context;
         private readonly ListView _list;
         private readonly Label _footer;
+        private readonly Panel _banner;
+        private readonly Label _bannerText;
+        private readonly Button _bannerAction;
         private readonly Button _details, _sendNow, _openFolder, _openRfm;
 
         public ActivityForm(TrayContext context)
@@ -50,9 +53,20 @@ namespace RFMTray
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(6) };
             buttons.Controls.AddRange(new Control[] { _details, _sendNow, _openFolder, _openRfm, settings });
 
-            _footer = new Label { Dock = DockStyle.Bottom, AutoSize = false, Height = 24, Padding = new Padding(8, 4, 8, 0), ForeColor = SystemColors.GrayText };
+            _footer = new Label { Dock = DockStyle.Bottom, AutoSize = false, Height = 24, AutoEllipsis = true, Padding = new Padding(8, 4, 8, 0), ForeColor = SystemColors.GrayText };
+
+            // What is going on overall, and the one thing that fixes it
+            _banner = new Panel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(10, 8, 10, 8) };
+            _bannerText = new Label { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font, FontStyle.Bold) };
+            _bannerAction = new Button { Dock = DockStyle.Right, AutoSize = true, Padding = new Padding(8, 0, 8, 0) };
+            _bannerAction.Click += (s, e) => _context.Status.Action?.Invoke();
+            _banner.Controls.Add(_bannerText);
+            _banner.Controls.Add(_bannerAction);
+            var check = MakeButton(L.T("tray.menu.check"), (s, e) => _context.ShowCheck());
+            buttons.Controls.Add(check);
 
             Controls.Add(_list);
+            Controls.Add(_banner);
             Controls.Add(buttons);
             Controls.Add(_footer);
 
@@ -60,8 +74,9 @@ namespace RFMTray
         }
 
         /// <summary>What is happening to a folder, in the user's words.</summary>
-        public static string Describe(Catalog c, TraySettings settings)
+        public static string Describe(Catalog c, TrayContext context)
         {
+            var settings = context.Settings;
             switch (c.State)
             {
                 case CatalogState.Waiting:
@@ -72,13 +87,16 @@ namespace RFMTray
                     int left = c.SkipQuiet ? 0 : (int)Math.Ceiling(settings.QuietSeconds - (DateTime.UtcNow - c.ChangedUtc).TotalSeconds);
                     return left > 0 ? L.T("tray.state.waiting", ("seconds", left)) : L.T("tray.state.checking");
                 case CatalogState.Queued:
-                    return settings.Paused ? L.T("tray.state.paused") : L.T("tray.state.queued");
+                    return settings.Paused ? L.T("tray.state.paused")
+                        : context.User == null ? L.T("tray.state.signInNeeded")
+                        : L.T("tray.state.queued");
                 case CatalogState.Pushing:
                     return L.T("tray.state.pushing");
                 case CatalogState.Pushed:
                     return L.T("tray.state.pushed", ("time", c.StateUtc.ToLocalTime().ToString("HH:mm")));
                 case CatalogState.Retrying:
-                    return L.T("tray.state.retrying", ("time", c.NextAttemptUtc.ToLocalTime().ToString("HH:mm")));
+                    return L.T("tray.state.retrying", ("time", c.NextAttemptUtc.ToLocalTime().ToString("HH:mm")),
+                        ("error", c.Result?.Message ?? "?"));
                 default:
                     switch (c.Result?.Outcome)
                     {
@@ -109,9 +127,9 @@ namespace RFMTray
                 var item = _list.Items[c.Path] ?? _list.Items.Add(new ListViewItem(new[] { "", "", "" }) { Name = c.Path });
                 item.Tag = c;
                 item.SubItems[0].Text = c.Name;
-                item.SubItems[1].Text = Describe(c, _context.Settings);
+                item.SubItems[1].Text = Describe(c, _context);
                 item.SubItems[2].Text = c.Files.ToString();
-                item.ToolTipText = c.Path;
+                item.ToolTipText = c.Result?.Message != null ? $"{c.Path}\n\n{c.Result.Message}" : c.Path;
                 item.ForeColor = c.State == CatalogState.NeedsAttention || c.State == CatalogState.Retrying ? Color.DarkRed
                     : c.State == CatalogState.Pushed ? SystemColors.GrayText
                     : SystemColors.WindowText;
@@ -125,6 +143,15 @@ namespace RFMTray
                     ? L.T("tray.status.notConfigured")
                     : L.T("tray.activity.watching", ("folders", string.Join(", ", _context.Settings.WatchFolders)));
             _footer.ForeColor = unreachable.Count > 0 ? Color.DarkRed : SystemColors.GrayText;
+
+            var status = _context.Status;
+            _bannerText.Text = status.Text;
+            _banner.BackColor = status.Health == TrayHealth.Ok ? Color.FromArgb(223, 240, 216)
+                : status.Good || status.Health == TrayHealth.Paused ? Color.FromArgb(234, 238, 243)
+                : Color.FromArgb(252, 236, 204);
+            _bannerText.ForeColor = Color.Black;
+            _bannerAction.Visible = status.Action != null;
+            _bannerAction.Text = status.ActionText ?? "";
             UpdateButtons();
         }
 

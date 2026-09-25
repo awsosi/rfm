@@ -76,6 +76,8 @@ namespace RFMTray
 
         /// <summary>A catalog needs the user (raised on the watcher thread).</summary>
         public event Action<Catalog> AttentionNeeded;
+        /// <summary>A catalog was pushed (raised on the watcher thread).</summary>
+        public event Action<Catalog> Sent;
         public event Action SignInNeeded;
 
         public CatalogWatcher(RfmClient client, TraySettings settings)
@@ -388,6 +390,8 @@ namespace RFMTray
                 }
             }
 
+            if (result.Outcome == PushOutcome.Pushed)
+                Sent?.Invoke(catalog.Copy());
             if (result.Outcome == PushOutcome.SignInRequired)
                 SignInNeeded?.Invoke();
             if (notify)

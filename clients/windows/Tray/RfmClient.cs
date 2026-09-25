@@ -39,7 +39,16 @@ namespace RFMTray
         public string Message;
     }
 
-    class SignInRequiredException : Exception { }
+    class SignInRequiredException : Exception
+    {
+        public SignInRequiredException() : base(L.T("tray.check.notSignedIn")) { }
+    }
+
+    /// <summary>RFM answered, but with an error.</summary>
+    class RfmException : Exception
+    {
+        public RfmException(string message) : base(message) { }
+    }
 
     /// <summary>
     /// The RFM API calls RFM Tray needs, under the user's own sign-in (the
@@ -59,6 +68,8 @@ namespace RFMTray
         private readonly Config _config;
         private readonly AuthenticationManager _auth;
         private readonly HttpClient _http;
+        // Checks must answer quickly; a PUSH may take minutes
+        private readonly HttpClient _quick;
         private int? _workerId;
 
         public RfmClient(Config config)
@@ -66,9 +77,89 @@ namespace RFMTray
             _config = config;
             _auth = new AuthenticationManager(config);
             // A PUSH returns when the worker has copied the catalog
-            _http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
-            _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(
+            _http = NewHttpClient(TimeSpan.FromMinutes(15));
+            _quick = NewHttpClient(TimeSpan.FromSeconds(20));
+        }
+
+        private static HttpClient NewHttpClient(TimeSpan timeout)
+        {
+            var http = new HttpClient { Timeout = timeout };
+            http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(
                 "RFMTray", Assembly.GetExecutingAssembly().GetName().Version.ToString()));
+            return http;
+        }
+
+        public string ServerUrl => _config.ApiBaseUrl;
+
+        /// <summary>GET /health, which needs no sign-in: null when RFM answers, else what went wrong.</summary>
+        public string ServerProblem()
+        {
+            try
+            {
+                var response = _quick.GetAsync(_config.ApiBaseUrl.TrimEnd('/') + "/health").Result;
+                Log.Info($"GET /health -> {(int)response.StatusCode}");
+                return response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode}";
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"GET /health: {ex}");
+                return Describe(ex);
+            }
+        }
+
+        /// <summary>The user RFM itself confirms for the saved sign-in; SignInRequiredException when there is none.</summary>
+        public string ConfirmedUser()
+        {
+            var response = Check(Send(HttpMethod.Get, "/api/auth/me", null, _quick));
+            return (string)ReadJson(response)["username"];
+        }
+
+        /// <summary>The worker pushes go to (the first active one, as the WebUI): "name (status)".</summary>
+        public string WorkerName()
+        {
+            _workerId = null;
+            int id = WorkerId();
+            var workers = JArray.Parse(Check(Send(HttpMethod.Get, "/api/workers/list", null, _quick)).Content.ReadAsStringAsync().Result);
+            var worker = workers.First(w => (int)w["id"] == id);
+            return $"{worker["name"]} ({worker["status"]})";
+        }
+
+        /// <summary>
+        /// How RFM sees a watched folder: its virtual path and how many entries
+        /// the worker lists in it, which proves the server reaches the same folder.
+        /// </summary>
+        public (string VirtualPath, int Entries) Locate(string windowsPath)
+        {
+            int workerId = WorkerId();
+            var resolve = Check(Send(HttpMethod.Post, "/api/path/resolve", new
+            {
+                windows_path = PathRules.NormalizeToCanonicalPath(windowsPath, _config),
+                worker_id = workerId,
+            }, _quick));
+            string virtualPath = (string)ReadJson(resolve)["virtual_path"];
+            var list = Check(Send(HttpMethod.Get,
+                $"/api/files/list?worker_id={workerId}&path={Uri.EscapeDataString(virtualPath)}&limit=1", null, _quick));
+            return (virtualPath, (int)ReadJson(list)["total_count"]);
+        }
+
+        /// <summary>A failure in words a user can pass on: the innermost cause, not "One or more errors occurred".</summary>
+        public static string Describe(Exception ex)
+        {
+            if (ex is RfmException || ex is SignInRequiredException)
+                return ex.Message;
+            // GetBaseException stops at the first non-aggregate: HttpRequestException's
+            // "An error occurred while sending the request" hides the real cause
+            while (ex.InnerException != null)
+                ex = ex.InnerException;
+            return ex is TaskCanceledException ? L.T("tray.check.timeout") : ex.Message;
+        }
+
+        private static HttpResponseMessage Check(HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode)
+                return response;
+            var detail = ErrorDetail(response);
+            throw new RfmException($"HTTP {(int)response.StatusCode}" + (detail != null ? $": {detail}" : ""));
         }
 
         /// <summary>Browser device flow, as RFMLauncher; blocks until approved or expired.</summary>
@@ -176,11 +267,11 @@ namespace RFMTray
             return new PushResult
             {
                 Outcome = status >= 500 || status == 429 ? PushOutcome.Transient : PushOutcome.Failed,
-                Message = ErrorDetail(response)?.ToString() ?? $"HTTP {status}",
+                Message = $"HTTP {status}" + (ErrorDetail(response) is JToken detail ? $": {detail}" : ""),
             };
         }
 
-        private HttpResponseMessage Send(HttpMethod method, string path, object body)
+        private HttpResponseMessage Send(HttpMethod method, string path, object body, HttpClient http = null)
         {
             string token = _auth.GetValidToken();
             if (token == null)
@@ -194,7 +285,7 @@ namespace RFMTray
                 request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
 
             var started = System.Diagnostics.Stopwatch.StartNew();
-            var response = _http.SendAsync(request).Result;
+            var response = (http ?? _http).SendAsync(request).Result;
             Log.Info($"{method} {path} -> {(int)response.StatusCode} in {started.ElapsedMilliseconds} ms");
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 throw new SignInRequiredException();

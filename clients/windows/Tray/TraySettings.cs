@@ -16,6 +16,9 @@ namespace RFMTray
     {
         public const int MinQuietSeconds = 15;
 
+        /// <summary>Raise when the onboarding changes enough to show it again to everyone.</summary>
+        public const int OnboardingVersion = 1;
+
         [JsonProperty("watch_folders")]
         public List<string> WatchFolders { get; set; } = new List<string>();
 
@@ -32,6 +35,18 @@ namespace RFMTray
         [JsonProperty("log_level")]
         [JsonConverter(typeof(StringEnumConverter), typeof(CamelCaseNamingStrategy))]
         public LogLevel LogLevel { get; set; }
+
+        /// <summary>The onboarding version the user finished (0: never).</summary>
+        [JsonProperty("onboarded")]
+        public int Onboarded { get; set; }
+
+        /// <summary>A notification for every folder sent, not only for problems.</summary>
+        [JsonProperty("notify_sent")]
+        public bool NotifySent { get; set; } = true;
+
+        /// <summary>The first successful push was announced as proof that sending works.</summary>
+        [JsonProperty("first_push_confirmed")]
+        public bool FirstPushConfirmed { get; set; }
 
         private static string FilePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RFM", "tray.json");

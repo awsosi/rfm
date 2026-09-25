@@ -65,6 +65,9 @@ namespace RFMTray
 
         public static int Uninstall() => Schtasks($"/Delete /TN \"{Name}\" /F");
 
+        /// <summary>Whether RFM Tray starts at sign-in (the installer registers the task).</summary>
+        public static bool IsInstalled() => Schtasks($"/Query /TN \"{Name}\"") == 0;
+
         private static int Schtasks(string arguments)
         {
             var info = new ProcessStartInfo("schtasks.exe", arguments)

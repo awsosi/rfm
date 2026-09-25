@@ -141,7 +141,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li><a href="#r10"><span class="n">10</span>Automatyczne wysyłanie z folderu – RFM Tray</a>
       <ul>
         <li><a href="#r10-1">10.1 Uruchomienie i ustawienia</a> · <a href="#r10-2">10.2 Kiedy folder zostanie wysłany</a> · <a href="#r10-3">10.3 Okno „Aktywność”</a></li>
-        <li><a href="#r10-4">10.4 Folder odrzucony – poprawianie</a> · <a href="#r10-5">10.5 Menu ikony i wstrzymywanie</a></li>
+        <li><a href="#r10-4">10.4 Folder odrzucony – poprawianie</a> · <a href="#r10-5">10.5 Menu ikony i wstrzymywanie</a> · <a href="#r10-6">10.6 Sprawdzenie połączenia i dziennik</a></li>
       </ul></li>
     <li><a href="#r11"><span class="n">11</span>Problemy i pytania</a></li>
   </ol>
@@ -840,26 +840,29 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <ul>
     <li>RFM Tray instaluje się razem z dodatkiem RFM (rozdział <a href="#r4">4</a>). Uruchomisz go z menu Start: <b>RFM Tray</b>.</li>
     <li>Jeśli masz ustawiony obserwowany folder, RFM Tray <b>uruchamia się sam</b> ok. 30 sekund po zalogowaniu do Windows.</li>
-    <li>Ikona jest obok zegara; jeśli jej nie widać, kliknij strzałkę <b>^</b> (ukryte ikony). Gdy ikona zmienia się w <b>żółty trójkąt ostrzegawczy</b>, któryś folder wymaga uwagi albo nie jesteś zalogowany.</li>
-    <li>Ponowne uruchomienie działającego programu pokaże tylko komunikat „RFM Tray już działa – jego ikona jest obok zegara.”</li>
+    <li>Ikona jest obok zegara; jeśli jej nie widać, kliknij strzałkę <b>^</b> (ukryte ikony). Gdy ikona zmienia się w <b>żółty trójkąt ostrzegawczy</b>, coś wymaga uwagi: folder, logowanie albo połączenie z RFM – co dokładnie, mówi pasek na górze okna „Aktywność” (punkt 10.3).</li>
+    <li>Ponowne uruchomienie działającego programu (np. z menu Start) otwiera jego okno „Aktywność” – albo przewodnik, jeśli nie został jeszcze ukończony.</li>
   </ul>
 
   <div class="two">
     <div>
-      <h4>Pierwsze uruchomienie</h4>
+      <h4>Pierwsze uruchomienie – przewodnik</h4>
+      <p>Przy pierwszym uruchomieniu (także po aktualizacji do wersji 1.2) otwiera się okno <b>RFM Tray – przewodnik</b>. Prowadzi przez wszystko, czego RFM Tray potrzebuje, i sprawdza to z serwerem RFM:</p>
       <ol class="steps">
-        <li>Gdy nie ma jeszcze obserwowanego folderu, od razu otworzy się okno <b>RFM Tray – ustawienia</b> (Rys. 45).</li>
-        <li>Kliknij <span class="ui">Dodaj…</span> i wskaż folder, do którego będziesz wrzucać katalogi. Musi leżeć w folderze sieciowym ze zdjęciami – inaczej pojawi się komunikat „RFM może wysyłać foldery tylko z: …” z listą dozwolonych miejsc.</li>
-        <li>Zostaw <b>Wyślij po braku zmian przez (sekundy)</b> na <b>60</b> (najmniej 15). Zwiększ tę wartość, jeśli kopiowanie przez wolne łącze robi dłuższe przerwy.</li>
-        <li>Kliknij <span class="ui primary">Zapisz</span>.</li>
+        <li><b>Witaj w RFM Tray</b> – jak działa wysyłanie i co zobaczysz, gdy coś pójdzie nie tak.</li>
+        <li><b>Logowanie do RFM</b> – kliknij <span class="ui">Zaloguj się w przeglądarce</span> i na stronie <b>Autoryzacja urządzenia</b> kliknij <span class="ui primary">Zatwierdź urządzenie</span>. Przewodnik pokaże „✔ Zalogowano jako … – potwierdzone przez RFM”. Jeśli byłeś już zalogowany (menu Eksploratora), zobaczysz to od razu.</li>
+        <li><b>Twój folder</b> – <span class="ui">Dodaj…</span> i wskaż swój folder w <span class="path">DO KATALOGU</span>. Musi leżeć w folderze sieciowym ze zdjęciami – inaczej pojawi się komunikat „RFM może wysyłać foldery tylko z: …”.</li>
+        <li><b>Sprawdzenie</b> – RFM Tray sprawdza z serwerem: czy RFM odpowiada, czy logowanie jest ważne, czy działa worker, czy RFM widzi Twój folder („RFM widzi go jako A:/DO KATALOGU/…”) i czy program uruchamia się po zalogowaniu do Windows. Przycisk <span class="ui primary">Zakończ i zacznij wysyłać</span> działa dopiero, gdy wszystko ma ✔.</li>
       </ol>
-      <p>Ustawienia otworzysz później z menu ikony (<b>Ustawienia…</b>) lub przyciskiem w oknie „Aktywność”. <span class="ui">Usuń</span> przestaje obserwować zaznaczony folder. Ustawienia są zapisane dla Twojego konta Windows na tym komputerze; administrator może ustawić obserwowany folder z góry.</p>
+      <p>Po wysłaniu pierwszego folderu pojawi się powiadomienie <b>„RFM Tray działa!”</b> – dowód, że cała droga działa. <span class="ui">Później</span> zamyka przewodnik; wróci przy następnym uruchomieniu, a z menu ikony otworzysz go przez <b>Przewodnik i konfiguracja…</b>.</p>
+      <p><b>Ustawienia…</b> (menu ikony lub okno „Aktywność”, Rys. 45): obserwowane foldery, czas bez zmian przed wysłaniem (<b>60</b> s, najmniej 15 – zwiększ przy wolnym łączu), wstrzymanie, powiadomienia o każdym wysłanym folderze i dziennik diagnostyczny (punkt 10.6). Ustawienia są zapisane dla Twojego konta Windows na tym komputerze.</p>
     </div>
     <figure style="margin-top:0"><img src="img/tray_settings.jpg"><figcaption><b>Rys. 45.</b> Okno „RFM Tray – ustawienia” (folder testowy)</figcaption></figure>
   </div>
 
   <h4>Logowanie</h4>
   <p>RFM Tray korzysta z tego samego logowania co menu Eksploratora Windows (rozdział <a href="#r4">4</a>) – jeśli jesteś tam już zalogowany, nic nie musisz robić. W przeciwnym razie pojawi się powiadomienie <b>„RFM: wymagane logowanie”</b>. Kliknij je (albo w menu ikony <b>Zaloguj…</b>) – otworzy się strona <b>Autoryzacja urządzenia</b>, na której klikasz <span class="ui primary">Zatwierdź urządzenie</span>, jak w rozdziale <a href="#r4">4</a>. Do czasu zatwierdzenia menu pokazuje „Oczekiwanie na zatwierdzenie logowania w przeglądarce…”. <b>Wyloguj</b> w menu ikony wylogowuje także menu Eksploratora.</p>
+  <p>RFM Tray co kilka minut pyta RFM, czy logowanie jest nadal ważne. Gdy wygaśnie, pojawi się powiadomienie, gotowe foldery mają stan <b>„Gotowy – czeka na zalogowanie do RFM”</b>, a dopóki czekają – przypomnienie co 30 minut. Po zalogowaniu wysyłanie rusza samo.</p>
 
   <h3 id="r10-2">10.2 Kiedy folder zostanie wysłany</h3>
   <p>Wysyłane są foldery leżące <b>bezpośrednio</b> w obserwowanym folderze (każdy to jeden katalog). Pliki leżące luzem w obserwowanym folderze oraz foldery ukryte i o nazwach zaczynających się od „.” lub „~” są pomijane. RFM Tray sprawdza folder co ok. 10 sekund i wysyła katalog dopiero, gdy:</p>
@@ -869,11 +872,21 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li>nic się w nim nie zmieniło przez ustawiony czas (domyślnie 60 s),</li>
     <li>żaden plik nie jest już zapisywany.</li>
   </ol>
-  <p>Katalogi są wysyłane <b>po kolei</b>, od najdawniej zmienionego – 30 folderów wrzuconych naraz tworzy kolejkę. Po wysłaniu folder znika z obserwowanego folderu, a w oknie „Aktywność” ma stan „Wysłano o …” (widoczny przez 12 godzin).</p>
+  <p>Katalogi są wysyłane <b>po kolei</b>, od najdawniej zmienionego – 30 folderów wrzuconych naraz tworzy kolejkę. Po wysłaniu folder znika z obserwowanego folderu, a w oknie „Aktywność” ma stan „Wysłano o …” (widoczny przez 12 godzin). Pojawia się też powiadomienie <b>„Wysłano do RFM”</b> (kilka folderów naraz – jedno zbiorcze); można je wyłączyć w Ustawieniach.</p>
   <div class="box tip"><span class="t">Wyślij teraz</span>Przycisk <b>Wyślij teraz</b> w oknie „Aktywność” pomija czas oczekiwania dla wybranego folderu – użyj go, gdy wiesz, że kopiowanie się skończyło. Nie działa, gdy wysyłanie jest wstrzymane (punkt 10.5) lub nie jesteś zalogowany.</div>
 
   <h3 id="r10-3">10.3 Okno „Aktywność”</h3>
   <p>Otwierasz je <b>kliknięciem ikony</b> lub w menu ikony: <b>Pokaż aktywność</b>. Pokazuje wszystkie foldery z obserwowanego folderu i co się z nimi dzieje. Zamknięcie okna tylko je chowa – RFM Tray działa dalej.</p>
+  <p><b>Pasek na górze okna</b> mówi jednym zdaniem, co się dzieje, i ma przycisk, który to naprawia:</p>
+  <table>
+    <tr><th style="width:48%">Pasek</th><th>Co zrobić</th></tr>
+    <tr><td>Działa – czeka na katalogi w … / Działa – ostatnio wysłano … (zielony)</td><td>Nic – wszystko w porządku.</td></tr>
+    <tr><td>Nie zalogowano – folderów czekających na wysłanie: 3.</td><td><span class="ui">Zaloguj…</span></td></tr>
+    <tr><td>Brak połączenia z RFM od 14:05: …</td><td>Sprawdź sieć; <span class="ui">Sprawdź połączenie…</span> pokaże szczegóły (punkt 10.6). RFM Tray próbuje sam co minutę.</td></tr>
+    <tr><td>RFM nie przyjmuje folderów (czeka: 2): … Kolejna próba o 14:20.</td><td>RFM odpowiada, ale zwraca błąd (jego treść jest w pasku). Ponawia sam; gdy trwa długo – zgłoś administratorowi.</td></tr>
+    <tr><td>Wysyłanie wstrzymane (czeka: 4).</td><td><span class="ui">Wznów wysyłanie</span></td></tr>
+    <tr><td>Folderów wymagających Twojej uwagi: 2.</td><td>Kliknij folder dwukrotnie (punkt 10.4).</td></tr>
+  </table>
   <figure class="m"><img src="img/tray_activity_waiting.jpg"><figcaption><b>Rys. 46.</b> Chwilę po skopiowaniu: dwa katalogi czekają na koniec kopiowania, pusty „Nowy folder” czeka na pliki. Na dole – obserwowany folder.</figcaption></figure>
   <table>
     <tr><th style="width:42%">Stan</th><th>Znaczenie</th></tr>
@@ -882,12 +895,13 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><td>Czeka na zakończenie kopiowania (45 s)</td><td>Odliczanie czasu bez zmian; każda zmiana w folderze zaczyna je od nowa.</td></tr>
     <tr><td>Sprawdzanie, czy kopiowanie się zakończyło…</td><td>Czas minął; RFM Tray sprawdza, czy żaden plik nie jest zapisywany.</td></tr>
     <tr><td>Gotowy – w kolejce</td><td>Czeka na swoją kolej do wysłania.</td></tr>
+    <tr><td>Gotowy – czeka na zalogowanie do RFM</td><td>Nic nie zostanie wysłane, dopóki się nie zalogujesz (<span class="ui">Zaloguj…</span> w pasku).</td></tr>
     <tr><td>Gotowy – wysyłanie wstrzymane</td><td>Gotowy, ale wysyłanie jest wstrzymane (punkt 10.5).</td></tr>
     <tr><td>Wysyłanie do RFM…</td><td>RFM sprawdza i kopiuje katalog.</td></tr>
     <tr><td>Wysłano o 14:05</td><td>Wysłany (wiersz szary). W Historii operacji jest nowy PUSH.</td></tr>
     <tr><td>Odrzucony – popraw nazwę lub zawartość (kliknij dwukrotnie)</td><td>RFM odmówił; nic nie zostało wysłane. Punkt 10.4.</td></tr>
     <tr><td>Już jest w RFM – użyj Aktualizacji w RFM (kliknij dwukrotnie)</td><td>Katalog o tej nazwie jest już wysłany. RFM Tray go nie wyśle – zmiany przez <b>Aktualizuj katalog</b>.</td></tr>
-    <tr><td>RFM niedostępny – kolejna próba o 14:20</td><td>RFM, PolkaSQL lub usługa kopiująca chwilowo nie odpowiada. Kolejne próby po 1, 2, 5, 10, a potem co 15 minut; po 3. nieudanej próbie – powiadomienie.</td></tr>
+    <tr><td>Nie wysłano (powód) – kolejna próba o 14:20</td><td>RFM, PolkaSQL lub usługa kopiująca nie odpowiada albo zwraca błąd; w nawiasie jego treść (całość w podpowiedzi po najechaniu na wiersz). Kolejne próby po 1, 2, 5, 10, a potem co 15 minut; po 3. nieudanej próbie – powiadomienie.</td></tr>
     <tr><td>Nie wysłano – kliknij dwukrotnie, aby zobaczyć szczegóły</td><td>Inny błąd – szczegóły po dwukrotnym kliknięciu.</td></tr>
   </table>
   <p class="small">Stany wymagające uwagi są pisane na czerwono. Kolumna <b>Pliki</b> to liczba plików w folderze.</p>
@@ -900,6 +914,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><td><span class="ui">Otwórz folder</span></td><td>Otwiera folder w Eksploratorze Windows (dwukrotne kliknięcie wiersza bez problemu robi to samo).</td></tr>
     <tr><td><span class="ui">Otwórz w RFM</span></td><td>Otwiera Menedżera plików z zaznaczonym folderem – jak „Przygotuj zaznaczone do wysłania przez RFM” (rozdział <a href="#r4">4</a>).</td></tr>
     <tr><td><span class="ui">Ustawienia…</span></td><td>Okno ustawień (punkt 10.1).</td></tr>
+    <tr><td><span class="ui">Sprawdź połączenie…</span></td><td>Sprawdzenie z serwerem RFM (punkt 10.6).</td></tr>
   </table>
   <p class="small">Na dole okna widać obserwowane foldery („Obserwowane: …”). Czerwony napis „Brak dostępu: …” oznacza, że obserwowany folder jest w tej chwili niedostępny, np. bez połączenia z siecią.</p>
 
@@ -922,16 +937,21 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <div>
       <p>Kliknięcie ikony <b>prawym</b> przyciskiem pokazuje menu:</p>
       <ul>
-        <li>dwa wiersze informacyjne: kto jest zalogowany oraz stan – <b>„W toku: 1 • wymaga uwagi: 2”</b> (w toku są też puste foldery czekające na pliki), „Automatyczne wysyłanie wstrzymane” albo „Brak obserwowanego folderu – otwórz Ustawienia”,</li>
+        <li>stan – to samo zdanie co pasek w oknie „Aktywność”; gdy coś jest nie tak, kliknięcie go uruchamia naprawę (np. „Nie zalogowano – … → Zaloguj…”) – i wiersz z nazwą zalogowanego użytkownika,</li>
         <li><b>Pokaż aktywność</b> – okno z punktu 10.3,</li>
         <li><b>Wstrzymaj automatyczne wysyłanie</b> – zaznaczone: nic nie jest wysyłane, gotowe foldery czekają ze stanem „Gotowy – wysyłanie wstrzymane”. Kliknij ponownie, aby wysłać wszystko, co czeka. Przydaje się, gdy chcesz przygotować całą partię i wysłać ją później. To samo pole jest w Ustawieniach,</li>
         <li><b>Otwórz RFM</b> – Menedżer plików w nowej karcie przeglądarki,</li>
+        <li><b>Sprawdź połączenie…</b> (punkt 10.6), <b>Przewodnik i konfiguracja…</b> (punkt 10.1),</li>
         <li><b>Ustawienia…</b>, <b>Zaloguj…</b> / <b>Wyloguj</b>,</li>
         <li><b>Zakończ</b> – zamyka RFM Tray; do ponownego uruchomienia nic nie będzie wysyłane.</li>
       </ul>
     </div>
     <figure style="margin-top:0"><img src="img/tray_menu.jpg" style="max-width:80%"><figcaption><b>Rys. 50.</b> Menu ikony RFM Tray</figcaption></figure>
   </div>
+
+  <h3 id="r10-6">10.6 Sprawdzenie połączenia i dziennik diagnostyczny</h3>
+  <p><b>Sprawdź połączenie…</b> (menu ikony lub okno „Aktywność”) wykonuje to samo sprawdzenie co ostatni krok przewodnika: serwer RFM, logowanie, worker, każdy obserwowany folder i start po zalogowaniu. Każdy wiersz ma ✔, ✖ albo „!” (ostrzeżenie, które nie blokuje wysyłania). Po naprawieniu kliknij <span class="ui">Sprawdź ponownie</span>. <span class="ui">Kopiuj wyniki</span> kopiuje całość do schowka – wklej ją w zgłoszeniu do administratora.</p>
+  <p>Gdy administrator poprosi o <b>dziennik</b>: <b>Ustawienia…</b> → <b>Dziennik diagnostyczny</b> → <b>Szczegółowy</b> → <span class="ui primary">Zapisz</span>, powtórz problem, a potem <span class="ui">Otwórz folder dziennika</span> i wyślij plik <code>RFMTray.log</code>. Domyślnie dziennik jest wyłączony; po diagnozie wyłącz go z powrotem.</p>
 </section>
 
 <!-- ============ 11 ============ -->
@@ -957,7 +977,9 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><td>RFM Tray: folder długo ma stan „Czeka na zakończenie kopiowania” lub „Kopiowanie…”.</td><td>W folderze coś się jeszcze zmienia albo leży w nim plik tymczasowy (np. <code>.tmp</code>, <code>.part</code>). Poczekaj na koniec kopiowania i usuń pliki tymczasowe; <b>Wyślij teraz</b> pomija czas oczekiwania (punkt 10.2).</td></tr>
     <tr><td>RFM Tray: „Odrzucony – popraw nazwę lub zawartość”.</td><td>Kliknij wiersz dwukrotnie i popraw folder według powodu (punkt 10.4). Po zmianie folder zostanie sprawdzony i wysłany sam.</td></tr>
     <tr><td>RFM Tray: „Już jest w RFM – użyj Aktualizacji w RFM”.</td><td>Ten katalog był już wysłany. Zmiany zrób przez <b>Aktualizuj katalog</b> (rozdział 7); folder z obserwowanego folderu usuń, jeśli trafił tam przez pomyłkę.</td></tr>
-    <tr><td>RFM Tray: „RFM niedostępny – kolejna próba o …”.</td><td>RFM Tray sam ponawia próby. Gdy trwa to długo (dostaniesz powiadomienie po 3. nieudanej próbie) – zgłoś administratorowi.</td></tr>
+    <tr><td>RFM Tray: „Nie wysłano (…) – kolejna próba o …”.</td><td>RFM Tray sam ponawia próby. Gdy trwa to długo (dostaniesz powiadomienie po 3. nieudanej próbie) – zgłoś administratorowi, podając treść z nawiasu.</td></tr>
+    <tr><td>RFM Tray: „Gotowy – czeka na zalogowanie do RFM”.</td><td>Zaloguj się: przycisk <b>Zaloguj…</b> na pasku okna „Aktywność” albo w menu ikony (punkt 10.1).</td></tr>
+    <tr><td>RFM Tray nie wysyła, a nie wiesz dlaczego.</td><td>Menu ikony → <b>Sprawdź połączenie…</b>; popraw to, co ma ✖. Jeśli nie wiesz jak – <b>Kopiuj wyniki</b> i wyślij administratorowi (punkt 10.6).</td></tr>
     <tr><td>RFM Tray: w oknie „Aktywność” na dole na czerwono „Brak dostępu: …”.</td><td>Obserwowany folder jest niedostępny (np. brak połączenia z siecią). Sprawdź, czy otwiera się w Eksploratorze Windows.</td></tr>
     <tr><td>Nie widzę ikony RFM Tray.</td><td>Kliknij strzałkę <b>^</b> obok zegara (ukryte ikony). Jeśli jej tam nie ma, uruchom <b>RFM Tray</b> z menu Start.</td></tr>
   </table>

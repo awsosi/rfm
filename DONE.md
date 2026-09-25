@@ -6,6 +6,32 @@
 
 ---
 
+## 2026-09-26 - RFM Tray 1.2: onboarding, clear status, confirmed sign-in
+
+**Why.** Ewa, Natalia and Lena all believed RFM Tray sent their folders. Prod shows
+none of the 437 PUSHes since 2026-09-24 came from it (every audit row has a browser
+user agent): they pushed from the WebUI while the Tray held its folders, showing
+"Gotowy – w kolejce" (e.g. when not signed in: it only noticed at the next push, then
+held everything silently) or "RFM niedostępny" (the HTTP 500 fixed in a7805b8). Nothing
+told the user which, or that the Tray was not working at all.
+
+**What.**
+- **Onboarding** (`OnboardingForm.cs`, first start and after upgrading): what the Tray
+  does and what to expect, sign-in, folder, and a check against the server
+  (`ConnectionCheck.cs`: `/health`, `/api/auth/me`, workers, `path/resolve` +
+  `files/list` per folder, sign-in task). Finishing needs every step to pass. The first
+  push afterwards shows "RFM Tray działa!".
+- **Status**: one sentence with the fixing action, as the Activity window's banner, the
+  first menu line and the tooltip. Folders waiting for sign-in say so; retries show
+  RFM's error (HTTP status and detail, not "RFM niedostępny").
+- **Sign-in confirmed with RFM** at start and every 10 min (1 min while not OK), with a
+  reminder every 30 min while folders wait. "Sent" notifications (batched, optional).
+- **Check connection** window with "Copy results"; starting the Tray again shows the
+  running one's window. Errors show their innermost cause (DNS, TLS…).
+- Guide chapter 10 updated (onboarding, banner, 10.6); screenshots and PDFs not yet.
+
+---
+
 ## 2026-09-25 - RFM Tray diagnostic log
 
 **Why.** Ewa and Natalia (remote) report folders that stay in the watched folder,

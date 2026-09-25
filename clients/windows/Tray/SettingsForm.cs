@@ -18,6 +18,7 @@ namespace RFMTray
         private readonly ListBox _folders;
         private readonly NumericUpDown _quiet;
         private readonly CheckBox _paused;
+        private readonly CheckBox _notifySent;
         private readonly ComboBox _logLevel;
 
         public SettingsForm(Config config, TraySettings settings)
@@ -29,16 +30,17 @@ namespace RFMTray
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterScreen;
             Font = SystemFonts.MessageBoxFont;
-            Size = new Size(620, 480);
+            Size = new Size(620, 510);
             MinimumSize = new Size(480, 420);
             MinimizeBox = false;
             MaximizeBox = false;
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7, Padding = new Padding(12) };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8, Padding = new Padding(12) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -84,6 +86,10 @@ namespace RFMTray
             layout.Controls.Add(_paused, 0, 4);
             layout.SetColumnSpan(_paused, 2);
 
+            _notifySent = new CheckBox { Text = L.T("tray.settings.notifySent"), AutoSize = true, Checked = settings.NotifySent, Margin = new Padding(3, 6, 3, 0) };
+            layout.Controls.Add(_notifySent, 0, 5);
+            layout.SetColumnSpan(_notifySent, 2);
+
             // Diagnostics for support: off unless someone asks for it
             var logRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
             _logLevel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
@@ -94,7 +100,7 @@ namespace RFMTray
             logRow.Controls.Add(new Label { Text = L.T("tray.settings.log"), AutoSize = true, Margin = new Padding(3, 6, 3, 0) });
             logRow.Controls.Add(_logLevel);
             logRow.Controls.Add(openLog);
-            layout.Controls.Add(logRow, 0, 5);
+            layout.Controls.Add(logRow, 0, 6);
             layout.SetColumnSpan(logRow, 2);
 
             var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
@@ -103,7 +109,7 @@ namespace RFMTray
             save.Click += (s, e) => Save();
             buttons.Controls.Add(cancel);
             buttons.Controls.Add(save);
-            layout.Controls.Add(buttons, 0, 6);
+            layout.Controls.Add(buttons, 0, 7);
             layout.SetColumnSpan(buttons, 2);
 
             AcceptButton = save;
@@ -113,24 +119,9 @@ namespace RFMTray
 
         private void AddFolder()
         {
-            using (var dialog = new FolderBrowserDialog { Description = L.T("tray.settings.pick"), ShowNewFolderButton = false })
-            {
-                if (_folders.Items.Count == 0 && _config.AllowedPaths.Count > 0)
-                    dialog.SelectedPath = _config.AllowedPaths[0];
-                if (dialog.ShowDialog(this) != DialogResult.OK)
-                    return;
-
-                string path = dialog.SelectedPath.TrimEnd('\\');
-                if (!PathRules.IsPathAllowed(path, _config))
-                {
-                    MessageBox.Show(this,
-                        L.T("tray.settings.notAllowed", ("paths", string.Join("\n", _config.AllowedPaths))),
-                        Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                if (!_folders.Items.Cast<string>().Contains(path, StringComparer.OrdinalIgnoreCase))
-                    _folders.Items.Add(path);
-            }
+            string path = FolderPicker.Pick(this, _config, Text);
+            if (path != null && !_folders.Items.Cast<string>().Contains(path, StringComparer.OrdinalIgnoreCase))
+                _folders.Items.Add(path);
         }
 
         private void Save()
@@ -139,6 +130,7 @@ namespace RFMTray
             _settings.WatchFolders = _folders.Items.Cast<string>().ToList();
             _settings.QuietSeconds = (int)_quiet.Value;
             _settings.Paused = _paused.Checked;
+            _settings.NotifySent = _notifySent.Checked;
             _settings.LogLevel = (LogLevel)_logLevel.SelectedIndex;
             DialogResult = DialogResult.OK;
         }

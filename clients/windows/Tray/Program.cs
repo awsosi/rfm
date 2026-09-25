@@ -56,9 +56,9 @@ namespace RFMTray
             {
                 if (!first)
                 {
+                    // Started again (Start menu): bring up the running one's window
                     if (!args.Contains("--autostart"))
-                        MessageBox.Show(L.T("tray.alreadyRunning"), "RFM Tray",
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        TrayContext.SignalShow();
                     return 0;
                 }
 

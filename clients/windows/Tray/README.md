@@ -11,15 +11,50 @@ validates the name against PolkaSQL, checks the contents, logs the push against
 that user and notifies PIM exactly as for a WebUI push. The audit log's user
 agent reads `RFMTray/<version>`, so automatic pushes can be told apart.
 
+## Onboarding
+
+First start (and after an upgrade that raises `TraySettings.OnboardingVersion`)
+opens **RFM Tray – przewodnik**: what the Tray does and what the user will see,
+sign-in, the folder, and a check. It can only be finished when the check passes
+against the real server, so a finished onboarding means the Tray can send:
+
+1. RFM answers (`GET /health`);
+2. RFM confirms the sign-in (`GET /api/auth/me`), not just a stored token;
+3. a worker is active (`/api/workers/list`);
+4. each folder is inside `allowed_paths`, reachable from the PC, resolves
+   (`/api/path/resolve`) and the worker lists it (`/api/files/list`);
+5. the sign-in task exists (warning only).
+
+The first successful push afterwards shows "RFM Tray działa!" once
+(`first_push_confirmed`). "Później" closes the guide; it returns on the next
+start and from the menu (**Przewodnik i konfiguracja…**). The same check is
+**Sprawdź połączenie…** (menu, Activity window), with **Kopiuj wyniki** for
+support.
+
+## Status
+
+One sentence, shown as the Activity window's banner (with the button that fixes
+it), the first menu line (clickable) and the tooltip; the icon turns into a
+warning for anything but "working" or "paused". In priority order: no folder,
+not signed in, RFM unreachable (from the periodic check), RFM refusing pushes
+(folders retrying, with RFM's error), folder unreachable, paused, folders
+needing attention, working.
+
+The sign-in is confirmed with RFM at start, then every 10 minutes (every minute
+while something is wrong), so an expired or revoked session shows up at once
+instead of at the next push. While ready folders wait for a sign-in they read
+"Gotowy – czeka na zalogowanie do RFM" and a reminder appears every 30 minutes.
+Starting RFM Tray again (Start menu) shows the running instance's window.
+
 ## How it behaves
 
 | Situation | What the user sees |
 |---|---|
-| Folder pushed | Nothing (it leaves the watched folder; the Activity window lists it as sent) |
+| Folder pushed | "Wysłano do RFM" notification (batched; can be turned off), the Activity window lists it as sent |
 | Name not a product / contents rejected | Notification. Clicking it opens the reasons (same text as the WebUI) with RFM's name suggestions; **Rename and send** renames the folder and sends it |
 | Catalog already published | Notification: changing a published catalog is an UPDATE, done in RFM. RFM Tray never re-pushes it (`refuse_existing`, HTTP 409) |
-| RFM / PolkaSQL / worker unavailable | Retried after 1, 2, 5, 10, then every 15 minutes; notification after the 3rd failure |
-| Not signed in / session expired | Notification; **Sign in…** opens the browser approval |
+| RFM / PolkaSQL / worker unavailable, or HTTP 5xx | Retried after 1, 2, 5, 10, then every 15 minutes, RFM's error shown in the row and the banner; notification after the 3rd failure |
+| Not signed in / session expired | Notification, banner with **Zaloguj…** (browser approval), reminder every 30 min while folders wait |
 | Many problems at once | One notification ("12 folders need your attention") opening the Activity window |
 
 A refused folder stays where it is and is not retried until it changes (new,
@@ -91,8 +126,11 @@ alone get no extra icon; the Start menu shortcut **RFM Tray** always opens it.
 | File | Purpose |
 |---|---|
 | `CatalogWatcher.cs` | Scanning, the "finished" rules, queue, retries |
+| `ConnectionCheck.cs` / `CheckPanel.cs` | The check against the server; its view, the check window, folder picker |
+| `OnboardingForm.cs` | First-run guide |
+| `Log.cs` | Optional diagnostic log |
 | `RfmClient.cs` | `path/resolve` + `operations/push`, maps responses to outcomes |
-| `TrayContext.cs` | Tray icon, menu, notifications, sign-in |
+| `TrayContext.cs` | Tray icon, menu, status, notifications, sign-in checks |
 | `ActivityForm.cs` / `IssueForm.cs` / `SettingsForm.cs` | Windows |
 | `ValidationText.cs` | Port of the WebUI's `formatValidationFailure()` |
 | `ScheduledTask.cs` | Sign-in task XML (`schtasks /Create /XML`) |
