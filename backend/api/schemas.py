@@ -390,7 +390,7 @@ class CatalogValidationResponse(BaseModel):
     catalog_name: str
     matched_name: Optional[str] = None
     product_id: Optional[int] = None
-    # Polka27.elementy.grup_nazwe of the matched product, sent to PIM as tgId
+    # Polka27.elementy.grup_nazwe_kolor of the matched product, sent to PIM as tgId
     tg_id: Optional[str] = None
     suggestions: list[str] = Field(default_factory=list)
     reason: Optional[str] = Field(

@@ -28,6 +28,12 @@ is mistyped, and misses are rare); `catalog_validation_timeout` defaults to 20 s
 `tests/test_polka_charset.py` (mislabelled cp1250 body; the fake PolkaSQL rejects
 `Accept-Charset`).
 
+**tgId is `grup_nazwe_kolor`.** PIM expects the full catalog name as `tgId`, not
+`grup_nazwe` (correcting 2026-09-16 below). RFM now takes it from the procedure's
+`matched_name`; the procedure's `tg_id` field is ignored, so PolkaSQL needs no change.
+Catalogs pushed earlier keep the old value in their PUSH `params_json`, which a PULL
+reuses; an UPDATE re-validates and sends the new one.
+
 ---
 
 ## 2026-09-24 - RFM Tray, context menu reuses the open tab, Polish names in PolkaSQL validation

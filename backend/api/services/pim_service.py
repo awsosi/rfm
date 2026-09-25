@@ -40,7 +40,7 @@ template stored in the ``config`` table and editable from the Admin Panel:
 - ``{files}``        JSON array of top-level basenames (substituted as raw JSON)
 - ``{catalog_name}`` catalog/folder name (``imageCatalog``)
 - ``{event_type}``   resolved eventType for this operation
-- ``{tg_id}``        product tgId, ``Polka27.elementy.grup_nazwe``; captured by
+- ``{tg_id}``        product tgId, ``Polka27.elementy.grup_nazwe_kolor``; captured by
                      catalog validation, otherwise looked up at delivery time
 - ``{operation_id}`` RFM operation ID
 - ``{username}``     user who triggered the operation

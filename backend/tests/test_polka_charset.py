@@ -19,7 +19,8 @@ from api.services import catalog_validation_service
 from api.services.polka import polka_json
 
 NAME = "RĘKAWICZKI 7X000310 AF29587-UC001"
-TG_ID = "RĘKAWICZKI 7X000310 AF29587"
+GRUP_NAZWE = "RĘKAWICZKI 7X000310 AF29587"
+TG_ID = NAME  # PIM's tgId is grup_nazwe_kolor (matched_name), not grup_nazwe
 
 
 def body(charset):
@@ -27,7 +28,7 @@ def body(charset):
     return (
         '{"success": true,"valid": true,"error": null,'
         f'"catalog_name": "{NAME}","matched_name": "{NAME}",'
-        f'"product_id": 123,"tg_id": "{TG_ID}","suggestions": []}}'
+        f'"product_id": 123,"tg_id": "{GRUP_NAZWE}","suggestions": []}}'
     ).encode(charset)
 
 
@@ -41,7 +42,7 @@ def test_polka_json_decodes_polish_names(content_type, charset):
     response = httpx.Response(200, headers={"Content-Type": content_type}, content=body(charset))
     data = polka_json(response)
     assert data["catalog_name"] == NAME
-    assert data["tg_id"] == TG_ID
+    assert data["tg_id"] == GRUP_NAZWE
 
 
 def test_cp1250_body_is_not_utf8():

@@ -185,8 +185,8 @@ class Settings(BaseSettings):
     #   {files}        -> JSON array of top-level basenames (unquoted, raw JSON)
     #   {catalog_name} -> catalog/folder name being signalled
     #   {event_type}   -> resolved eventType for this operation
-    #   {tg_id}        -> product tgId (Polka27.elementy.grup_nazwe), from
-    #                     RFM_ValidateProductName
+    #   {tg_id}        -> product tgId (Polka27.elementy.grup_nazwe_kolor), the
+    #                     matched_name from RFM_ValidateProductName
     #   {operation_id}, {username}, {source_path}, {dest_path}
     pim_payload_template: str = (
         '{"tgId": "{tg_id}", "imageCatalog": "{catalog_name}", '

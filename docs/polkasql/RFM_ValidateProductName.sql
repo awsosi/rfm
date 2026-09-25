@@ -2,13 +2,15 @@
 -- RFM_ValidateProductName - PolkaSQL / SQL Anywhere 17.0.11.7908 (Watcom-SQL)
 -- =============================================================================
 -- Validates that a catalog (folder) name pushed from RFM corresponds to a real
--- product, matching Polka27.elementy.grup_nazwe_kolor. On a match it also returns
--- the product's tgId (Polka27.elementy.grup_nazwe of the matched row), which RFM
--- sends to PIM. On a miss it returns the closest names ranked by similarity so
--- the operator can correct the folder.
+-- product, matching Polka27.elementy.grup_nazwe_kolor. On a match it returns that
+-- name as matched_name, which RFM sends to PIM as both tgId and imageCatalog.
+-- On a miss it returns the closest names ranked by similarity so the operator
+-- can correct the folder.
 --
---   grup_nazwe_kolor (catalog / imageCatalog) : 'TORBA HB0788 FA0542-910 SILVER'
---   grup_nazwe       (tgId)                   : 'TORBA HB0788 FA0542'
+--   grup_nazwe_kolor (matched_name, tgId) : 'TORBA HB0788 FA0542-910 SILVER'
+--   grup_nazwe       (tg_id, unused)      : 'TORBA HB0788 FA0542'
+--
+-- The tg_id field (grup_nazwe) is not what PIM expects; RFM ignores it.
 --
 -- AAA follows the same simplified pattern as RFM_sp_Auth: a hardcoded API key
 -- allow-list, explicit input validation, and a single JSON result column.
@@ -211,13 +213,13 @@ Liczba sugestii jest ograniczana do zakresu 1–25 (domyślnie 5). Dopasowanie n
 -- -----------------------------------------------------------------------------
 -- Verification
 -- -----------------------------------------------------------------------------
--- Exact match (expect valid: true, product_id 2473757, tg_id "TORBA HB0788 FA0542"):
+-- Exact match (expect valid: true, product_id 2473757):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'TORBA HB0788 FA0542-910 SILVER', 5);
 --
--- Exact match (expect tg_id "OZDOBA PS261403 0"):
+-- Exact match (expect matched_name "OZDOBA PS261403 0-BRASS"):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'OZDOBA PS261403 0-BRASS', 5);
 --
--- Polish letter (expect valid: true, product_id 2490156, tg_id "RĘKAWICZKI 104458 0"):
+-- Polish letter (expect valid: true, product_id 2490156):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'RĘKAWICZKI 104458 0-12L', 5);
 --
 -- Near miss (expect valid: false with suggestions, not the 's_score' ORDER BY error):

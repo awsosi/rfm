@@ -25,10 +25,11 @@ Expected response shape from RFM_ValidateProductName:
 On a miss, ``valid`` is false, ``matched_name`` and ``tg_id`` are null and
 ``suggestions`` carries the closest names ranked by similarity.
 
-``tg_id`` is ``Polka27.elementy.grup_nazwe`` of the matched row: the product
-identifier PIM expects as ``tgId`` next to the catalog name (``imageCatalog``,
-``grup_nazwe_kolor``). ``lookup_tg_id()`` resolves it for PIM delivery even
-when the validation gate itself is switched off.
+The tgId PIM expects is ``Polka27.elementy.grup_nazwe_kolor`` of the matched
+row, which the procedure returns as ``matched_name``. Its own ``tg_id`` field
+(``grup_nazwe``) is not what PIM wants and is ignored. ``lookup_tg_id()``
+resolves the tgId for PIM delivery even when the validation gate itself is
+switched off.
 
 Enforcement is fail-closed: if validation is enabled and the service cannot
 be reached, the operation is refused. Set ``catalog_validation_fail_open`` to
@@ -145,12 +146,9 @@ async def lookup_tg_id(catalog_name: str, db: AsyncSession) -> tuple:
         return None, f"RFM_ValidateProductName error: {data.get('error') or 'unknown error'}"
     if not data.get("valid"):
         return None, f"no product matches catalog {name!r}"
-    tg_id = _clean_tg_id(data.get("tg_id"))
+    tg_id = _clean_tg_id(data.get("matched_name"))
     if not tg_id:
-        return None, (
-            "RFM_ValidateProductName returned no tg_id; deploy the current "
-            "docs/polkasql/RFM_ValidateProductName.sql"
-        )
+        return None, "RFM_ValidateProductName returned no matched_name"
     return tg_id, None
 
 
@@ -257,7 +255,7 @@ async def validate_catalog_name(
                 catalog_name=name,
                 matched_name=data.get("matched_name") or name,
                 product_id=data.get("product_id"),
-                tg_id=_clean_tg_id(data.get("tg_id")),
+                tg_id=_clean_tg_id(data.get("matched_name")),
             )
 
         logger.warning(

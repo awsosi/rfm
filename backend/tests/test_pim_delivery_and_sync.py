@@ -48,9 +48,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 TORBA = "TORBA HB0788 FA0542-910 SILVER"
-TORBA_TG = "TORBA HB0788 FA0542"
 OZDOBA = "OZDOBA PS261403 0-BRASS"
-OZDOBA_TG = "OZDOBA PS261403 0"
+# PIM's tgId is grup_nazwe_kolor, the procedure's matched_name. The procedure's
+# own tg_id field is grup_nazwe and must be ignored, so the fake still sends it.
+TORBA_TG = TORBA
+OZDOBA_TG = OZDOBA
+GRUP_NAZWE = {TORBA: "TORBA HB0788 FA0542", OZDOBA: "OZDOBA PS261403 0"}
 PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 100
 
 
@@ -60,8 +63,8 @@ class Remote:
     def __init__(self):
         self.pim_received = []
         self.pim_statuses = []          # popped per POST; empty -> 200
-        self.products = {TORBA: TORBA_TG, OZDOBA: OZDOBA_TG}
-        self.omit_tg_id = False
+        self.products = dict(GRUP_NAZWE)
+        self.omit_matched_name = False
         self.images = {}                # (catalog, file) -> (status, content type, body)
         self.image_requests = []
         remote = self
@@ -88,10 +91,10 @@ class Remote:
                     name = q["CatalogName"][0]
                     tg_id = remote.products.get(name)
                     data = {"success": q["ApiKey"][0] == "key", "valid": tg_id is not None,
-                            "catalog_name": name, "matched_name": name if tg_id else None,
+                            "catalog_name": name, "tg_id": tg_id,
                             "product_id": 1 if tg_id else None, "suggestions": []}
-                    if not remote.omit_tg_id:
-                        data["tg_id"] = tg_id
+                    if not remote.omit_matched_name:
+                        data["matched_name"] = name if tg_id else None
                     return self._send(200, json.dumps(data).encode())
                 # /uploads/product_thumb/<catalog>/up/<file>
                 parts = url.path.split("/")
@@ -357,17 +360,17 @@ async def test_missing_tg_id_is_looked_up_at_delivery_or_retried(session, db_man
     assert event.status == "DELIVERED" and event.tg_id == TORBA_TG
     assert remote.pim_received[0]["body"]["tgId"] == TORBA_TG
 
-    # The procedure is an old version without tg_id: never sent without it
-    remote.omit_tg_id = True
+    # No matched_name in the reply: never sent without a tgId
+    remote.omit_matched_name = True
     old = await completed_operation(session, user, OZDOBA)
     await enqueue_pim_event(old)
     await deliver_due_events()
     event = await event_of(db_manager, old.id)
-    assert event.status == "PENDING" and "returned no tg_id" in event.last_error
+    assert event.status == "PENDING" and "returned no matched_name" in event.last_error
     assert len(remote.pim_received) == 1
 
     # A template without {tg_id} needs no lookup
-    remote.omit_tg_id = False
+    remote.omit_matched_name = False
     await set_config_value(session, catalog_validation_url="")
     await set_config(session, pim_payload_template='{"imageCatalog": "{catalog_name}", "files": {files}}')
     unknown = await completed_operation(session, user, "NO SUCH PRODUCT")
