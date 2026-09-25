@@ -34,7 +34,8 @@ def body(charset):
 @pytest.mark.parametrize("content_type, charset", [
     ("text/plain", "cp1250"),                        # no charset declared
     ("text/plain; charset=windows-1250", "cp1250"),  # declared
-    ("application/json", "utf-8"),                   # server honoured Accept-Charset
+    ("application/json", "utf-8"),                   # UTF-8 body
+    ("text/plain; charset=UTF-8", "cp1250"),         # label does not match the body
 ])
 def test_polka_json_decodes_polish_names(content_type, charset):
     response = httpx.Response(200, headers={"Content-Type": content_type}, content=body(charset))
@@ -57,6 +58,8 @@ def polka_server():
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            # With Accept-Charset: utf-8 PolkaSQL stops matching Polish names
+            assert "Accept-Charset" not in self.headers
             received.append(parse_qs(urlparse(self.path).query)["CatalogName"][0])
             payload = body("cp1250")
             self.send_response(200)

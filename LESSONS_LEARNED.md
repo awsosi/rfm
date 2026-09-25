@@ -2,7 +2,7 @@
 
 > **Critical patterns and anti-patterns discovered during development**
 > **Purpose:** Prevent recurring bugs and document invisible failure modes
-> **Last Updated:** 2026-09-24
+> **Last Updated:** 2026-09-25
 
 ---
 
@@ -13,7 +13,10 @@
 **Why it is invisible:** Only names with Polish letters fail, and the message blames the network. Every ASCII product name works.
 
 **Rules:**
-1. Decode PolkaSQL bodies with `api/services/polka.py:polka_json()` (declared charset, else UTF-8, else cp1250) and send `POLKA_HEADERS`; never `response.json()`.
+1. Decode PolkaSQL bodies with `api/services/polka.py:polka_json()` (declared charset or UTF-8, falling back to cp1250) and send `POLKA_HEADERS`; never `response.json()`.
+4. Never send `Accept-Charset` to PolkaSQL. With `Accept-Charset: utf-8`, `RĘKAWICZKI 104458 0-12L` stopped matching, although it matches without the header. The reply also said `charset=UTF-8`, so the label is not proof of the body's encoding.
+5. Reproduce a PolkaSQL problem with the request RFM really sends (same headers), not a bare browser URL: the browser test said `valid: true` while RFM was refused.
+6. Every miss runs the suggestion query, so a broken suggestion query fails every mistyped name with `catalogValidation.serviceError`. Test the procedure with a name that does not exist.
 2. Test external services with non-ASCII data in the encoding they really use (`tests/test_polka_charset.py`).
 3. A catch-all that maps every exception to "unreachable" hides bugs; the log line (`'utf-8' codec can't decode byte 0xca`) was the only clue.
 

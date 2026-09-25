@@ -2,7 +2,28 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-09-24
+> **Last Updated:** 2026-09-25
+
+---
+
+## 2026-09-25 - Polish names in PolkaSQL validation, second round
+
+**Symptom.** PUSH of `RĘKAWICZKI 104458 0-12L` was refused from the WebUI and RFM Tray
+with `catalogValidation.serviceError`, although `grup_nazwe_kolor` holds exactly that
+name. API log: `Function or column reference to 's_score' in the ORDER BY clause is invalid`.
+
+**Cause, two bugs.**
+1. `POLKA_HEADERS` sent `Accept-Charset: utf-8` (added on 2026-09-24). With it, PolkaSQL
+   no longer found the exact match; the same URL without the header returned `valid: true`.
+2. On a miss, the suggestion query in `RFM_sp_ValidateProductName` used
+   `SELECT DISTINCT s_name … ORDER BY s_score`, which SQL Anywhere refuses. Every name
+   without an exact match failed with that error instead of getting suggestions.
+
+**Fix.** `api/services/polka.py`: no `Accept-Charset`; `polka_json()` falls back to cp1250
+even when the reply claims `charset=UTF-8`. `docs/polkasql/RFM_ValidateProductName.sql`:
+`GROUP BY s_name` with `MAX(s_score)` (ALTER PROCEDURE, DBA deploys). Tests:
+`tests/test_polka_charset.py` (mislabelled cp1250 body; the fake PolkaSQL rejects
+`Accept-Charset`).
 
 ---
 
@@ -21,7 +42,8 @@ and `httpx.Response.json()` always decodes UTF-8. The catch-all `except` reporte
 the decode error as "unreachable".
 
 **Fix.** `api/services/polka.py`: `polka_json()` decodes with the declared charset,
-else UTF-8, else cp1250, and `POLKA_HEADERS` asks for UTF-8 (`Accept-Charset`).
+else UTF-8, else cp1250, and `POLKA_HEADERS` asks for UTF-8 (`Accept-Charset`;
+removed on 2026-09-25, it broke the exact match).
 Used by catalog validation, the PIM tgId lookup (`lookup_tg_id`, same bug) and
 PolkaSQL login. No DBA change needed. Tests: `tests/test_polka_charset.py` serves
 the exact cp1250 body; without the fix it reproduces the production error.

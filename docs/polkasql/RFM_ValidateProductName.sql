@@ -123,7 +123,11 @@ BEGIN
   SET v_count = 0;
 
   sugloop: FOR sug AS sugcur CURSOR FOR
-    SELECT DISTINCT s_name
+    -- GROUP BY rather than DISTINCT: SQL Anywhere refuses ORDER BY on a column
+    -- outside a DISTINCT select list, which failed every miss with "Function
+    -- or column reference to 's_score' in the ORDER BY clause is invalid".
+    -- All size rows of a name have the same score, so MAX() is that score.
+    SELECT s_name, MAX(s_score) AS s_best
       FROM (
         SELECT e.grup_nazwe_kolor AS s_name,
                SIMILAR(e.grup_nazwe_kolor, v_name) AS s_score
@@ -135,7 +139,8 @@ BEGIN
               OR SIMILAR(e.grup_nazwe_kolor, v_name) >= 60 )
       ) AS scored
      WHERE s_score >= 40
-     ORDER BY s_score DESC, s_name ASC
+     GROUP BY s_name
+     ORDER BY s_best DESC, s_name ASC
   DO
     IF v_count >= v_max THEN
       LEAVE sugloop;
@@ -173,37 +178,34 @@ EXCEPTION WHEN OTHERS THEN
 
 END;
 
+COMMENT ON PROCEDURE "Polka27"."RFM_sp_ValidateProductName" IS 'Procedura walidacji nazwy produktu dla aplikacji RFM (ff.vitkac.local).
+Waliduje klucz API oraz nazwę katalogową produktu, a następnie wyszukuje dokładne dopasowanie w tabeli Polka27.elementy. W przypadku znalezienia dopasowania zwraca nazwę produktu, jego product_id (Indeks) oraz tg_id. Jeżeli dokładne dopasowanie nie zostanie znalezione, generuje listę podobnych nazw produktów na podstawie pierwszego tokenu nazwy oraz podobieństwa tekstowego (SIMILAR), ograniczając wynik do zadanej liczby sugestii.
+Zwraca JSON z polami: success, valid, error, catalog_name, matched_name, product_id, tg_id, suggestions.
+Liczba sugestii jest ograniczana do zakresu 1–25 (domyślnie 5), a dopasowanie nazwy produktu respektuje kolację bazy danych. W przypadku błędu wykonania procedura zwraca komunikat błędu w formacie JSON.';
+
 
 -- -----------------------------------------------------------------------------
 -- PART 2 - Web Service
 -- -----------------------------------------------------------------------------
--- Mirrors the RFM_Auth service definition.
+-- Deployed once; a procedure change needs only PART 1.
 --
---   Service name : RFM_ValidateProductName
---   Service type : Raw
---   URL path     : Off
---   Methods      : GET
---   Comment      : Web service pozwalajacy na walidacje nazwy katalogu
---                  produktu w aplikacji RFM (ff.vitkac.local).
---                  Wywoluje procedure Polka27.RFM_sp_ValidateProductName.
---                  Zwraca JSON: {"success": true/false, "valid": true/false,
---                  "error": null/"message", "catalog_name": "...",
---                  "matched_name": null/"...", "product_id": null/123,
---                  "tg_id": null/"..." (grup_nazwe),
---                  "suggestions": ["...", "..."]}
---                  Porownanie jest case-insensitive.
-
--- Character set: SQL Anywhere sends the body in the database charset (cp1250),
--- so names like 'RĘKAWICZKI ...' are not UTF-8. RFM decodes the declared
--- charset, else UTF-8, else cp1250 (backend/api/services/polka.py); no change
--- is needed here.
+-- Character set: SQL Anywhere sends the body in the database charset and says
+-- so (Content-Type: text/plain; charset=windows-1250, 'Ę' = byte 0xCA).
+-- RFM must NOT send Accept-Charset: with "Accept-Charset: utf-8" the exact
+-- match failed for 'RĘKAWICZKI 104458 0-12L' (backend/api/services/polka.py).
 
 CREATE SERVICE "RFM_ValidateProductName"
   TYPE 'RAW'
   AUTHORIZATION OFF
-  USER "Polka27"
+  USER "RFM_view"
   METHODS 'GET'
   AS CALL "Polka27"."RFM_sp_ValidateProductName"(:ApiKey, :CatalogName, :MaxSuggestions);
+
+COMMENT ON SERVICE "RFM_ValidateProductName" IS 'Web service pozwalający na zdalną walidację nazwy produktu w aplikacji RFM (ff.vitkac.local).
+Wywołuje procedurę Polka27.RFM_sp_ValidateProductName.
+Waliduje klucz API oraz nazwę katalogową produktu i zwraca dokładne dopasowanie lub listę podobnych nazw produktów.
+Zwraca JSON: {"success": true/false, "valid": true/false, "error": null/"message", "catalog_name": "name", "matched_name": "name"/null, "product_id": 123/null, "tg_id": "id"/null, "suggestions": ["name1", "name2"]}.
+Liczba sugestii jest ograniczana do zakresu 1–25 (domyślnie 5). Dopasowanie nazwy respektuje kolację bazy danych.';
 
 
 -- -----------------------------------------------------------------------------
@@ -215,7 +217,10 @@ CREATE SERVICE "RFM_ValidateProductName"
 -- Exact match (expect tg_id "OZDOBA PS261403 0"):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'OZDOBA PS261403 0-BRASS', 5);
 --
--- Near miss (expect valid: false with suggestions):
+-- Polish letter (expect valid: true, product_id 2490156, tg_id "RĘKAWICZKI 104458 0"):
+--   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'RĘKAWICZKI 104458 0-12L', 5);
+--
+-- Near miss (expect valid: false with suggestions, not the 's_score' ORDER BY error):
 --   CALL "Polka27"."RFM_sp_ValidateProductName"('topsecret1', 'TORBA HB0788 FA0542-910 SILVR', 5);
 --
 -- Bad key (expect success: false):
