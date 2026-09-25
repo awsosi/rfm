@@ -27,6 +27,7 @@ from api.middleware.logging import (
 )
 from api.schemas import *
 from api.services.worker_service import (
+    WorkerCommunicationError,
     WorkerService,
     get_worker_by_id,
     get_active_workers,
@@ -630,7 +631,15 @@ async def published_catalog_path(
         raise HTTPException(status_code=404, detail=f"Worker {worker_id} not found")
 
     catalog_path = f"B:/{_os.path.basename(source_path.rstrip('/'))}"
-    response = await WorkerService(settings).list_directory(worker, catalog_path, db, 0, 1)
+    try:
+        response = await WorkerService(settings).list_directory(worker, catalog_path, db, 0, 1)
+    except WorkerCommunicationError as exc:
+        # The worker reports a missing directory as a failed command
+        # ("Directory not found: ..."): the usual case, a new catalog. Any
+        # other failure (offline, timeout) still fails the push.
+        if "not found" in str(exc).lower():
+            return None
+        raise
     return catalog_path if response.status == "success" else None
 
 
