@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Menedżer plików – szybki start</title>
+<link rel="stylesheet" href="fonts/roboto.css">
 <style>
 @page { size: A4; margin: 11mm 12mm 12mm 12mm; }
 :root{--ink:#0f172a;--muted:#475569;--line:#e2e8f0;--blue:#2563eb}
@@ -59,7 +60,7 @@ th{background:#f1f5f9;font-weight:600}
   <h2>Zanim wyślesz – 4 zasady</h2>
   <div class="row">
     <ol>
-      <li><b>Nazwa folderu = nazwa produktu</b>, np. <code>TORBA HB0788 FA0542-910 SILVER</code>.</li>
+      <li><b>Nazwa folderu = nazwa produktu</b>, np. <code>RĘKAWICZKI 104458 0-12L</code> (polskie litery są dozwolone).</li>
       <li><b>Minimum 2 zdjęcia</b> (jpg, png, gif, bmp, tif, webp).</li>
     </ol>
     <ol start="3">
@@ -72,7 +73,7 @@ th{background:#f1f5f9;font-weight:600}
 
 <div class="card">
   <h2>Logowanie</h2>
-  <p style="margin:0">Otwórz adres Menedżera plików (środowisko testowe: <b>https://dev.ff.vitkac.local</b>), wpisz login i hasło, wybierz metodę: <b>PolkaSQL</b> (konto z PolkaSQL) albo <b>Lokalna</b> (konto założone w Menedżerze plików) → <span class="ui p">Zaloguj się</span>. „Zapamiętaj mnie” = nie wylogowuje po zamknięciu przeglądarki.</p>
+  <p style="margin:0">Otwórz <b>https://ff.vitkac.local</b> (środowisko testowe: <b>https://dev.ff.vitkac.local</b>), wpisz login i hasło, wybierz metodę: <b>PolkaSQL</b> (konto z PolkaSQL) albo <b>Lokalna</b> (konto założone w Menedżerze plików) → <span class="ui p">Zaloguj się</span>. „Zapamiętaj mnie” = nie wylogowuje po zamknięciu przeglądarki.</p>
 </div>
 
 <div class="card">
@@ -83,10 +84,11 @@ th{background:#f1f5f9;font-weight:600}
       <ol>
         <li>Zaznacz folder(y) produktu – <b>tylko foldery</b>, w tym samym miejscu.</li>
         <li>Prawy przycisk myszy → <b>Przygotuj zaznaczone do wysłania przez RFM</b>. W Windows 11 najpierw <b>Pokaż więcej opcji</b>.</li>
-        <li>Otworzy się przeglądarka z zaznaczonymi katalogami. Za pierwszym razem kliknij tam <span class="ui p">Zatwierdź urządzenie</span>.</li>
+        <li>Aplikacja pokaże zaznaczone katalogi – w już otwartej karcie RFM albo w nowej. Za pierwszym razem kliknij <span class="ui p">Zatwierdź urządzenie</span>.</li>
       </ol>
       <p><b>Sposób B – w aplikacji:</b> przejdź do folderu (kliknij nazwę lub wpisz ścieżkę, np. <code>A:/tester</code>) i zaznacz <b>pole wyboru</b> przy katalogu.</p>
-      <p><b>Potem:</b> kliknij <span class="ui p">Wyślij →</span>, przeczytaj okno i kliknij <span class="ui p">Potwierdź</span>.</p>
+      <p><b>Sposób C – RFM Tray</b> (ikona przy zegarze): skopiuj folder do swojego obserwowanego folderu – wyśle się sam po zakończeniu kopiowania. Problem pokaże powiadomienie; kliknij je.</p>
+      <p><b>Potem (A i B):</b> kliknij <span class="ui p">Wyślij →</span>, przeczytaj okno, kliknij <span class="ui p">Potwierdź</span> i poczekaj, aż zniknie napis „Wysyłanie katalogu...”.</p>
       <div class="ok">Gotowe, gdy w <b>Historii operacji</b> jest wiersz <span class="tag push">PUSH</span> ze statusem <b>Zakończone</b>. „PIM: powiadomiono” i „Synchronizacja” dzieją się dalej same – nie musisz czekać.</div>
     </div>
     <div>
@@ -158,6 +160,7 @@ th{background:#f1f5f9;font-weight:600}
     <tr><td>Brak pozycji RFM w menu Windows</td><td>Zaznacz tylko foldery; w Windows 11 kliknij „Pokaż więcej opcji”; folder musi leżeć w folderze sieciowym ze zdjęciami.</td></tr>
     <tr><td>„PIM: błąd” lub długo „PIM: ponawianie”</td><td>Kliknij numer operacji (ID) → <b>Wyślij ponownie do PIM</b>.</td></tr>
     <tr><td>Nie widzę okna potwierdzenia</td><td>Wyłączono je opcją „Nie pytaj ponownie”. Włączysz je w <b>Ustawienia → Potwierdzenia</b>.</td></tr>
+    <tr><td>RFM Tray: folder „Odrzucony” lub „Już jest w RFM”</td><td>Kliknij go dwukrotnie w oknie <b>Aktywność</b> (klik w ikonę) i popraw według powodu. Wysłany już katalog zmieniasz przez <b>Aktualizuj katalog</b>.</td></tr>
   </table>
   <p class="foot" style="margin:1.5mm 0 0">Zgłaszając problem administratorowi, podaj <b>numer operacji (ID)</b>, nazwę katalogu i treść komunikatu.</p>
 </div>

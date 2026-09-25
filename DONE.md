@@ -34,6 +34,26 @@ is mistyped, and misses are rare); `catalog_validation_timeout` defaults to 20 s
 Catalogs pushed earlier keep the old value in their PUSH `params_json`, which a PULL
 reuses; an UPDATE re-validates and sends the new one.
 
+**RFM Tray could not push a new catalog.** `refuse_existing` lists `B:/<name>` to see
+whether the catalog is published; the worker reports a missing directory as a failed
+command, which `send_command` raises, so every new catalog got HTTP 500 and RFM Tray
+retried it forever as "RFM niedostępny". "not found" now means not published
+(`published_catalog_path`); other worker failures still fail the push.
+`tests/test_push_refuse_existing.py` now raises like the real worker.
+
+**WebUI: a running PUSH is visible.** The status line had no element since the VF
+redesign, so after "Potwierdź" nothing happened on screen for the ~7 s a wrong name
+takes. The "Wyślij" button now reads "Wysyłanie katalogu..." and stays disabled.
+
+**User guides (PDF).** `docs/instructions/*.pdf` updated for the current app: new
+chapter 10 on RFM Tray (real screenshots from dev: settings, activity, rejection with
+suggestions, menu), the context menu reusing the open tab, Polish letters in names, the
+busy "Wyślij" button, a new Rys. 1 with today's refusal wording, the production address.
+Roboto is bundled in `docs/instructions/src/fonts`. To render: serve `src/` over HTTP
+(Chrome blocks web fonts on `file://`), e.g. `python -m http.server 8765`, then
+`chrome --headless=new --no-pdf-header-footer --print-to-pdf=<out.pdf> http://127.0.0.1:8765/guide.html`
+(and `quickstart.html`, which must stay at 2 pages).
+
 ---
 
 ## 2026-09-24 - RFM Tray, context menu reuses the open tab, Polish names in PolkaSQL validation

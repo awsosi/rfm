@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Menedżer plików – instrukcja użytkownika</title>
+<link rel="stylesheet" href="fonts/roboto.css">
 <style>
 @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
 :root{
@@ -104,8 +105,9 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     </div>
   </div>
   <div class="meta">
-    Wersja z 17 września 2026 r. · Zrzuty ekranu wykonano w środowisku testowym <b>https://dev.ff.vitkac.local</b> na koncie <b>tester</b>,
+    Wersja z 25 września 2026 r. · Zrzuty ekranu wykonano w środowisku testowym <b>https://dev.ff.vitkac.local</b> na koncie <b>tester</b>,
     na katalogach <b>OZDOBA PS261403 0-BRASS</b> i <b>TORBA HB0788 FA0542-910 SILVER</b> (folder <span class="path">A:/tester</span>).
+    Zrzuty RFM Tray i Rys. 1 pochodzą z folderu <span class="path">A:/tester/DO KATALOGU</span> z katalogami testowymi zawierającymi celowe błędy.
     Numery operacji (np. #35) pochodzą z tych testów – u Ciebie będą inne.
   </div>
 </section>
@@ -136,7 +138,12 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li><a href="#r9-4">9.4 Historia operacji</a> · <a href="#r9-5">9.5 Znaczki PIM i synchronizacji</a> · <a href="#r9-6">9.6 Okno szczegółów operacji</a></li>
         <li><a href="#r9-7">9.7 Ustawienia</a> · <a href="#r9-8">9.8 Komunikaty</a></li>
       </ul></li>
-    <li><a href="#r10"><span class="n">10</span>Problemy i pytania</a></li>
+    <li><a href="#r10"><span class="n">10</span>Automatyczne wysyłanie z folderu – RFM Tray</a>
+      <ul>
+        <li><a href="#r10-1">10.1 Uruchomienie i ustawienia</a> · <a href="#r10-2">10.2 Kiedy folder zostanie wysłany</a> · <a href="#r10-3">10.3 Okno „Aktywność”</a></li>
+        <li><a href="#r10-4">10.4 Folder odrzucony – poprawianie</a> · <a href="#r10-5">10.5 Menu ikony i wstrzymywanie</a></li>
+      </ul></li>
+    <li><a href="#r11"><span class="n">11</span>Problemy i pytania</a></li>
   </ol>
 </section>
 
@@ -167,7 +174,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <h3>Typowy dzień pracy</h3>
   <ol class="steps">
     <li>Przygotowujesz folder produktu ze zdjęciami <code>1.jpg</code>, <code>2.jpg</code>… w Ścieżce A.</li>
-    <li>Klikasz folder prawym przyciskiem w Eksploratorze Windows → <b>Przygotuj zaznaczone do wysłania przez RFM</b> (albo sam wyszukujesz go w aplikacji).</li>
+    <li>Klikasz folder prawym przyciskiem w Eksploratorze Windows → <b>Przygotuj zaznaczone do wysłania przez RFM</b> (albo sam wyszukujesz go w aplikacji). Jeśli korzystasz z <b>RFM Tray</b>, wystarczy skopiować folder do swojego obserwowanego folderu – zostanie wysłany sam (rozdział <a href="#r10">10</a>).</li>
     <li>W aplikacji klikasz <span class="ui primary">Wyślij →</span> i potwierdzasz.</li>
     <li>Jeśli trzeba coś poprawić – wybierasz katalog w historii i klikasz <span class="ui">Aktualizuj katalog</span>.</li>
     <li>Jeśli katalog w ogóle nie powinien być wysłany – wybierasz go w historii i klikasz <span class="ui">← Cofnij</span>.</li>
@@ -180,7 +187,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <p class="lead">Zanim cokolwiek zostanie wysłane lub zaktualizowane, aplikacja sprawdza katalog. Jeśli któraś zasada nie jest spełniona, operacja się nie wykona i nic nie zostanie zmienione. Oto zasady obowiązujące w chwili pisania instrukcji:</p>
   <table>
     <tr><th style="width:5%">#</th><th style="width:37%">Zasada</th><th>Przykład</th></tr>
-    <tr><td>1</td><td><b>Nazwa folderu = nazwa istniejącego produktu</b> w systemie (PolkaSQL).</td><td><b>OZDOBA PS261403 0-BRASS</b> ✓. Przy literówce aplikacja może podpowiedzieć podobne nazwy produktów.</td></tr>
+    <tr><td>1</td><td><b>Nazwa folderu = nazwa istniejącego produktu</b> w systemie (PolkaSQL).</td><td><b>OZDOBA PS261403 0-BRASS</b>, <b>RĘKAWICZKI 104458 0-12L</b> ✓ (polskie litery są dozwolone). Przy literówce aplikacja podpowiada podobne nazwy produktów – ich wyszukanie trwa kilka–kilkanaście sekund.</td></tr>
     <tr><td>2</td><td>Co najmniej <b>2 pliki ze zdjęciami</b>.</td><td>Dozwolone formaty: jpg, jpeg, png, gif, bmp, tif, tiff, webp.</td></tr>
     <tr><td>3</td><td>Pliki nazwane <b>numerem</b> i rozszerzeniem (grafiki AI: <code>_ai</code>).</td><td><code>1.jpg</code>, <code>2.png</code>, <code>10.jpg</code>, <code>3_ai.png</code>, <code>4_AI.jpg</code> ✓ &nbsp;·&nbsp; <code>okladka.png</code>, <code>zdjecie 1.jpg</code>, <code>1a.jpg</code> ✗</td></tr>
     <tr><td>4</td><td>Plik musi <b>naprawdę być zdjęciem</b> w podanym formacie.</td><td>Dokument ze zmienioną końcówką na <code>.jpg</code> zostanie odrzucony.</td></tr>
@@ -189,8 +196,8 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <div class="box tip"><span class="t">Dobra praktyka</span>Trzymaj w katalogu wyłącznie ponumerowane zdjęcia, bez podfolderów i innych plików. Wtedy wysyłka zawsze przejdzie za pierwszym razem.</div>
 
   <h3>Jak wygląda odmowa</h3>
-  <p>Gdy zasada nie jest spełniona, pojawi się okno <b>„Nie można kontynuować”</b> z nazwą katalogu, powodem i podsumowaniem. Poniżej przykład z testu: próbowaliśmy zmienić nazwę pliku <code>1.png</code> na <code>okladka.png</code>. Aplikacja odmówiła, a katalog pozostał bez zmian.</p>
-  <figure class="s"><img src="img/validation_error.jpg"><figcaption><b>Rys. 1.</b> Odmowa z powodu złej nazwy pliku. Wiersz „7 z 2 wymaganych plików graficznych” znaczy: jest 7 zdjęć, a wymagane są co najmniej 2.</figcaption></figure>
+  <p>Gdy zasada nie jest spełniona, pojawi się okno <b>„Nie można kontynuować”</b> z nazwą katalogu, powodem i podsumowaniem. Poniżej przykład z testu: próbowaliśmy wysłać katalog <b>TORBA HB0788 FA0542-910 SILVR</b> (literówka: SILVR zamiast SILVER) z plikiem <code>okladka.jpg</code>. Aplikacja odmówiła z obu powodów i podpowiedziała właściwą nazwę; katalog został w Ścieżce A bez zmian.</p>
+  <figure class="xs"><img src="img/validation_error.jpg"><figcaption><b>Rys. 1.</b> Odmowa z powodu literówki w nazwie katalogu i złej nazwy pliku. Wiersz „3 z 2 wymaganych plików graficznych” znaczy: są 3 zdjęcia, a wymagane są co najmniej 2.</figcaption></figure>
   <table>
     <tr><th style="width:44%">Komunikat w oknie</th><th>Co zrobić</th></tr>
     <tr><td>„Nierozpoznana nazwa katalogu” / „… nie odpowiada żadnemu produktowi w PolkaSQL”</td><td>Popraw nazwę folderu. Jeśli pod spodem są podpowiedzi („Czy chodziło o jedną z tych nazw?”), użyj właściwej.</td></tr>
@@ -198,6 +205,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><td>„PIM przyjmuje tylko pliki o nazwach w postaci <code>3.png</code>, <code>3_ai.png</code>…”</td><td>Zmień nazwy wymienionych plików na dopuszczalne albo je usuń. Okno zawsze wymienia przykłady nazw przyjmowanych w danej chwili.</td></tr>
     <tr><td>„Niektóre pliki nie są w rzeczywistości obrazami…”</td><td>Usuń lub podmień wymienione pliki na prawdziwe zdjęcia.</td></tr>
     <tr><td>„Nie można połączyć się z PolkaSQL…” / „…nie odpowiedział w wyznaczonym czasie”</td><td>Spróbuj ponownie za chwilę. Gdy się powtarza – zgłoś administratorowi.</td></tr>
+    <tr><td>„PolkaSQL odrzucił żądanie weryfikacji…”</td><td>Zgłoś administratorowi – ponowienie nie pomoże.</td></tr>
   </table>
 </section>
 
@@ -208,7 +216,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <figure style="margin-top:0"><img src="img/login_filled.jpg" style="max-width:88%"><figcaption><b>Rys. 2.</b> Ekran logowania</figcaption></figure>
     <div>
       <ol class="steps">
-        <li>Otwórz adres Menedżera plików w przeglądarce (środowisko testowe: <b>https://dev.ff.vitkac.local</b>).</li>
+        <li>Otwórz w przeglądarce adres Menedżera plików: <b>https://ff.vitkac.local</b> (środowisko testowe: <b>https://dev.ff.vitkac.local</b>).</li>
         <li>Wpisz <b>Nazwę użytkownika</b> i <b>Hasło</b>. Ikona oka pokazuje wpisane hasło.</li>
         <li>Wybierz <b>Metodę uwierzytelniania</b>:
           <ul>
@@ -270,7 +278,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
 <!-- ============ 4 ============ -->
 <section class="chapter" id="r4">
   <h2><span class="num">4</span>Przygotowanie katalogów prosto z Eksploratora Windows</h2>
-  <p class="lead">Na komputerach z zainstalowanym dodatkiem <b>RFM</b> (program RFMLauncher) nie musisz szukać folderów w aplikacji. Wystarczy kliknąć je prawym przyciskiem myszy w zwykłym Eksploratorze Windows.</p>
+  <p class="lead">Na komputerach z zainstalowanym dodatkiem <b>RFM</b> (program RFMLauncher) nie musisz szukać folderów w aplikacji. Wystarczy kliknąć je prawym przyciskiem myszy w zwykłym Eksploratorze Windows. Ten sam dodatek zawiera program <b>RFM Tray</b>, który wysyła foldery całkiem sam (rozdział <a href="#r10">10</a>).</p>
 
   <figure class="m"><img src="img/windows_menu.jpg"><figcaption><b>Rys. 4.</b> Ilustracja poglądowa: dwa foldery zaznaczone w Eksploratorze Windows i menu z pozycjami RFM. Pozostałe pozycje menu i jego wygląd zależą od wersji Windows.</figcaption></figure>
 
@@ -280,7 +288,11 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li>Zaznacz <b>jeden lub kilka folderów produktów</b> (kilka: przytrzymaj <b>Ctrl</b> i klikaj).</li>
     <li>Kliknij zaznaczenie <b>prawym przyciskiem myszy</b>. W <b>Windows 11</b> najpierw kliknij <b>Pokaż więcej opcji</b> (albo od razu użyj <b>Shift + prawy przycisk</b>).</li>
     <li>Wybierz <b>Przygotuj zaznaczone do wysłania przez RFM</b>.</li>
-    <li>Otworzy się przeglądarka z Menedżerem plików. Aplikacja sama przejdzie do właściwego folderu i <b>zaznaczy wybrane katalogi</b> (Rys. 5). Jeśli nie byłeś zalogowany w przeglądarce, zaloguje Cię automatycznie.</li>
+    <li>Aplikacja sama przejdzie do właściwego folderu i <b>zaznaczy wybrane katalogi</b> (Rys. 5):
+      <ul>
+        <li>jeśli Menedżer plików jest już <b>otwarty w przeglądarce</b> na tym samym koncie, wszystko dzieje się <b>w tej karcie</b> – nowa karta się nie otwiera. Gdy karta jest w tle, jej tytuł miga napisem <b>„● RFM: folder z Eksploratora Windows”</b>, dopóki na nią nie przejdziesz,</li>
+        <li>w przeciwnym razie po kilku sekundach otworzy się <b>nowa karta</b> z Menedżerem plików; jeśli nie byłeś w niej zalogowany, zaloguje Cię automatycznie.</li>
+      </ul></li>
     <li>Sprawdź zaznaczenie i kliknij <span class="ui primary">Wyślij →</span> – dalej jak w rozdziale <a href="#r5">5</a>.</li>
   </ol>
   <figure><img src="img/prepare_deeplink.jpg"><figcaption><b>Rys. 5.</b> Prawdziwy efekt „Przygotuj…” dla folderów OZDOBA i TORBA: aplikacja otworzyła <span class="path">A:/tester</span> i zaznaczyła oba katalogi. Przycisk <b>Wyślij</b> jest aktywny.</figcaption></figure>
@@ -308,7 +320,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li>Po wybraniu pozycji RFM przeglądarka otworzy stronę <b>Autoryzacja urządzenia</b> z kodem (Rys. 6).</li>
         <li>Kliknij <span class="ui primary">Zatwierdź urządzenie</span>. Jeśli nie jesteś zalogowany, aplikacja najpierw poprosi o zalogowanie, a potem wróci na tę stronę – kliknij przycisk ponownie.</li>
         <li>Pojawi się komunikat „Urządzenie zostało pomyślnie autoryzowane! Możesz zamknąć to okno.”</li>
-        <li>Chwilę później otworzy się Menedżer plików z zaznaczonymi katalogami.</li>
+        <li>Chwilę później Menedżer plików pokaże zaznaczone katalogi.</li>
       </ol>
       <p>Kolejne użycia nie wymagają tego kroku. Logowanie jest bezpiecznie zapisane w Windows.</p>
       <div class="box stop"><span class="t">Uwaga</span>Klikaj <b>Zatwierdź urządzenie</b> tylko wtedy, gdy sam przed chwilą użyłeś menu RFM. Jeśli strona z kodem otworzyła się bez Twojej akcji – kliknij <b>Odrzuć</b>. Kod jest ważny ograniczony czas; po wygaśnięciu po prostu użyj menu ponownie.</div>
@@ -353,9 +365,11 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <p class="small">Treść okna zależy od ustawień administratora. Gdy archiwizacja jest włączona, zamiast „Usunięcie katalogu źródłowego” zobaczysz „Zarchiwizowanie źródła w PATH_C”. Pole <b>Nie pytaj ponownie</b> wyłącza to okno na przyszłość (włączysz je z powrotem w Ustawieniach).</p>
 
   <ol class="steps" style="counter-reset:s 4">
-    <li><b>Kliknij <span class="ui primary">Potwierdź</span>.</b> W prawym dolnym rogu pojawi się zielony komunikat, np. „Rozpoczęto wysyłanie dla 2 katalogów”. Katalogi znikną ze Ścieżki A, a w historii pojawią się nowe wiersze <span class="tag push">PUSH</span>. Przycisk <b>Wyślij</b> znów jest nieaktywny, bo nic nie jest zaznaczone.</li>
+    <li><b>Kliknij <span class="ui primary">Potwierdź</span>.</b> Aplikacja sprawdza katalogi i kopiuje je do miejsca docelowego. Do tego czasu przycisk <b>Wyślij</b> jest nieaktywny i ma napis <b>„Wysyłanie katalogu...”</b> (Rys. 12) – poczekaj na wynik. Zwykle trwa to chwilę; gdy nazwy katalogu nie ma w PolkaSQL, szukanie podobnych nazw trwa kilka–kilkanaście sekund.
+      <br>Po udanym wysłaniu w prawym dolnym rogu pojawi się zielony komunikat, np. „Rozpoczęto wysyłanie dla 2 katalogów”. Katalogi znikną ze Ścieżki A, a w historii pojawią się nowe wiersze <span class="tag push">PUSH</span>. Przycisk <b>Wyślij</b> znów ma zwykły napis i jest nieaktywny, bo nic nie jest zaznaczone.</li>
   </ol>
-  <figure><img src="img/push_done.jpg"><figcaption><b>Rys. 12.</b> Po wysłaniu: w Ścieżce A nie ma już OZDOBA i TORBA, w historii są operacje PUSH #35 (OZDOBA) i #36 (TORBA) ze statusem „Zakończone”</figcaption></figure>
+  <figure class="xs"><img src="img/push_busy.jpg" style="max-width:30%"><figcaption><b>Rys. 12.</b> W trakcie wysyłania przycisk „Wyślij” jest nieaktywny i ma napis „Wysyłanie katalogu...”</figcaption></figure>
+  <figure><img src="img/push_done.jpg"><figcaption><b>Rys. 13.</b> Po wysłaniu: w Ścieżce A nie ma już OZDOBA i TORBA, w historii są operacje PUSH #35 (OZDOBA) i #36 (TORBA) ze statusem „Zakończone”</figcaption></figure>
 
   <h3>Co się dzieje po wysłaniu</h3>
   <p>Status <b>Zakończone</b> oznacza, że pliki są już w miejscu docelowym. Pod statusem aplikacja pokazuje dalsze, automatyczne kroki:</p>
@@ -378,7 +392,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <ol class="steps">
     <li><b>W Historii operacji zaznacz kółko</b> w kolumnie „Wybierz” przy operacji <span class="tag push">PUSH</span> tego katalogu. Aktywują się przyciski <span class="ui">← Cofnij</span> i <span class="ui">Aktualizuj katalog</span>.</li>
   </ol>
-  <figure><img src="img/pull_selected.jpg"><figcaption><b>Rys. 13.</b> Wybrana operacja PUSH #36 (TORBA). Kółko wyboru jest tylko przy wysłaniach, które się zakończyły i nie zostały jeszcze cofnięte.</figcaption></figure>
+  <figure><img src="img/pull_selected.jpg"><figcaption><b>Rys. 14.</b> Wybrana operacja PUSH #36 (TORBA). Kółko wyboru jest tylko przy wysłaniach, które się zakończyły i nie zostały jeszcze cofnięte.</figcaption></figure>
   <div class="two">
     <div>
       <ol class="steps" style="counter-reset:s 1">
@@ -388,11 +402,11 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li><b>Kliknij <span class="ui primary">Potwierdź</span>.</b> Pojawi się komunikat „Operacja cofania rozpoczęta”.</li>
       </ol>
     </div>
-    <figure style="margin-top:0"><img src="img/pull_confirm.jpg" style="max-width:92%"><figcaption><b>Rys. 14.</b> Potwierdzenie cofnięcia</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/pull_confirm.jpg" style="max-width:92%"><figcaption><b>Rys. 15.</b> Potwierdzenie cofnięcia</figcaption></figure>
   </div>
 
   <h3>Efekt</h3>
-  <figure><img src="img/pull_done.jpg"><figcaption><b>Rys. 15.</b> Po cofnięciu: TORBA jest z powrotem w <span class="path">A:/tester</span>, w historii jest PULL #37. Przy PUSH #36 nie ma już kółka wyboru, synchronizacja ma stan „anulowano”, a przyciski „Cofnij” i „Aktualizuj katalog” znów są nieaktywne.</figcaption></figure>
+  <figure><img src="img/pull_done.jpg"><figcaption><b>Rys. 16.</b> Po cofnięciu: TORBA jest z powrotem w <span class="path">A:/tester</span>, w historii jest PULL #37. Przy PUSH #36 nie ma już kółka wyboru, synchronizacja ma stan „anulowano”, a przyciski „Cofnij” i „Aktualizuj katalog” znów są nieaktywne.</figcaption></figure>
   <div class="two">
   <ul>
     <li>Katalog wraca <b>w to samo miejsce</b>, z którego został wysłany, ze wszystkimi plikami (tu: 7 zdjęć).</li>
@@ -400,7 +414,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li>Sprawdzanie serwera zdjęć dla tego wysłania zostaje zakończone (<b>Synchronizacja: anulowano</b>).</li>
     <li>Tego wysłania nie można już cofnąć ani aktualizować. Aby wysłać katalog ponownie, zaznacz go w Ścieżce A i kliknij <b>Wyślij</b> – powstanie nowa operacja PUSH.</li>
   </ul>
-<figure style="margin-top:0" class="tall"><img src="img/pull_details.jpg"><figcaption><b>Rys. 16.</b> Szczegóły PULL #37 (kliknij numer operacji w historii): skąd i dokąd przeniesiono katalog oraz powiązane wysłanie PUSH #36</figcaption></figure>
+<figure style="margin-top:0" class="tall"><img src="img/pull_details.jpg"><figcaption><b>Rys. 17.</b> Szczegóły PULL #37 (kliknij numer operacji w historii): skąd i dokąd przeniesiono katalog oraz powiązane wysłanie PUSH #36</figcaption></figure>
   </div>
 </section>
 
@@ -429,9 +443,9 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li>W <b>Historii operacji</b> zaznacz kółko przy operacji <span class="tag push">PUSH</span> katalogu, który chcesz zmienić (status „Zakończone”, jeszcze niecofnięty).</li>
     <li>Kliknij <span class="ui">Aktualizuj katalog</span>.</li>
   </ol>
-  <figure class="s"><img src="img/update_selected.jpg"><figcaption><b>Rys. 17.</b> Wybrane wysłanie PUSH #35 (OZDOBA) – przyciski „Cofnij” i „Aktualizuj katalog” są aktywne</figcaption></figure>
+  <figure class="s"><img src="img/update_selected.jpg"><figcaption><b>Rys. 18.</b> Wybrane wysłanie PUSH #35 (OZDOBA) – przyciski „Cofnij” i „Aktualizuj katalog” są aktywne</figcaption></figure>
   <div class="two">
-    <figure style="margin-top:0" class="tall"><img src="img/update_modal_open.jpg"><figcaption><b>Rys. 18.</b> Okno „Aktualizuj katalog”</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/update_modal_open.jpg"><figcaption><b>Rys. 19.</b> Okno „Aktualizuj katalog”</figcaption></figure>
     <div>
       <p>Okno ma trzy części:</p>
       <ul>
@@ -462,8 +476,8 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li>Kliknij <span class="ui primary">Wybierz</span> (przy kilku plikach: „Wybierz pliki (N)”).</li>
   </ol>
   <div class="two">
-    <figure style="margin-top:0"><img src="img/picker_multi.jpg"><figcaption><b>Rys. 19.</b> Okno wyboru – nic jeszcze nie zaznaczono, „Wybierz” jest nieaktywny</figcaption></figure>
-    <figure style="margin-top:0"><img src="img/picker_checked.jpg"><figcaption><b>Rys. 20.</b> Zaznaczony plik 7.jpg</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/picker_multi.jpg"><figcaption><b>Rys. 20.</b> Okno wyboru – nic jeszcze nie zaznaczono, „Wybierz” jest nieaktywny</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/picker_checked.jpg"><figcaption><b>Rys. 21.</b> Zaznaczony plik 7.jpg</figcaption></figure>
   </div>
   <ol class="steps" style="counter-reset:s 5">
     <li>Plik pojawi się w części <b>Dodaj pliki</b>:
@@ -474,7 +488,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li><b>×</b> – rezygnacja z dodania tego pliku.</li>
       </ul></li>
   </ol>
-  <figure class="tall"><img src="img/update1_draft.jpg"><figcaption><b>Rys. 21.</b> Gotowy zestaw zmian: zmiana nazwy 6.png → 8.png oraz dodanie 7.jpg ze Ścieżki A. Obie zmiany widać w „Oczekujących zmianach”.</figcaption></figure>
+  <figure class="tall"><img src="img/update1_draft.jpg"><figcaption><b>Rys. 22.</b> Gotowy zestaw zmian: zmiana nazwy 6.png → 8.png oraz dodanie 7.jpg ze Ścieżki A. Obie zmiany widać w „Oczekujących zmianach”.</figcaption></figure>
   <div class="two">
     <div>
       <ol class="steps" style="counter-reset:s 6">
@@ -482,9 +496,9 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li>Kliknij <span class="ui primary">Potwierdź</span>. Zobaczysz komunikat „Katalog „OZDOBA PS261403 0-BRASS” został zaktualizowany”.</li>
       </ol>
     </div>
-    <figure style="margin-top:0"><img src="img/update1_confirm.jpg"><figcaption><b>Rys. 22.</b> Potwierdzenie aktualizacji #38</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/update1_confirm.jpg"><figcaption><b>Rys. 23.</b> Potwierdzenie aktualizacji #38</figcaption></figure>
   </div>
-  <figure><img src="img/update1_done.jpg"><figcaption><b>Rys. 23.</b> W historii pojawiła się operacja UPDATE #38, a przy wysłaniu PUSH #35 dopisek „zaktualizowano w #38” (klik otwiera szczegóły)</figcaption></figure>
+  <figure><img src="img/update1_done.jpg"><figcaption><b>Rys. 24.</b> W historii pojawiła się operacja UPDATE #38, a przy wysłaniu PUSH #35 dopisek „zaktualizowano w #38” (klik otwiera szczegóły)</figcaption></figure>
 </section>
 
 <section id="r7-3" style="margin-top:7mm">
@@ -506,7 +520,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
       </ol>
       <div class="box warn"><span class="t">Ten sam format</span>Plik zastępujący powinien mieć ten sam format co zastępowany (np. <code>.jpg</code> zastępuj zdjęciem JPG) – nazwa pliku w katalogu się nie zmienia. Aby zmienić format, usuń stary plik i dodaj nowy.</div>
     </div>
-    <figure style="margin-top:0" class="tall"><img src="img/replace_choose.jpg"><figcaption><b>Rys. 24.</b> Opcja „Zastąp” – wybór źródła nowego pliku</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/replace_choose.jpg"><figcaption><b>Rys. 25.</b> Opcja „Zastąp” – wybór źródła nowego pliku</figcaption></figure>
   </div>
 
   <h4>Dodanie plików z komputera</h4>
@@ -516,8 +530,8 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <li><b>Zmień nazwę w polu na numerową</b> – tu <code>10.jpg</code> (dla grafiki z AI: <code>10_ai.jpg</code>). Z nazwą <code>nowe-zdjecie.jpg</code> aktualizacja zostałaby odrzucona (rozdział 2, zasada 3).</li>
   </ol>
   <div class="two">
-    <figure style="margin-top:0" class="tall"><img src="img/uploaded.jpg"><figcaption><b>Rys. 25.</b> Oba pliki przesłane. Dodawany plik ma jeszcze oryginalną nazwę – trzeba ją zmienić.</figcaption></figure>
-    <figure style="margin-top:0" class="tall"><img src="img/update2_draft.jpg"><figcaption><b>Rys. 26.</b> Gotowe: nazwa zmieniona na 10.jpg, dodatkowo zmiana nazwy 8.png → 6.png</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/uploaded.jpg"><figcaption><b>Rys. 26.</b> Oba pliki przesłane. Dodawany plik ma jeszcze oryginalną nazwę – trzeba ją zmienić.</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/update2_draft.jpg"><figcaption><b>Rys. 27.</b> Gotowe: nazwa zmieniona na 10.jpg, dodatkowo zmiana nazwy 8.png → 6.png</figcaption></figure>
   </div>
   <div class="two">
     <div>
@@ -533,7 +547,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
           <li>Opcja „Usuń ze ścieżki A po aktualizacji” nie dotyczy plików z komputera.</li>
         </ul></div>
     </div>
-    <figure style="margin-top:0"><img src="img/update2_confirm.jpg"><figcaption><b>Rys. 27.</b> Potwierdzenie aktualizacji #39 z ostrzeżeniem o zastąpieniu</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/update2_confirm.jpg"><figcaption><b>Rys. 28.</b> Potwierdzenie aktualizacji #39 z ostrzeżeniem o zastąpieniu</figcaption></figure>
   </div>
 </section>
 
@@ -549,20 +563,20 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li>W wierszu pojawi się ścieżka pliku i pole <b>Usuń ze ścieżki A po aktualizacji</b>.</li>
       </ol>
     </div>
-    <figure style="margin-top:0"><img src="img/picker_single.jpg"><figcaption><b>Rys. 28.</b> Wybór jednego pliku do zastąpienia</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/picker_single.jpg"><figcaption><b>Rys. 29.</b> Wybór jednego pliku do zastąpienia</figcaption></figure>
   </div>
   <h4>Usunięcie pliku</h4>
   <ol class="steps" style="counter-reset:s 3">
     <li>Przy <code>7.jpg</code> wybierz <b>Usuń</b>. W „Oczekujących zmianach” pojawi się „Usuń 7.jpg”.</li>
   </ol>
   <div class="two">
-    <figure style="margin-top:0" class="tall"><img src="img/update3_draft.jpg"><figcaption><b>Rys. 29.</b> Zestaw zmian #40</figcaption></figure>
+    <figure style="margin-top:0" class="tall"><img src="img/update3_draft.jpg"><figcaption><b>Rys. 30.</b> Zestaw zmian #40</figcaption></figure>
     <div>
       <ol class="steps" style="counter-reset:s 4">
         <li>Kliknij <span class="ui primary">Zastosuj zmiany</span>. Potwierdzenie ostrzega o obu nieodwracalnych zmianach: <b>„1 usunięć nie będzie można cofnąć.”</b> oraz <b>„Zastąpionych plików (1) nie będzie można przywrócić.”</b></li>
         <li>Kliknij <span class="ui primary">Potwierdź</span>.</li>
       </ol>
-      <figure><img src="img/update3_confirm.jpg"><figcaption><b>Rys. 30.</b> Potwierdzenie zmian nieodwracalnych</figcaption></figure>
+      <figure><img src="img/update3_confirm.jpg"><figcaption><b>Rys. 31.</b> Potwierdzenie zmian nieodwracalnych</figcaption></figure>
     </div>
   </div>
   <div class="box stop"><span class="t">Usunięcia i zastąpienia są nieodwracalne</span>Usunięty lub zastąpiony plik nie trafia do żadnego kosza. Nawet <b>Cofnij (PULL)</b> go nie przywróci – PULL zwraca katalog w <b>obecnej</b> postaci (rozdział 8). Jeśli możesz potrzebować starego zdjęcia, zachowaj jego kopię przed aktualizacją.</div>
@@ -600,7 +614,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <ol class="steps">
     <li>W historii zaznacz kółko przy <span class="tag push">PUSH</span> #35. Dopisek <b>„zaktualizowano w #38, #39, #40”</b> informuje, że katalog był zmieniany.</li>
   </ol>
-  <figure class="m"><img src="img/pull2_selected.jpg"><figcaption><b>Rys. 31.</b> Wybrane wysłanie #35 z trzema aktualizacjami</figcaption></figure>
+  <figure class="m"><img src="img/pull2_selected.jpg"><figcaption><b>Rys. 32.</b> Wybrane wysłanie #35 z trzema aktualizacjami</figcaption></figure>
   <div class="two">
     <div>
       <ol class="steps" style="counter-reset:s 1">
@@ -609,11 +623,11 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
       </ol>
       <p class="small">To ostrzeżenie ma osobny przełącznik w Ustawieniach („Ostrzegaj przy cofaniu zaktualizowanego katalogu”).</p>
     </div>
-    <figure style="margin-top:0"><img src="img/pull_after_update_confirm.jpg"><figcaption><b>Rys. 32.</b> Potwierdzenie cofnięcia zaktualizowanego katalogu</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/pull_after_update_confirm.jpg"><figcaption><b>Rys. 33.</b> Potwierdzenie cofnięcia zaktualizowanego katalogu</figcaption></figure>
   </div>
 
   <h3>Efekt</h3>
-  <figure><img src="img/pull2_done.jpg"><figcaption><b>Rys. 33.</b> Po cofnięciu: OZDOBA jest z powrotem w A:/tester, w historii jest PULL #41</figcaption></figure>
+  <figure><img src="img/pull2_done.jpg"><figcaption><b>Rys. 34.</b> Po cofnięciu: OZDOBA jest z powrotem w A:/tester, w historii jest PULL #41</figcaption></figure>
   <div class="two">
     <div>
       <p>Porównanie zawartości katalogu w Ścieżce A:</p>
@@ -629,9 +643,9 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
       </ul>
       <p>Wrócił więc katalog z plikiem <code>10.jpg</code> dodanym w aktualizacjach.</p>
     </div>
-    <figure style="margin-top:0"><img src="img/ozdoba_after_pull.jpg"><figcaption><b>Rys. 34.</b> Zawartość OZDOBA po cofnięciu – widoczny dodany plik 10.jpg</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/ozdoba_after_pull.jpg"><figcaption><b>Rys. 35.</b> Zawartość OZDOBA po cofnięciu – widoczny dodany plik 10.jpg</figcaption></figure>
   </div>
-  <figure class="tall2"><img src="img/pull2_details.jpg"><figcaption><b>Rys. 35.</b> Szczegóły PULL #41: „Przywrócono katalog razem z aktualizacjami #38, #39, #40.” Poniżej pełna historia: wysłanie #35 i wszystkie aktualizacje z listą zmian.</figcaption></figure>
+  <figure class="tall2"><img src="img/pull2_details.jpg"><figcaption><b>Rys. 36.</b> Szczegóły PULL #41: „Przywrócono katalog razem z aktualizacjami #38, #39, #40.” Poniżej pełna historia: wysłanie #35 i wszystkie aktualizacje z listą zmian.</figcaption></figure>
 </section>
 
 <!-- ============ 9 ============ -->
@@ -673,8 +687,8 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
       <p>Prawy przycisk na wierszu folderu pokazuje menu:</p><ul><li><b>Otwórz</b> – otwiera folder,</li><li><b>Wyślij &gt;</b> – wysyła <b>tylko ten folder</b> (inne zaznaczenia są usuwane). Pojawia się to samo okno potwierdzenia co po kliknięciu <span class="ui primary">Wyślij →</span>.</li></ul>
     </div>
     <div>
-      <figure style="margin-top:0"><img src="img/search.jpg"><figcaption><b>Rys. 36.</b> Wyszukiwanie „TORBA” w A:/tester</figcaption></figure>
-      <figure><img src="img/web_context_menu.jpg"><figcaption><b>Rys. 37.</b> Menu prawego przycisku na folderze TORBA</figcaption></figure>
+      <figure style="margin-top:0"><img src="img/search.jpg"><figcaption><b>Rys. 37.</b> Wyszukiwanie „TORBA” w A:/tester</figcaption></figure>
+      <figure><img src="img/web_context_menu.jpg"><figcaption><b>Rys. 38.</b> Menu prawego przycisku na folderze TORBA</figcaption></figure>
     </div>
   </div>
 
@@ -682,11 +696,11 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <div class="two">
     <table style="margin-top:0">
       <tr><th style="width:36%">Przycisk</th><th>Aktywny, gdy…</th></tr>
-      <tr><td><span class="ui primary">Wyślij →</span></td><td>w Ścieżce A zaznaczono co najmniej jeden katalog. Uruchamia PUSH (rozdział 5).</td></tr>
+      <tr><td><span class="ui primary">Wyślij →</span></td><td>w Ścieżce A zaznaczono co najmniej jeden katalog. Uruchamia PUSH (rozdział 5). W trakcie wysyłania ma napis „Wysyłanie katalogu...” i jest nieaktywny.</td></tr>
       <tr><td><span class="ui">← Cofnij</span></td><td>w historii wybrano operację PUSH. Uruchamia PULL (rozdziały 6 i 8).</td></tr>
       <tr><td><span class="ui">Aktualizuj katalog</span></td><td>w historii wybrano zakończoną operację PUSH. Otwiera okno UPDATE (rozdział 7).</td></tr>
     </table>
-    <figure class="s" style="margin-top:0"><img src="img/buttons.jpg"><figcaption><b>Rys. 38.</b> Przyciski i podpowiedź pod nimi</figcaption></figure>
+    <figure class="s" style="margin-top:0"><img src="img/buttons.jpg"><figcaption><b>Rys. 39.</b> Przyciski i podpowiedź pod nimi</figcaption></figure>
   </div>
   <p class="small">Przyciski same stają się nieaktywne, gdy zaznaczenie zniknie – np. po wysłaniu katalogu, przejściu do innego folderu albo po cofnięciu wybranej operacji.</p>
 </section>
@@ -694,7 +708,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
 <section id="r9-4" style="margin-top:7mm">
   <h3 style="margin-top:0;font-size:15pt">9.4 Historia operacji</h3>
   <p>Pokazuje operacje <b>wszystkich użytkowników</b>, od najnowszych. Odświeża się sama – nowe operacje i zmiany statusów pojawiają się bez klikania.</p>
-  <figure class="m"><img src="img/history_top.jpg"><figcaption><b>Rys. 39.</b> Historia operacji</figcaption></figure>
+  <figure class="m"><img src="img/history_top.jpg"><figcaption><b>Rys. 40.</b> Historia operacji</figcaption></figure>
   <table>
     <tr><th style="width:22%">Kolumna</th><th>Opis</th></tr>
     <tr><td><b>Wybierz</b></td><td>Kółko wyboru – tylko przy <span class="tag push">PUSH</span> ze statusem „Zakończone”, jeszcze niecofniętych. Wybraną operację można cofnąć lub zaktualizować. Operacji PULL i UPDATE nie wybiera się.</td></tr>
@@ -707,8 +721,8 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   </table>
   <h4>Wyszukiwanie, filtry, sortowanie</h4>
   <div class="two">
-    <figure style="margin-top:0"><img src="img/history_search.jpg"><figcaption><b>Rys. 40.</b> Wyszukanie „TORBA”</figcaption></figure>
-    <figure style="margin-top:0"><img src="img/filter_update.jpg"><figcaption><b>Rys. 41.</b> Filtr typu „Aktualizacja”</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/history_search.jpg"><figcaption><b>Rys. 41.</b> Wyszukanie „TORBA”</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/filter_update.jpg"><figcaption><b>Rys. 42.</b> Filtr typu „Aktualizacja”</figcaption></figure>
   </div>
   <ul>
     <li><b>Szukaj operacji…</b> – wpisz np. nazwę katalogu i kliknij <span class="ui">Szukaj</span> lub Enter. <span class="ui">Wyczyść</span> wraca do pełnej listy.</li>
@@ -765,14 +779,14 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
       </table>
       <p class="small">Okno zamyka przycisk <b>Zamknij</b> lub <b>×</b>.</p>
     </div>
-    <figure style="margin-top:0" class="tall2"><img src="img/push28_details.jpg"><figcaption><b>Rys. 42.</b> Szczegóły PUSH #35 w trakcie synchronizacji – na dole widoczne przyciski sprawdzania serwera</figcaption></figure>
+    <figure style="margin-top:0" class="tall2"><img src="img/push28_details.jpg"><figcaption><b>Rys. 43.</b> Szczegóły PUSH #35 w trakcie synchronizacji – na dole widoczne przyciski sprawdzania serwera</figcaption></figure>
   </div>
 </section>
 
 <section id="r9-7" style="margin-top:7mm">
   <h3 style="margin-top:0;font-size:15pt">9.7 Ustawienia</h3>
   <div class="two">
-    <figure style="margin-top:0" class="tall2"><img src="img/settings.jpg"><figcaption><b>Rys. 43.</b> Okno „Ustawienia użytkownika”</figcaption></figure>
+    <figure style="margin-top:0" class="tall2"><img src="img/settings.jpg"><figcaption><b>Rys. 44.</b> Okno „Ustawienia użytkownika”</figcaption></figure>
     <div>
       <p>Ustawienia są zapisane na Twoim koncie – działają na każdym komputerze.</p>
       <h4>Preferencje wyświetlania</h4>
@@ -795,7 +809,7 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
         <li>Potwierdzaj odrzucenie niezapisanych zmian w katalogu</li>
         <li>Potwierdzaj przywracanie ustawień domyślnych</li>
       </ul>
-      <div class="box warn"><span class="t">Zalecenie</span>Nie wyłączaj potwierdzeń PUSH, PULL i zmian nieodwracalnych. Po ich wyłączeniu operacja rusza od razu po kliknięciu przycisku (także z menu Windows „Wyślij zaznaczone przez RFM”).</div>
+      <div class="box warn"><span class="t">Zalecenie</span>Nie wyłączaj potwierdzeń PUSH, PULL i zmian nieodwracalnych. Po ich wyłączeniu operacja rusza od razu po kliknięciu przycisku (także z menu Windows „Wyślij zaznaczone przez RFM”). RFM Tray nigdy nie pyta o potwierdzenie – skopiowanie folderu do obserwowanego folderu jest decyzją o wysłaniu.</div>
       <p><span class="ui">Zapisz</span> zapisuje zmiany · <span class="ui">Anuluj</span> zamyka bez zmian · <span class="ui">Przywróć ustawienia domyślne</span> przywraca wszystko, w tym włącza wszystkie potwierdzenia.</p>
     </div>
   </div>
@@ -809,12 +823,123 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
   <p>Odmowy z powodu zasad katalogu nie znikają same – pokazują się w oknie „Nie można kontynuować”, które zamykasz przyciskiem <b>Zamknij</b>.</p>
 </section>
 
-<!-- ============ 10 ============ -->
+<!-- ============ 10 RFM Tray ============ -->
 <section class="chapter" id="r10">
-  <h2><span class="num">10</span>Problemy i pytania</h2>
+  <h2><span class="num">10</span>Automatyczne wysyłanie z folderu – RFM Tray</h2>
+  <p class="lead"><b>RFM Tray</b> to mały program z ikoną obok zegara Windows. Pilnuje wybranego folderu (np. <span class="path">DO KATALOGU\Ewa</span>) i każdy folder produktu, który do niego skopiujesz, sam wysyła do RFM, gdy kopiowanie się skończy. Nie trzeba niczego klikać w aplikacji – przydaje się zwłaszcza przy wielu katalogach naraz.</p>
+
+  <table>
+    <tr><th style="width:30%">Co warto wiedzieć</th><th>Szczegóły</th></tr>
+    <tr><td>To zwykłe wysłanie (PUSH)</td><td>Obowiązują te same zasady (rozdział <a href="#r2">2</a>). Wysłany katalog <b>znika z obserwowanego folderu</b>, a w Historii operacji pojawia się jako <span class="tag push">PUSH</span> wykonany przez Ciebie – można go cofnąć i aktualizować jak każdy inny.</td></tr>
+    <tr><td>Bez okna potwierdzenia</td><td>Skopiowanie folderu do obserwowanego folderu jest decyzją o wysłaniu. Ustawienia potwierdzeń z punktu <a href="#r9-7">9.7</a> nie dotyczą RFM Tray.</td></tr>
+    <tr><td>Wysyła w Twoim imieniu</td><td>RFM Tray działa na Twoim koncie Windows i używa Twojego logowania do RFM. Bez zalogowania niczego nie wyśle. Obserwuj <b>tylko swój folder</b> – wszystko, co z niego wyjdzie, trafi do historii pod Twoim nazwiskiem.</td></tr>
+    <tr><td>Katalog już wysłany</td><td>RFM Tray <b>nigdy</b> nie wyśle drugi raz katalogu, który już jest w RFM. Zmiany w nim robisz przez <b>Aktualizuj katalog</b> (rozdział <a href="#r7">7</a>).</td></tr>
+  </table>
+
+  <h3 id="r10-1">10.1 Uruchomienie i ustawienia</h3>
+  <ul>
+    <li>RFM Tray instaluje się razem z dodatkiem RFM (rozdział <a href="#r4">4</a>). Uruchomisz go z menu Start: <b>RFM Tray</b>.</li>
+    <li>Jeśli masz ustawiony obserwowany folder, RFM Tray <b>uruchamia się sam</b> ok. 30 sekund po zalogowaniu do Windows.</li>
+    <li>Ikona jest obok zegara; jeśli jej nie widać, kliknij strzałkę <b>^</b> (ukryte ikony). Gdy ikona zmienia się w <b>żółty trójkąt ostrzegawczy</b>, któryś folder wymaga uwagi albo nie jesteś zalogowany.</li>
+    <li>Ponowne uruchomienie działającego programu pokaże tylko komunikat „RFM Tray już działa – jego ikona jest obok zegara.”</li>
+  </ul>
+
+  <div class="two">
+    <div>
+      <h4>Pierwsze uruchomienie</h4>
+      <ol class="steps">
+        <li>Gdy nie ma jeszcze obserwowanego folderu, od razu otworzy się okno <b>RFM Tray – ustawienia</b> (Rys. 45).</li>
+        <li>Kliknij <span class="ui">Dodaj…</span> i wskaż folder, do którego będziesz wrzucać katalogi. Musi leżeć w folderze sieciowym ze zdjęciami – inaczej pojawi się komunikat „RFM może wysyłać foldery tylko z: …” z listą dozwolonych miejsc.</li>
+        <li>Zostaw <b>Wyślij po braku zmian przez (sekundy)</b> na <b>60</b> (najmniej 15). Zwiększ tę wartość, jeśli kopiowanie przez wolne łącze robi dłuższe przerwy.</li>
+        <li>Kliknij <span class="ui primary">Zapisz</span>.</li>
+      </ol>
+      <p>Ustawienia otworzysz później z menu ikony (<b>Ustawienia…</b>) lub przyciskiem w oknie „Aktywność”. <span class="ui">Usuń</span> przestaje obserwować zaznaczony folder. Ustawienia są zapisane dla Twojego konta Windows na tym komputerze; administrator może ustawić obserwowany folder z góry.</p>
+    </div>
+    <figure style="margin-top:0"><img src="img/tray_settings.jpg"><figcaption><b>Rys. 45.</b> Okno „RFM Tray – ustawienia” (folder testowy)</figcaption></figure>
+  </div>
+
+  <h4>Logowanie</h4>
+  <p>RFM Tray korzysta z tego samego logowania co menu Eksploratora Windows (rozdział <a href="#r4">4</a>) – jeśli jesteś tam już zalogowany, nic nie musisz robić. W przeciwnym razie pojawi się powiadomienie <b>„RFM: wymagane logowanie”</b>. Kliknij je (albo w menu ikony <b>Zaloguj…</b>) – otworzy się strona <b>Autoryzacja urządzenia</b>, na której klikasz <span class="ui primary">Zatwierdź urządzenie</span>, jak w rozdziale <a href="#r4">4</a>. Do czasu zatwierdzenia menu pokazuje „Oczekiwanie na zatwierdzenie logowania w przeglądarce…”. <b>Wyloguj</b> w menu ikony wylogowuje także menu Eksploratora.</p>
+
+  <h3 id="r10-2">10.2 Kiedy folder zostanie wysłany</h3>
+  <p>Wysyłane są foldery leżące <b>bezpośrednio</b> w obserwowanym folderze (każdy to jeden katalog). Pliki leżące luzem w obserwowanym folderze oraz foldery ukryte i o nazwach zaczynających się od „.” lub „~” są pomijane. RFM Tray sprawdza folder co ok. 10 sekund i wysyła katalog dopiero, gdy:</p>
+  <ol>
+    <li>zawiera co najmniej jeden plik (świeżo utworzony „Nowy folder” czeka),</li>
+    <li>nie ma w nim plików tymczasowych kopiowania: <code>.tmp</code>, <code>.part</code>, <code>.partial</code>, <code>.crdownload</code>, <code>.download</code>, <code>.!ut</code> ani plików zaczynających się od <code>~$</code> lub <code>.~lock</code>,</li>
+    <li>nic się w nim nie zmieniło przez ustawiony czas (domyślnie 60 s),</li>
+    <li>żaden plik nie jest już zapisywany.</li>
+  </ol>
+  <p>Katalogi są wysyłane <b>po kolei</b>, od najdawniej zmienionego – 30 folderów wrzuconych naraz tworzy kolejkę. Po wysłaniu folder znika z obserwowanego folderu, a w oknie „Aktywność” ma stan „Wysłano o …” (widoczny przez 12 godzin).</p>
+  <div class="box tip"><span class="t">Wyślij teraz</span>Przycisk <b>Wyślij teraz</b> w oknie „Aktywność” pomija czas oczekiwania dla wybranego folderu – użyj go, gdy wiesz, że kopiowanie się skończyło. Nie działa, gdy wysyłanie jest wstrzymane (punkt 10.5) lub nie jesteś zalogowany.</div>
+
+  <h3 id="r10-3">10.3 Okno „Aktywność”</h3>
+  <p>Otwierasz je <b>kliknięciem ikony</b> lub w menu ikony: <b>Pokaż aktywność</b>. Pokazuje wszystkie foldery z obserwowanego folderu i co się z nimi dzieje. Zamknięcie okna tylko je chowa – RFM Tray działa dalej.</p>
+  <figure class="m"><img src="img/tray_activity_waiting.jpg"><figcaption><b>Rys. 46.</b> Chwilę po skopiowaniu: dwa katalogi czekają na koniec kopiowania, pusty „Nowy folder” czeka na pliki. Na dole – obserwowany folder.</figcaption></figure>
+  <table>
+    <tr><th style="width:42%">Stan</th><th>Znaczenie</th></tr>
+    <tr><td>Pusty – czeka na pliki</td><td>W folderze nie ma jeszcze plików.</td></tr>
+    <tr><td>Kopiowanie…</td><td>W folderze jest plik tymczasowy – kopiowanie trwa.</td></tr>
+    <tr><td>Czeka na zakończenie kopiowania (45 s)</td><td>Odliczanie czasu bez zmian; każda zmiana w folderze zaczyna je od nowa.</td></tr>
+    <tr><td>Sprawdzanie, czy kopiowanie się zakończyło…</td><td>Czas minął; RFM Tray sprawdza, czy żaden plik nie jest zapisywany.</td></tr>
+    <tr><td>Gotowy – w kolejce</td><td>Czeka na swoją kolej do wysłania.</td></tr>
+    <tr><td>Gotowy – wysyłanie wstrzymane</td><td>Gotowy, ale wysyłanie jest wstrzymane (punkt 10.5).</td></tr>
+    <tr><td>Wysyłanie do RFM…</td><td>RFM sprawdza i kopiuje katalog.</td></tr>
+    <tr><td>Wysłano o 14:05</td><td>Wysłany (wiersz szary). W Historii operacji jest nowy PUSH.</td></tr>
+    <tr><td>Odrzucony – popraw nazwę lub zawartość (kliknij dwukrotnie)</td><td>RFM odmówił; nic nie zostało wysłane. Punkt 10.4.</td></tr>
+    <tr><td>Już jest w RFM – użyj Aktualizacji w RFM (kliknij dwukrotnie)</td><td>Katalog o tej nazwie jest już wysłany. RFM Tray go nie wyśle – zmiany przez <b>Aktualizuj katalog</b>.</td></tr>
+    <tr><td>RFM niedostępny – kolejna próba o 14:20</td><td>RFM, PolkaSQL lub usługa kopiująca chwilowo nie odpowiada. Kolejne próby po 1, 2, 5, 10, a potem co 15 minut; po 3. nieudanej próbie – powiadomienie.</td></tr>
+    <tr><td>Nie wysłano – kliknij dwukrotnie, aby zobaczyć szczegóły</td><td>Inny błąd – szczegóły po dwukrotnym kliknięciu.</td></tr>
+  </table>
+  <p class="small">Stany wymagające uwagi są pisane na czerwono. Kolumna <b>Pliki</b> to liczba plików w folderze.</p>
+
+  <figure class="m"><img src="img/tray_activity.jpg"><figcaption><b>Rys. 47.</b> Dwa katalogi odrzucone przez RFM; zaznaczony wiersz odblokowuje przyciski</figcaption></figure>
+  <table>
+    <tr><th style="width:26%">Przycisk</th><th>Działanie</th></tr>
+    <tr><td><span class="ui">Szczegóły…</span></td><td>Powód odmowy lub błędu (to samo co dwukrotne kliknięcie wiersza). Aktywny tylko przy folderze z problemem.</td></tr>
+    <tr><td><span class="ui">Wyślij teraz</span></td><td>Wysyła wybrany folder bez czekania albo ponawia próbę po odmowie lub błędzie.</td></tr>
+    <tr><td><span class="ui">Otwórz folder</span></td><td>Otwiera folder w Eksploratorze Windows (dwukrotne kliknięcie wiersza bez problemu robi to samo).</td></tr>
+    <tr><td><span class="ui">Otwórz w RFM</span></td><td>Otwiera Menedżera plików z zaznaczonym folderem – jak „Przygotuj zaznaczone do wysłania przez RFM” (rozdział <a href="#r4">4</a>).</td></tr>
+    <tr><td><span class="ui">Ustawienia…</span></td><td>Okno ustawień (punkt 10.1).</td></tr>
+  </table>
+  <p class="small">Na dole okna widać obserwowane foldery („Obserwowane: …”). Czerwony napis „Brak dostępu: …” oznacza, że obserwowany folder jest w tej chwili niedostępny, np. bez połączenia z siecią.</p>
+
+  <h3 id="r10-4">10.4 Folder odrzucony – poprawianie</h3>
+  <p>Gdy RFM odmówi, w prawym dolnym rogu ekranu pojawi się powiadomienie z nazwą folderu. <b>Kliknięcie powiadomienia</b> otwiera okno z powodem. Gdy odrzuconych jest kilka folderów naraz, zamiast wielu powiadomień pojawi się jedno – „RFM: 12 folderów wymaga uwagi” – które otwiera okno „Aktywność”.</p>
+  <div class="two">
+    <figure style="margin-top:0"><img src="img/tray_issue_name.jpg"><figcaption><b>Rys. 48.</b> Literówka w nazwie (SILVR) i plik o złej nazwie. RFM podpowiada właściwą nazwę.</figcaption></figure>
+    <figure style="margin-top:0"><img src="img/tray_issue_content.jpg"><figcaption><b>Rys. 49.</b> Nazwa poprawna (z polską literą), ale zawartość odrzucona: plik 3.jpg nie jest zdjęciem, a „zdjecie 2.jpg” ma złą nazwę</figcaption></figure>
+  </div>
+  <ul>
+    <li>Górna część okna podaje powody – ten sam tekst co w oknie „Nie można kontynuować” w aplikacji (rozdział <a href="#r2">2</a>).</li>
+    <li><b>Zła nazwa folderu:</b> w części <b>Zmień nazwę folderu</b> wybierz właściwą nazwę z listy „Czy chodziło o jedną z tych nazw?” (albo wpisz ją w pole) i kliknij <span class="ui">Zmień nazwę i wyślij</span> (lub kliknij nazwę na liście dwukrotnie). RFM Tray zmieni nazwę folderu i od razu go wyśle. Jeśli okno wymienia też problemy z zawartością (jak na Rys. 48 – plik <code>okladka.jpg</code>), najpierw popraw pliki, inaczej folder zostanie odrzucony ponownie.</li>
+    <li><b>Zła zawartość:</b> kliknij <span class="ui">Otwórz folder</span>, popraw pliki według powodu (zmień nazwy na numerowe, usuń pliki, które nie są zdjęciami). Po zmianie RFM Tray sam sprawdzi folder ponownie i wyśle go po upływie czasu bez zmian.</li>
+    <li><span class="ui">Spróbuj ponownie</span> wysyła folder jeszcze raz bez zmian – przydatne, gdy przyczyna leżała po stronie RFM. <span class="ui">Otwórz w RFM</span> pokazuje folder w aplikacji.</li>
+  </ul>
+  <p>Odrzucony folder <b>zostaje na miejscu</b> i nie jest wysyłany ponownie, dopóki go nie zmienisz (pliki, nazwa) albo nie klikniesz „Spróbuj ponownie” / „Wyślij teraz”. Przy katalogu, który już jest w RFM, okno wyjaśnia, że zmiany robi się przez Aktualizację, i nie ma przycisku „Spróbuj ponownie”.</p>
+
+  <h3 id="r10-5">10.5 Menu ikony i wstrzymywanie</h3>
+  <div class="two">
+    <div>
+      <p>Kliknięcie ikony <b>prawym</b> przyciskiem pokazuje menu:</p>
+      <ul>
+        <li>dwa wiersze informacyjne: kto jest zalogowany oraz stan – <b>„W toku: 1 • wymaga uwagi: 2”</b> (w toku są też puste foldery czekające na pliki), „Automatyczne wysyłanie wstrzymane” albo „Brak obserwowanego folderu – otwórz Ustawienia”,</li>
+        <li><b>Pokaż aktywność</b> – okno z punktu 10.3,</li>
+        <li><b>Wstrzymaj automatyczne wysyłanie</b> – zaznaczone: nic nie jest wysyłane, gotowe foldery czekają ze stanem „Gotowy – wysyłanie wstrzymane”. Kliknij ponownie, aby wysłać wszystko, co czeka. Przydaje się, gdy chcesz przygotować całą partię i wysłać ją później. To samo pole jest w Ustawieniach,</li>
+        <li><b>Otwórz RFM</b> – Menedżer plików w nowej karcie przeglądarki,</li>
+        <li><b>Ustawienia…</b>, <b>Zaloguj…</b> / <b>Wyloguj</b>,</li>
+        <li><b>Zakończ</b> – zamyka RFM Tray; do ponownego uruchomienia nic nie będzie wysyłane.</li>
+      </ul>
+    </div>
+    <figure style="margin-top:0"><img src="img/tray_menu.jpg" style="max-width:80%"><figcaption><b>Rys. 50.</b> Menu ikony RFM Tray</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="chapter" id="r11">
+  <h2><span class="num">11</span>Problemy i pytania</h2>
   <table>
     <tr><th style="width:38%">Sytuacja</th><th>Rozwiązanie</th></tr>
-    <tr><td>Przycisk <b>Wyślij</b> jest szary.</td><td>Zaznacz pole wyboru przy katalogu. Pliki nie mają pól wyboru – wysyła się całe foldery.</td></tr>
+    <tr><td>Przycisk <b>Wyślij</b> jest szary.</td><td>Zaznacz pole wyboru przy katalogu. Pliki nie mają pól wyboru – wysyła się całe foldery. Jeśli przycisk ma napis „Wysyłanie katalogu...”, poprzednie wysyłanie jeszcze trwa – poczekaj na wynik.</td></tr>
     <tr><td>Przy operacji w historii nie ma kółka wyboru.</td><td>Kółko jest tylko przy <b>PUSH</b> ze statusem „Zakończone”, które nie zostały cofnięte. Operacji PULL i UPDATE nie wybiera się – do aktualizacji wybierz PUSH danego katalogu.</td></tr>
     <tr><td>Katalog zniknął ze Ścieżki A.</td><td>Tak działa wysłanie (PUSH). Aby go odzyskać – <b>Cofnij</b> w historii.</td></tr>
     <tr><td>Po cofnięciu brakuje zdjęcia, które kiedyś było w katalogu.</td><td>Zostało usunięte lub zastąpione w aktualizacji. PULL zwraca obecny stan katalogu (rozdział 8). Sprawdź listę zmian w szczegółach PUSH.</td></tr>
@@ -825,9 +950,16 @@ th{background:#f1f5f9;font-weight:600;color:#1e293b}
     <tr><td>„Operacje na Ścieżce A muszą używać ścieżek zaczynających się od „A:”…”.</td><td>Wpisując ścieżkę, zaczynaj od <span class="path">A:</span>, np. <span class="path">A:/tester</span>.</td></tr>
     <tr><td>Wyłączyłem okno potwierdzenia („Nie pytaj ponownie”) i chcę je przywrócić.</td><td><b>Ustawienia</b> → sekcja <b>Potwierdzenia</b> → włącz przełącznik → <b>Zapisz</b>.</td></tr>
     <tr><td>Nie widzę pozycji RFM w menu Windows.</td><td>Zaznacz tylko foldery; w Windows 11 kliknij „Pokaż więcej opcji”; folder musi leżeć w dozwolonej lokalizacji. Jeśli nadal brak – dodatek RFM nie jest zainstalowany; zgłoś administratorowi.</td></tr>
+    <tr><td>Menu Windows otworzyło nową kartę, choć Menedżer plików był otwarty.</td><td>Otwarta karta przejmuje akcję tylko wtedy, gdy jesteś w niej zalogowany na to samo konto co w dodatku RFM i karta pokazuje ekran główny Menedżera plików (a nie np. Panel administracyjny).</td></tr>
     <tr><td>Menu Windows otworzyło aplikację, ale nic nie jest zaznaczone („Wybrana ścieżka nie jest skonfigurowana dla operacji RFM”).</td><td>Folder leży poza Ścieżką A albo został w międzyczasie przeniesiony. Sprawdź, gdzie jest folder.</td></tr>
     <tr><td>Status <b>PIM: ponawianie</b> lub <b>PIM: błąd</b> długo się nie zmienia.</td><td>Otwórz szczegóły operacji; możesz użyć „Wyślij ponownie do PIM”. Gdy problem się powtarza – zgłoś administratorowi.</td></tr>
     <tr><td>Synchronizacja: przekroczono czas.</td><td>W szczegółach sprawdź, których plików brakuje (✗), i użyj „Sprawdź ponownie serwer zdjęć”.</td></tr>
+    <tr><td>RFM Tray: folder długo ma stan „Czeka na zakończenie kopiowania” lub „Kopiowanie…”.</td><td>W folderze coś się jeszcze zmienia albo leży w nim plik tymczasowy (np. <code>.tmp</code>, <code>.part</code>). Poczekaj na koniec kopiowania i usuń pliki tymczasowe; <b>Wyślij teraz</b> pomija czas oczekiwania (punkt 10.2).</td></tr>
+    <tr><td>RFM Tray: „Odrzucony – popraw nazwę lub zawartość”.</td><td>Kliknij wiersz dwukrotnie i popraw folder według powodu (punkt 10.4). Po zmianie folder zostanie sprawdzony i wysłany sam.</td></tr>
+    <tr><td>RFM Tray: „Już jest w RFM – użyj Aktualizacji w RFM”.</td><td>Ten katalog był już wysłany. Zmiany zrób przez <b>Aktualizuj katalog</b> (rozdział 7); folder z obserwowanego folderu usuń, jeśli trafił tam przez pomyłkę.</td></tr>
+    <tr><td>RFM Tray: „RFM niedostępny – kolejna próba o …”.</td><td>RFM Tray sam ponawia próby. Gdy trwa to długo (dostaniesz powiadomienie po 3. nieudanej próbie) – zgłoś administratorowi.</td></tr>
+    <tr><td>RFM Tray: w oknie „Aktywność” na dole na czerwono „Brak dostępu: …”.</td><td>Obserwowany folder jest niedostępny (np. brak połączenia z siecią). Sprawdź, czy otwiera się w Eksploratorze Windows.</td></tr>
+    <tr><td>Nie widzę ikony RFM Tray.</td><td>Kliknij strzałkę <b>^</b> obok zegara (ukryte ikony). Jeśli jej tam nie ma, uruchom <b>RFM Tray</b> z menu Start.</td></tr>
   </table>
   <div class="box info"><span class="t">Zgłaszając problem, podaj</span>numer operacji (ID), nazwę katalogu, godzinę oraz treść komunikatu (najlepiej zrzut ekranu okna szczegółów operacji).</div>
 </section>
