@@ -16,7 +16,7 @@
 1. Decode PolkaSQL bodies with `api/services/polka.py:polka_json()` (declared charset or UTF-8, falling back to cp1250) and send `POLKA_HEADERS`; never `response.json()`.
 4. Never send `Accept-Charset` to PolkaSQL. With `Accept-Charset: utf-8`, `RĘKAWICZKI 104458 0-12L` stopped matching, although it matches without the header. The reply also said `charset=UTF-8`, so the label is not proof of the body's encoding.
 5. Reproduce a PolkaSQL problem with the request RFM really sends (same headers), not a bare browser URL: the browser test said `valid: true` while RFM was refused.
-6. Every miss runs the suggestion query, so a broken suggestion query fails every mistyped name with `catalogValidation.serviceError`. Test the procedure with a name that does not exist.
+6. Every miss runs the suggestion query, so a broken suggestion query fails every mistyped name with `catalogValidation.serviceError`. Test the procedure with a name that does not exist, and time it: a miss takes about 7 s, so `catalog_validation_timeout` must stay well above that (20 s; set in the Admin Panel, or forced by `CATALOG_VALIDATION_TIMEOUT` in `.env`).
 2. Test external services with non-ASCII data in the encoding they really use (`tests/test_polka_charset.py`).
 3. A catch-all that maps every exception to "unreachable" hides bugs; the log line (`'utf-8' codec can't decode byte 0xca`) was the only clue.
 

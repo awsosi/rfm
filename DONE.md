@@ -21,7 +21,10 @@ name. API log: `Function or column reference to 's_score' in the ORDER BY clause
 
 **Fix.** `api/services/polka.py`: no `Accept-Charset`; `polka_json()` falls back to cp1250
 even when the reply claims `charset=UTF-8`. `docs/polkasql/RFM_ValidateProductName.sql`:
-`GROUP BY s_name` with `MAX(s_score)` (ALTER PROCEDURE, DBA deploys). Tests:
+`GROUP BY s_name` with `MAX(s_score)` (ALTER PROCEDURE, DBA deploys). A miss now
+really runs the suggestion scan: `SIMILAR()` over all ~1M `elementy` rows, about 7 s,
+past the old 5 s timeout. Kept on purpose (it also suggests names when the first word
+is mistyped, and misses are rare); `catalog_validation_timeout` defaults to 20 s. Tests:
 `tests/test_polka_charset.py` (mislabelled cp1250 body; the fake PolkaSQL rejects
 `Accept-Charset`).
 

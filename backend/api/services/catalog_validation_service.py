@@ -124,9 +124,9 @@ async def lookup_tg_id(catalog_name: str, db: AsyncSession) -> tuple:
         return None, "catalog_validation_url or catalog_validation_api_key is not configured"
 
     try:
-        timeout = int(config.get('catalog_validation_timeout', '5'))
+        timeout = int(config.get('catalog_validation_timeout', '20'))
     except (TypeError, ValueError):
-        timeout = 5
+        timeout = 20
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -197,9 +197,9 @@ async def validate_catalog_name(
         )
 
     try:
-        timeout = int(config.get('catalog_validation_timeout', '5'))
+        timeout = int(config.get('catalog_validation_timeout', '20'))
     except (TypeError, ValueError):
-        timeout = 5
+        timeout = 20
 
     try:
         max_suggestions = int(config.get('catalog_validation_max_suggestions', '5'))

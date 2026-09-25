@@ -227,7 +227,8 @@ class Settings(BaseSettings):
     )
     catalog_validation_url: Optional[str] = None
     catalog_validation_api_key: Optional[str] = None
-    catalog_validation_timeout: int = 5
+    # A miss takes ~7 s on PolkaSQL: SIMILAR() over all ~1M elementy rows
+    catalog_validation_timeout: int = 20
     catalog_validation_max_suggestions: int = 5
     # Fail-closed by default: an unreachable PolkaSQL refuses the operation.
     # Flip to true to let pushes through during a PolkaSQL outage.

@@ -48,7 +48,7 @@ _CONFIG_SEED = [
     ('catalog_validation_enabled', 'false', 'BOOLEAN', 'Validate catalog names against PolkaSQL RFM_ValidateProductName'),
     ('catalog_validation_url', '', 'STRING', 'RFM_ValidateProductName web service URL'),
     ('catalog_validation_api_key', '', 'STRING', 'API key passed to RFM_ValidateProductName'),
-    ('catalog_validation_timeout', '5', 'INT', 'Catalog validation timeout in seconds'),
+    ('catalog_validation_timeout', '20', 'INT', 'Catalog validation timeout in seconds'),
     ('catalog_validation_max_suggestions', '5', 'INT', 'Maximum number of name suggestions to return'),
     ('catalog_validation_fail_open', 'false', 'BOOLEAN', 'Allow operations when PolkaSQL is unreachable (default: fail closed)'),
     # --- PUSH / UPDATE content validation --------------------------------
