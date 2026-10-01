@@ -60,10 +60,11 @@ IGNORE_CONFIG_KEYS = ['push_ignore_file_masks', 'push_ignore_system_files']
 _DEFAULT_EXTENSIONS = "jpg,jpeg,png,gif,bmp,tif,tiff,webp"
 DEFAULT_IGNORE_MASKS = "Thumbs.db"
 
-# Metadata that macOS and Windows leave in folders; never catalog content
+# Metadata that operating systems and photo tools leave in folders; never catalog content
 SYSTEM_FILE_MASKS = [
     ".DS_Store", "._*", ".localized", ".apdisk",   # macOS (._* = AppleDouble)
     "Thumbs.db", "ehthumbs.db", "desktop.ini",      # Windows
+    ".Bridge*",                                     # Adobe Bridge (.BridgeSort, .BridgeCache, ...)
 ]
 
 # Suffixes allowed between the number and the extension, e.g. "1_ai.png" for

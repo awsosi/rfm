@@ -9,19 +9,24 @@ Handles:
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from loguru import logger
+from redis.exceptions import LockError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
 from api.schemas import WorkerRequest, WorkerCommandResponse
+from api.services.user_events import get_redis
 from api.services.worker_service import (
     WorkerService,
     WorkerCommunicationError,
+    WorkerTimeoutError,
     get_worker_by_id,
+    unwrap_worker_data,
 )
 from api.services.elasticsearch_service import get_elasticsearch_service
 from models import (
@@ -34,9 +39,44 @@ from models import (
     User,
 )
 
-# Global lock dictionary for path-based operation locking
-# This ensures locks are shared across all OperationService instances
-_operation_locks: dict[str, asyncio.Lock] = {}
+# A path lock lives in Redis for as long as its holder renews it, so a crashed
+# API process frees the path within this many seconds.
+PATH_LOCK_TTL = 60
+
+
+@asynccontextmanager
+async def path_lock(path: str):
+    """
+    Serialize operations on one path across every API process.
+
+    uvicorn runs ``API_WORKERS`` processes, so an in-process lock let two
+    requests for the same folder (e.g. Send clicked twice) PUSH it at once:
+    the one that lost the race could not delete the already-moved source, and
+    its rollback deleted the catalog the other one had just published
+    (prod, 2026-10-01).
+    """
+    lock = get_redis().lock(
+        f"rfm:path_lock:{path.rstrip('/').casefold()}", timeout=PATH_LOCK_TTL, sleep=0.2
+    )
+    await lock.acquire()
+
+    async def renew():
+        while True:
+            await asyncio.sleep(PATH_LOCK_TTL / 3)
+            try:
+                await lock.reacquire()
+            except Exception as exc:
+                logger.warning(f"Could not renew the path lock for {path!r}: {exc}")
+
+    renewal = asyncio.create_task(renew())
+    try:
+        yield
+    finally:
+        renewal.cancel()
+        try:
+            await lock.release()
+        except LockError as exc:
+            logger.warning(f"Path lock for {path!r} expired before release: {exc}")
 
 
 class OperationError(Exception):
@@ -804,23 +844,9 @@ class OperationService:
 
         await db.commit()
 
-    def _get_path_lock(self, path: str) -> asyncio.Lock:
-        """
-        Get lock for specific file path to prevent concurrent operations.
-
-        Uses global lock dictionary to ensure locks are shared across all
-        OperationService instances and prevent concurrent operations on the
-        same path from different requests.
-
-        Args:
-            path: File path
-
-        Returns:
-            Lock for path
-        """
-        if path not in _operation_locks:
-            _operation_locks[path] = asyncio.Lock()
-        return _operation_locks[path]
+    def _get_path_lock(self, path: str):
+        """Async context manager holding ``path`` for one operation: see ``path_lock``."""
+        return path_lock(path)
 
     async def create_push_operation(
         self,
@@ -1044,14 +1070,13 @@ class OperationService:
         1. Copy directory from source to PATH_B (respecting flatten/ignore settings)
            → If fails: raise error, PATH_A untouched
         2a. [archive=True] Move entire PATH_A source to PATH_C
-           → If fails: rollback Step 1 (delete PATH_B copy), raise error, PATH_A untouched
         2b. [archive=True, after Step 2 success] Cleanup PATH_C: remove subfolders/ignored
            (best-effort, non-fatal — PATH_A is never touched by cleanup)
         3.  [archive=False] Delete PATH_A entirely
-           → If fails: rollback Step 1 (delete PATH_B copy), raise error, PATH_A untouched
 
-        Critical guarantee: PATH_A is NEVER modified until both Step 1 (copy to B) AND
-        Step 2 (archive/delete A) have both succeeded.
+        If Step 2 fails, ``_handle_push_step2_failure`` rolls back Step 1 only
+        while PATH_A is still complete; a PATH_A that Step 2 already partly
+        removed leaves PATH_B as the only complete copy, which is kept.
 
         Args:
             operation: PUSH operation to execute
@@ -1085,6 +1110,8 @@ class OperationService:
         )
 
         copy_completed = False
+        # Set when Step 2 failed after removing part of PATH_A
+        source_left = False
 
         try:
             # Verify source directory exists before proceeding
@@ -1154,37 +1181,17 @@ class OperationService:
                         )
 
                 except Exception as step2_exc:
-                    # CRITICAL: Step 2 failed, rollback Step 1 (delete from PATH_B)
-                    # PATH_A is still intact at this point
-                    logger.error(f"PUSH Step 2 failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
-
-                    try:
-                        rollback_response = await self.worker_service.delete_file(
-                            worker, operation.dest_path, db, recursive=True
-                        )
-                        if rollback_response.status == "success":
-                            logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
-                        else:
-                            logger.error(
-                                f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
-                                f"MANUAL CLEANUP REQUIRED!"
-                            )
-                    except Exception as rollback_exc:
-                        logger.error(
-                            f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
-                            f"PATH_B may contain partial data at {operation.dest_path}. "
-                            f"MANUAL CLEANUP REQUIRED!"
-                        )
-
-                    raise OperationError(
-                        f"PUSH Step 2 (archive to PATH_C) failed: {step2_exc}. "
-                        f"Step 1 (copy to PATH_B) has been rolled back. PATH_A is untouched."
+                    # Returns only if PATH_B is kept as the only complete copy
+                    await self._handle_push_step2_failure(
+                        operation, worker, db, step2_exc, "archive to PATH_C",
+                        copy_response.file_count, flatten, ignore_masks,
                     )
+                    archive_response = None
+                    source_left = True
 
-                # Step 2 succeeded: PATH_A is now in PATH_C.
                 # Step 2b: Cleanup PATH_C (best-effort, non-fatal).
                 # PATH_A is no longer modified — we clean the archive copy only.
-                if flatten or ignore_masks:
+                if archive_response and (flatten or ignore_masks):
                     try:
                         cleanup_command = WorkerRequest(
                             command="push_cleanup",
@@ -1199,9 +1206,8 @@ class OperationService:
                     except Exception as cleanup_exc:
                         logger.warning(f"PUSH archive cleanup failed (non-fatal): {cleanup_exc}")
 
-                # Both steps completed successfully
-                total_files = (copy_response.file_count or 0) + (archive_response.file_count or 0)
-                total_size = (copy_response.total_size_bytes or 0) + (archive_response.total_size_bytes or 0)
+                total_files = (copy_response.file_count or 0) + ((archive_response and archive_response.file_count) or 0)
+                total_size = (copy_response.total_size_bytes or 0) + ((archive_response and archive_response.total_size_bytes) or 0)
             else:
                 # Step 2: Delete source (no archive) — Step 1.5 is redundant since
                 # entire source is deleted here anyway
@@ -1215,32 +1221,12 @@ class OperationService:
                         raise OperationError(f"PUSH Step 2 failed: Delete source failed: {delete_response.message}")
 
                 except Exception as step2_exc:
-                    # CRITICAL: Step 2 failed, rollback Step 1
-                    # PATH_A is still intact at this point
-                    logger.error(f"PUSH Step 2 (delete source) failed: {step2_exc}. Rolling back Step 1 (deleting from PATH_B)...")
-
-                    try:
-                        rollback_response = await self.worker_service.delete_file(
-                            worker, operation.dest_path, db, recursive=True
-                        )
-                        if rollback_response.status == "success":
-                            logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
-                        else:
-                            logger.error(
-                                f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
-                                f"MANUAL CLEANUP REQUIRED!"
-                            )
-                    except Exception as rollback_exc:
-                        logger.error(
-                            f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
-                            f"PATH_B may contain partial data at {operation.dest_path}. "
-                            f"MANUAL CLEANUP REQUIRED!"
-                        )
-
-                    raise OperationError(
-                        f"PUSH Step 2 (delete source) failed: {step2_exc}. "
-                        f"Step 1 (copy to PATH_B) has been rolled back. PATH_A is untouched."
+                    # Returns only if PATH_B is kept as the only complete copy
+                    await self._handle_push_step2_failure(
+                        operation, worker, db, step2_exc, "delete source",
+                        copy_response.file_count, flatten, ignore_masks,
                     )
+                    source_left = True
 
                 total_files = copy_response.file_count or 0
                 total_size = copy_response.total_size_bytes or 0
@@ -1254,7 +1240,10 @@ class OperationService:
                 operation, worker, OperationStatus.COMPLETED, db
             )
 
-            step2_desc = f"archived to {operation.archive_path}" if archive else "source deleted"
+            if source_left:
+                step2_desc = f"but {operation.source_path} was only partly removed"
+            else:
+                step2_desc = f"archived to {operation.archive_path}" if archive else "source deleted"
             logger.info(f"PUSH operation {operation.id} completed: {total_files} files, {total_size} bytes")
 
             # Return combined response
@@ -1283,6 +1272,103 @@ class OperationService:
                 operation, worker, OperationStatus.FAILED, db, str(exc)
             )
             raise OperationError(f"PUSH operation failed: {exc}")
+
+    async def _handle_push_step2_failure(
+        self,
+        operation: Operation,
+        worker: Worker,
+        db: AsyncSession,
+        step2_exc: Exception,
+        step: str,
+        copied_files: Optional[int],
+        flatten: bool,
+        ignore_masks: List[str],
+    ) -> None:
+        """
+        Undo a PUSH whose Step 2 failed, unless that would lose data.
+
+        Deleting (or moving across volumes) a folder is not atomic: the worker
+        removes file after file, and a file another program holds or re-creates
+        (Explorer's Thumbs.db, Adobe Bridge's .BridgeSort) stops it halfway.
+        Deleting the PATH_B copy then left the photos nowhere (prod, 2026-09-30,
+        "The directory is not empty.").
+
+        So Step 1 is rolled back, and OperationError raised, only while PATH_A
+        still holds every file Step 1 copied. Otherwise this returns: the
+        complete copy in PATH_B is kept, the PUSH counts as done, and what is
+        left of PATH_A has to be removed by hand.
+        """
+        logger.error(f"PUSH {operation.id} Step 2 ({step}) failed: {step2_exc}")
+
+        # After a timeout the worker may still be removing PATH_A
+        if isinstance(step2_exc, WorkerTimeoutError) or not await self._push_source_complete(
+            operation, worker, db, copied_files, flatten, ignore_masks
+        ):
+            logger.error(
+                f"PUSH {operation.id}: {operation.source_path} was already partly removed, so the "
+                f"complete copy at {operation.dest_path} is kept. Remove what is left of "
+                f"{operation.source_path} by hand."
+            )
+            return
+
+        logger.info(f"PUSH {operation.id}: {operation.source_path} is complete; rolling back Step 1")
+        try:
+            rollback_response = await self.worker_service.delete_file(
+                worker, operation.dest_path, db, recursive=True
+            )
+            if rollback_response.status == "success":
+                logger.info(f"Successfully rolled back Step 1: Deleted {operation.dest_path} from PATH_B")
+            else:
+                logger.error(
+                    f"Rollback of Step 1 failed: Could not delete {operation.dest_path} from PATH_B. "
+                    f"MANUAL CLEANUP REQUIRED!"
+                )
+        except Exception as rollback_exc:
+            logger.error(
+                f"CRITICAL: Rollback of Step 1 failed with exception: {rollback_exc}. "
+                f"PATH_B may contain partial data at {operation.dest_path}. "
+                f"MANUAL CLEANUP REQUIRED!"
+            )
+
+        raise OperationError(
+            f"PUSH Step 2 ({step}) failed: {step2_exc}. "
+            f"Step 1 (copy to PATH_B) has been rolled back. PATH_A is untouched."
+        )
+
+    async def _push_source_complete(
+        self,
+        operation: Operation,
+        worker: Worker,
+        db: AsyncSession,
+        copied_files: Optional[int],
+        flatten: bool,
+        ignore_masks: List[str],
+    ) -> bool:
+        """Whether PATH_A still holds as many files as Step 1 copied (counted the same way)."""
+        from api.services.content_validation_service import matches_ignore_mask
+
+        if not copied_files:
+            return False  # nothing to compare with: assume the worst
+        try:
+            response = await self.worker_service.send_command(
+                worker,
+                WorkerRequest(
+                    command="list",
+                    params={"path": operation.source_path, "recursive": not flatten},
+                ),
+                db,
+            )
+        except WorkerCommunicationError as exc:
+            logger.warning(f"PUSH {operation.id}: cannot list {operation.source_path}: {exc}")
+            return False
+
+        items = unwrap_worker_data(response).get("items") or []
+        remaining = sum(
+            1 for item in items
+            if item.get("type") == "file" and not matches_ignore_mask(item.get("name", ""), ignore_masks)
+        )
+        logger.info(f"PUSH {operation.id}: {remaining} of {copied_files} copied files still in {operation.source_path}")
+        return remaining >= copied_files
 
     async def _execute_pull_operation(
         self,

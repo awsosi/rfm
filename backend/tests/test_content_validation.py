@@ -354,11 +354,12 @@ from api.services.content_validation_service import ignore_masks_from_config
 
 def test_system_files_are_ignored_by_default():
     assert ignore_masks_from_config({}) == [
-        "Thumbs.db", ".DS_Store", "._*", ".localized", ".apdisk", "ehthumbs.db", "desktop.ini",
+        "Thumbs.db", ".DS_Store", "._*", ".localized", ".apdisk", "ehthumbs.db", "desktop.ini", ".Bridge*",
     ]
     # An operator's own mask is kept, and not repeated in another case
     assert ignore_masks_from_config({"push_ignore_file_masks": "*.tmp, DESKTOP.INI"}) == [
         "*.tmp", "DESKTOP.INI", ".DS_Store", "._*", ".localized", ".apdisk", "Thumbs.db", "ehthumbs.db",
+        ".Bridge*",
     ]
     assert ignore_masks_from_config({"push_ignore_system_files": "false"}) == ["Thumbs.db"]
 
@@ -379,3 +380,15 @@ async def test_ds_store_does_not_block_a_catalog():
     refused = await _validate_with(payload, push_ignore_system_files="false")
     assert refused.reason == "contentValidation.invalidFileNames"
     assert refused.invalid_names == ["._1.jpg", ".DS_Store"]
+
+
+async def test_adobe_bridge_sort_file_does_not_block_a_catalog():
+    """Prod, 2026-09-29: A:/DO KATALOGU/Lena/BUTY 3001-001 0051-262 LIGHT BEIGE
+    was refused three times for the .BridgeSort file Adobe Bridge leaves."""
+    payload = {"files": [".BridgeSort", "1.jpg", "2.jpg"], "total_files": 3,
+               "image_count": 2, "non_image_files": [".BridgeSort"], "invalid_files": []}
+
+    result = await _validate_with(payload)
+
+    assert result.valid is True
+    assert result.files == ["1.jpg", "2.jpg"]

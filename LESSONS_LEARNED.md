@@ -29,6 +29,7 @@
 **Rules:**
 1. Anything that must reach a specific user's tab goes through Redis: `api/services/user_events.py:publish_to_user()`; every process relays it to its own sockets.
 2. When exactly one party must act (a tab or the launcher), claim with one atomic `SET NX`, never "check, then act" (`api/routes/client_actions.py`).
+3. The same goes for locks: an `asyncio.Lock` only excludes requests in its own process. The per-path operation lock was one, so two PUSHes of one folder ran at once (prod, 2026-10-01) and the loser's rollback deleted the winner's catalog. Path locks are Redis locks now (`operation_service.path_lock`).
 
 ## UI State Derived From a Selection Must Be Recomputed After Every Re-render
 
@@ -119,6 +120,7 @@
 2. Inspect what was staged (type, "is it a file at all") before the first visible change. A rejection then costs nothing.
 3. Replace = move the old file aside, then move the new one in. Never overwrite in place: the old version is the undo.
 4. Irreversible steps run last. Post-success housekeeping (cleanup, removing sources) is best-effort and recorded as warnings; it must not fail an operation whose result is already correct.
+5. A recursive delete is not atomic. It removes file after file and can stop halfway: a file that Explorer or Adobe Bridge holds or re-creates (`Thumbs.db`, `.BridgeSort`) gives "in use" or "The directory is not empty." So after a failed delete, never assume the source is untouched. PUSH used to roll back its catalog copy after such a failure, and the photos were then gone from both places (prod, 2026-09-30). Before removing the other copy, check that the source is still complete (`_handle_push_step2_failure`).
 
 ---
 

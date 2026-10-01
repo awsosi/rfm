@@ -6,6 +6,34 @@
 
 ---
 
+## 2026-10-01 - PUSH no longer loses photos when the source cannot be fully deleted
+
+**Why.** Users reported folders whose photos disappeared while the folder stayed in
+"DO KATALOGU" with status failed (e.g. `SKARPETY JV7410 0-WHITE`, operation 1607).
+Prod logs showed two causes, and both deleted the catalog copy:
+- **Partial delete, then rollback.** Step 2 deletes the source recursively, file after file.
+  A file Explorer or Adobe Bridge held or re-created (`Thumbs.db`, `.BridgeSort`) stopped
+  it halfway ("in use", "The directory is not empty.") after the photos were gone. The
+  rollback then deleted the complete copy in `B:` (operations 1598, 1607, 1769).
+- **Concurrent PUSH of one folder.** The path lock was an `asyncio.Lock`, so it only held
+  within one of the 4 uvicorn processes. Two PUSHes of the same folder ran at once; the
+  second could not delete the already-moved source ("Path not found") and its rollback
+  deleted the first one's catalog (1748, 1760). In 1587, 1752 and 1756 that rollback
+  failed halfway, leaving a partial catalog.
+
+**What.**
+- `_handle_push_step2_failure`: Step 1 is rolled back only while the source still holds
+  every copied file. If not (or the delete timed out), the complete copy is kept, the
+  PUSH completes, and the log names the leftovers to remove by hand.
+- `path_lock`: a Redis lock, renewed while held, shared by every API process.
+- Worker `DeleteDirectoryWithRetry`: clears read-only and retries up to 5 times, so brief
+  holds pass (needs a worker rebuild and redeploy).
+- `.Bridge*` (Adobe Bridge) joins the system files that PUSH ignores, so `.BridgeSort` no
+  longer gets a catalog refused.
+- `/health` is no longer logged (uvicorn and gunicorn access logs, request middleware).
+
+---
+
 ## 2026-09-26 - RFM Tray 1.2: onboarding, clear status, confirmed sign-in
 
 **Why.** Ewa, Natalia and Lena all believed RFM Tray sent their folders. Prod shows

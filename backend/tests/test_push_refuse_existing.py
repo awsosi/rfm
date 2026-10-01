@@ -7,10 +7,12 @@ going through UPDATE.
 
 from types import SimpleNamespace
 
+import fakeredis
 import pytest
 from fastapi import HTTPException
 
 import api.app as app_module
+import api.services.user_events as user_events
 from api.config import get_settings
 from api.schemas import FilePushRequest
 from api.services.worker_service import WorkerCommunicationError, WorkerService
@@ -41,6 +43,8 @@ def worker(monkeypatch):
     state = SimpleNamespace(published=published, listed=listed, failure=None)
     monkeypatch.setattr(app_module, "get_worker_by_id", get_worker_by_id)
     monkeypatch.setattr(WorkerService, "list_directory", list_directory)
+    # The path lock lives in Redis
+    monkeypatch.setattr(user_events, "_redis", fakeredis.aioredis.FakeRedis(decode_responses=True))
     return state
 
 

@@ -6,6 +6,7 @@ Integrates with audit_logs table for compliance.
 """
 
 import json
+import logging
 import time
 from typing import Callable
 from uuid import uuid4
@@ -58,6 +59,19 @@ def get_client_ip(request: Request) -> str:
     return None
 
 
+# Docker healthchecks (API and WebUI) poll this every 15 s; logging each poll
+# buries everything else in the container's output
+HEALTH_PATH = "/health"
+
+
+class _SkipHealthChecks(logging.Filter):
+    """Drop uvicorn access-log lines for ``HEALTH_PATH``."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # uvicorn.access args: (client, method, path, http_version, status)
+        return not (isinstance(record.args, tuple) and len(record.args) > 2 and record.args[2] == HEALTH_PATH)
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware for logging all HTTP requests and responses.
@@ -83,6 +97,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         Returns:
             Response from handler
         """
+        if request.url.path == HEALTH_PATH:
+            return await call_next(request)
+
         # Generate unique request ID
         request_id = str(uuid4())
         request.state.request_id = request_id
@@ -281,6 +298,8 @@ def setup_logging(log_level: str = "INFO", json_logs: bool = True):
     """
     # Remove default handler
     logger.remove()
+
+    logging.getLogger("uvicorn.access").addFilter(_SkipHealthChecks())
 
     if json_logs:
         # JSON structured logging for production

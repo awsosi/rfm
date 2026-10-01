@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 
@@ -653,7 +654,7 @@ namespace FileManagerWorker
 
                             // Only delete source if validation passed
                             Logger.Info("Validation passed, safe to delete source directory '{0}'", resolvedSource);
-                            Directory.Delete(resolvedSource, true);
+                            DeleteDirectoryWithRetry(resolvedSource);
 
                             // Calculate total size of all files moved
                             var destFiles = Directory.GetFiles(resolvedDest, "*", SearchOption.AllDirectories);
@@ -764,7 +765,7 @@ namespace FileManagerWorker
                             totalSize += new FileInfo(file).Length;
                         }
 
-                        Directory.Delete(resolvedPath, true);
+                        DeleteDirectoryWithRetry(resolvedPath);
 
                         result["type"] = "directory";
                         result["file_count"] = fileCount;
@@ -781,6 +782,39 @@ namespace FileManagerWorker
                     return result;
                 });
             });
+        }
+
+        /// <summary>
+        /// Directory.Delete(path, true) stops at the first file another program holds or
+        /// re-creates meanwhile (Explorer's Thumbs.db, Adobe Bridge's .BridgeSort, a file
+        /// whose delete is still pending over SMB), leaving the folder half deleted, and
+        /// it cannot delete read-only files at all. Clear read-only and retry, so
+        /// such brief holds pass.
+        /// </summary>
+        private static void DeleteDirectoryWithRetry(string path)
+        {
+            const int attempts = 5;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    if (!Directory.Exists(path))
+                        return;
+                    foreach (var entry in Directory.GetFileSystemEntries(path, "*", SearchOption.AllDirectories))
+                    {
+                        var attributes = File.GetAttributes(entry);
+                        if ((attributes & FileAttributes.ReadOnly) != 0)
+                            File.SetAttributes(entry, attributes & ~FileAttributes.ReadOnly);
+                    }
+                    Directory.Delete(path, true);
+                    return;
+                }
+                catch (Exception ex) when ((ex is IOException || ex is UnauthorizedAccessException) && attempt < attempts)
+                {
+                    Logger.Warn("Deleting {0} failed (attempt {1} of {2}), retrying: {3}", path, attempt, attempts, ex.Message);
+                    Thread.Sleep(500 * attempt);
+                }
+            }
         }
 
         /// <summary>

@@ -16,6 +16,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+class SkipHealthChecks(logging.Filter):
+    """Drop gunicorn access-log lines for /health, which the Docker healthcheck polls every 15 s."""
+
+    def filter(self, record):
+        # gunicorn passes the request's atoms as a dict; 'U' is the path without query
+        return not (isinstance(record.args, dict) and record.args.get('U') == '/health')
+
+
+logging.getLogger('gunicorn.access').addFilter(SkipHealthChecks())
+
 # Initialize Flask app
 app = Flask(__name__, static_folder='frontend', static_url_path='')
 
