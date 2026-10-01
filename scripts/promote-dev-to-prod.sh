@@ -311,8 +311,10 @@ Remaining manual steps:
          non-admins. Admins confirm their password before changing system settings.
        - PUSH ignores OS metadata files (.DS_Store, ._*, Thumbs.db, desktop.ini, ...)
          and destroys them at the source (push_ignore_system_files, on).
-       - PUSH/UPDATE require catalog file names like 3.png, or 3_ai.png with one of
-         push_validation_name_suffixes (default "_ai", case-insensitive)
+       - PUSH/UPDATE require catalog file names like 3.png, or 3_ai.png / 2_w.jpg /
+         2_w_ai.jpg with one of push_validation_name_suffixes (default
+         "_ai,_w,_m,_w_ai,_m_ai", case-insensitive; migration 022 replaces an
+         untouched "_ai")
          (push_validation_file_names, on). Clear the suffix list for numbers only.
   3. Configure the new integrations in the Admin Panel -> Configuration:
        - PIM: base URL, endpoint, API token, then enable. Delivery is queued and

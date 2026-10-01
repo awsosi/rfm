@@ -541,8 +541,8 @@
 
                                 <div class="form-group">
                                     <label for="config-push-validation-name-suffixes">Allowed File Name Suffixes</label>
-                                    <input type="text" id="config-push-validation-name-suffixes" name="push_validation_name_suffixes" class="form-control" placeholder="_ai">
-                                    <small>Comma-separated suffixes accepted between the number and the extension, so <code>_ai</code> lets 1_ai.png through next to 1.png. Case-insensitive (_ai, _AI, _Ai, _aI all match). Letters, digits, <code>_</code> and <code>-</code> only; leave empty to accept numbers alone.</small>
+                                    <input type="text" id="config-push-validation-name-suffixes" name="push_validation_name_suffixes" class="form-control" placeholder="_ai,_w,_m,_w_ai,_m_ai">
+                                    <small>Comma-separated suffixes accepted between the number and the extension, so <code>_ai</code> lets 1_ai.png through next to 1.png. Each entry is one whole suffix: <code>_w_ai</code> must be listed for 2_w_ai.jpg even when <code>_w</code> and <code>_ai</code> are. Case-insensitive (_ai, _AI, _Ai, _aI all match). Letters, digits, <code>_</code> and <code>-</code> only; leave empty to accept numbers alone.</small>
                                 </div>
 
                                 <h4 class="mt-4">UPDATE Behaviour</h4>

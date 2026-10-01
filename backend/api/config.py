@@ -247,9 +247,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices('enable_push_validation_file_names', 'push_validation_file_names'),
     )
-    # Suffixes also allowed between the number and the extension, e.g. "3_ai.png".
-    # Comma-separated, matched case-insensitively; empty means numbers only.
-    push_validation_name_suffixes: str = "_ai"
+    # Suffixes also allowed between the number and the extension, e.g. "3_ai.png",
+    # "2_w.jpg", "2_w_ai.jpg". Comma-separated, matched case-insensitively; empty
+    # means numbers only.
+    push_validation_name_suffixes: str = "_ai,_w,_m,_w_ai,_m_ai"
 
     # Logging
     log_level: str = "INFO"

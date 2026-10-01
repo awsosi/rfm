@@ -6,6 +6,16 @@
 
 ---
 
+## 2026-10-01 - File names with the _w and _m photo markers
+
+Product photos are now marked `_w` / `_m`, also on AI images: `2_w.jpg`, `3_m.jpg`,
+`2_w_ai.jpg`, `3_m_ai.jpg`. The default `push_validation_name_suffixes` is now
+`_ai,_w,_m,_w_ai,_m_ai` (each entry is one whole suffix, so the combinations are listed);
+migration `022` replaces an untouched `_ai` and leaves an operator's own value alone.
+WebUI and RFM Tray list the accepted forms from the server, so neither changed. Guides updated.
+
+---
+
 ## 2026-10-01 - PUSH no longer loses photos when the source cannot be fully deleted
 
 **Why.** Users reported folders whose photos disappeared while the folder stayed in

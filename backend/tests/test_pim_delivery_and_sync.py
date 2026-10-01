@@ -680,7 +680,7 @@ async def test_ai_suffix_is_accepted_and_configurable(session, db_manager, setti
     preflight = await preflight_catalog(request, user, session, settings)
     assert preflight.ok is True
     assert preflight.content.invalid_names == []
-    assert preflight.content.allowed_name_suffixes == ["_ai"]
+    assert preflight.content.allowed_name_suffixes == ["_ai", "_w", "_m", "_w_ai", "_m_ai"]
 
     # Cleared, the setting means numbers only: the same catalog is refused
     # before anything is copied, exactly as it was before suffixes existed

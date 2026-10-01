@@ -67,10 +67,12 @@ SYSTEM_FILE_MASKS = [
     ".Bridge*",                                     # Adobe Bridge (.BridgeSort, .BridgeCache, ...)
 ]
 
-# Suffixes allowed between the number and the extension, e.g. "1_ai.png" for
-# an AI-generated image. Matched case-insensitively, so "_ai", "_AI", "_Ai" and
-# "_aI" all pass. An empty setting means numbers only.
-DEFAULT_NAME_SUFFIXES = "_ai"
+# Suffixes allowed between the number and the extension: "1_ai.png" for an
+# AI-generated image, "2_w.jpg" / "3_m.jpg" for photos marked _w / _m, and
+# both together ("2_w_ai.jpg"). Each entry is one whole suffix, so a new
+# combination must be listed. Matched case-insensitively, so "_ai", "_AI",
+# "_Ai" and "_aI" all pass. An empty setting means numbers only.
+DEFAULT_NAME_SUFFIXES = "_ai,_w,_m,_w_ai,_m_ai"
 
 # A suffix ends up inside a file name, so only these characters are accepted.
 # An operator's typo is dropped with a warning rather than breaking every PUSH.

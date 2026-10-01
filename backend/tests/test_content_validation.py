@@ -236,15 +236,17 @@ def test_ignore_masks_match_like_the_worker(name, masks, expected):
 
 
 def test_pim_file_name_rule():
-    # The default suffix list ("_ai") applies when none is passed
-    ok = ["1.png", "03.JPG", "12.jpeg", "7.webp", "1_ai.png", "2_AI.JPG", "3_Ai.png", "4_aI.webp"]
+    # The default suffix list applies when none is passed
+    ok = ["1.png", "03.JPG", "12.jpeg", "7.webp", "1_ai.png", "2_AI.JPG", "3_Ai.png", "4_aI.webp",
+          "2_w.jpg", "3_m.jpg", "2_w_ai.jpg", "3_m_ai.jpg", "4_W_AI.JPG"]
     bad = ["Thumbs.db", "front.jpg", "1.png.bak", "1", ".png", "1 .png", "1_2.png", "\u0663.png", "1.pn g",
-           "-1.png", "_ai.png", "1_bi.png", "1_ai_ai.png", "ai_1.png", "1-ai.png"]
+           "-1.png", "_ai.png", "1_bi.png", "1_ai_ai.png", "ai_1.png", "1-ai.png",
+           "1_ai_w.jpg", "1_w_m.jpg", "1_wm.jpg", "_w.jpg", "1_w_ai_ai.jpg"]
     assert invalid_file_names(ok + bad) == bad
 
 
 def test_name_suffixes_are_parsed_from_config():
-    assert name_suffixes_from_config({}) == ["_ai"]
+    assert name_suffixes_from_config({}) == ["_ai", "_w", "_m", "_w_ai", "_m_ai"]
     # An operator's own list replaces the default, whitespace and all
     assert name_suffixes_from_config({"push_validation_name_suffixes": " _ai , _gen "}) == ["_ai", "_gen"]
     # Matching is case-insensitive, so these are one suffix, not two
@@ -296,13 +298,13 @@ async def test_name_rule_is_on_by_default_and_ignores_masked_files():
 async def test_ai_suffix_passes_by_default():
     """End users name AI-generated images "1_ai.png"; those must not be
     refused, and the accepted suffixes travel to the WebUI for the message."""
-    payload = {"files": ["1.png", "2_ai.png", "3_AI.PNG"], "total_files": 3, "image_count": 3,
-               "non_image_files": [], "invalid_files": []}
+    payload = {"files": ["1.png", "2_ai.png", "3_AI.PNG", "4_w.jpg", "5_m_ai.jpg"], "total_files": 5,
+               "image_count": 5, "non_image_files": [], "invalid_files": []}
     result = await _validate_with(payload)
 
     assert result.valid is True and result.invalid_names == []
-    assert result.allowed_name_suffixes == ["_ai"]
-    assert result.to_dict()["allowed_name_suffixes"] == ["_ai"]
+    assert result.allowed_name_suffixes == ["_ai", "_w", "_m", "_w_ai", "_m_ai"]
+    assert result.to_dict()["allowed_name_suffixes"] == ["_ai", "_w", "_m", "_w_ai", "_m_ai"]
 
 
 @pytest.mark.asyncio
