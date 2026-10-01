@@ -9,6 +9,7 @@ This service provides:
 """
 
 import asyncio
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,24 @@ from elasticsearch.exceptions import NotFoundError, ConnectionError as ESConnect
 from loguru import logger
 
 from ..config import get_settings
+
+# Operation fields the history search looks in (the database fallback uses the
+# same columns)
+SEARCH_FIELDS = ("source_path", "dest_path", "original_path", "archive_path", "user_name")
+
+_WILDCARD_SPECIAL = re.compile(r"[\\*?]")
+
+
+def search_terms(query: Optional[str]) -> List[str]:
+    """
+    The words of an operation history search; an operation matches only if
+    every word appears, case-insensitively, inside one of ``SEARCH_FIELDS``.
+
+    "BUTY FU" used to match any operation containing either word (fuzzy, OR),
+    i.e. every "BUTY" catalog, newest first, burying the one wanted (prod,
+    2026-10-01).
+    """
+    return (query or "").split()
 
 
 class ElasticsearchService:
@@ -274,35 +293,14 @@ class ElasticsearchService:
             # Build query
             must_clauses = []
 
-            # Add free-text search with substring matching support
-            if query:
-                # Use "should" clause with multiple query types for better substring matching
+            # Every word must appear somewhere: see search_terms
+            for term in search_terms(query):
+                pattern = "*" + _WILDCARD_SPECIAL.sub(r"\\\g<0>", term) + "*"
                 must_clauses.append({
                     "bool": {
                         "should": [
-                            # Fuzzy match for typo tolerance
-                            {
-                                "multi_match": {
-                                    "query": query,
-                                    "fields": [
-                                        "source_path^3",
-                                        "dest_path^3",
-                                        "original_path^2",
-                                        "archive_path^2",
-                                        "user_name^2",
-                                        "error_msg",
-                                    ],
-                                    "type": "best_fields",
-                                    "operator": "or",
-                                    "fuzziness": "AUTO",
-                                }
-                            },
-                            # Wildcard queries on keyword fields for substring matching (case-insensitive)
-                            {"wildcard": {"source_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
-                            {"wildcard": {"dest_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
-                            {"wildcard": {"original_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 1.5}}},
-                            {"wildcard": {"archive_path.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 1.5}}},
-                            {"wildcard": {"user_name.keyword": {"value": f"*{query}*", "case_insensitive": True, "boost": 2.0}}},
+                            {"wildcard": {f"{field}.keyword": {"value": pattern, "case_insensitive": True}}}
+                            for field in SEARCH_FIELDS
                         ],
                         "minimum_should_match": 1,
                     }

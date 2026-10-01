@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-10-01 - Operation history search finds what was typed
+
+**Why.** On prod, searching "BUTY FU" listed every BUTY catalog: the Elasticsearch query
+matched any word, fuzzily (`operator: or`, `fuzziness: AUTO`), and the list is sorted by
+date, so the two FU catalogs were lost among dozens.
+
+**What.** Every word must now appear, case-insensitively and as a fragment, in the catalog
+path (source, destination, original, archive) or the user name (`search_terms`, one
+wildcard clause per word). The database fallback applies the same rule (it matched the
+whole text as one fragment) and now counts only matching operations. `*`, `?`, `%`, `_`
+are literal. Error messages are no longer searched.
+
+---
+
 ## 2026-10-01 - One automatic version for server, worker, Launcher, Tray and MSI
 
 **Why.** Each part had its own hand-kept version (server and worker 1.0.0, Tray and MSI

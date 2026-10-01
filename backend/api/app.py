@@ -6,6 +6,7 @@ and admin functionality.
 """
 
 import asyncio
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Optional, Any
@@ -1926,7 +1927,7 @@ async def search_operations(
     Falls back to database query if Elasticsearch is disabled.
     """
     try:
-        from api.services.elasticsearch_service import get_elasticsearch_service
+        from api.services.elasticsearch_service import get_elasticsearch_service, search_terms
 
         es_service = await get_elasticsearch_service()
 
@@ -2012,16 +2013,25 @@ async def search_operations(
                 query = query.where(Operation.type == operation_type.upper())
             if status:
                 query = query.where(Operation.status == status.upper())
-            if q:
-                # Basic path search using SQL LIKE
-                search_pattern = f"%{q}%"
+            # Same rule as Elasticsearch: every word inside one of the fields
+            for term in search_terms(q):
+                pattern = "%" + re.sub(r"[\\%_]", r"\\\g<0>", term) + "%"
                 query = query.where(
-                    or_(
-                        Operation.source_path.ilike(search_pattern),
-                        Operation.dest_path.ilike(search_pattern),
-                        User.username.ilike(search_pattern),
-                    )
+                    or_(*(
+                        column.ilike(pattern, escape="\\")
+                        for column in (
+                            Operation.source_path,
+                            Operation.dest_path,
+                            Operation.original_path,
+                            Operation.archive_path,
+                            User.username,
+                        )
+                    ))
                 )
+
+            # Total of what matched, before pagination
+            count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+            total = count_result.scalar()
 
             # Pagination
             query = query.limit(limit).offset(offset)
@@ -2061,16 +2071,6 @@ async def search_operations(
                     **integration_db.get(operation.id, {}),
                 })
                 operations.append(op_response.model_dump())
-
-            # Get total count (approximate)
-            count_query = select(func.count(Operation.id))
-            if operation_type:
-                count_query = count_query.where(Operation.type == operation_type.upper())
-            if status:
-                count_query = count_query.where(Operation.status == status.upper())
-
-            count_result = await db.execute(count_query)
-            total = count_result.scalar()
 
             return {
                 "total": total,
