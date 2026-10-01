@@ -18,6 +18,7 @@ from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings, Settings
+from api.version import RFM_VERSION
 from api.middleware.auth import get_current_user, require_admin, require_user
 from api.middleware.logging import (
     RequestLoggingMiddleware,
@@ -383,7 +384,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Modular File Manager API",
     description="Enterprise file operations management API",
-    version="1.0.0",
+    version=RFM_VERSION,
     lifespan=lifespan,
 )
 
@@ -430,7 +431,7 @@ async def health_check_endpoint():
     all_healthy = db_healthy and redis_healthy
     return HealthCheckResponse(
         status="healthy" if all_healthy else "degraded",
-        version="1.0.0",
+        version=RFM_VERSION,
         database=db_healthy,
         redis=redis_healthy,
     )

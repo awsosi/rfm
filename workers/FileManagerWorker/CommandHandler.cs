@@ -562,7 +562,7 @@ namespace FileManagerWorker
                     { "operations_processed", 0 }, // TODO: Implement operation counter
                     { "operations_in_queue", 0 }, // TODO: Implement queue status
                     { "status", "online" },
-                    { "version", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() },
+                    { "version", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3) },
                     { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
                 };
 

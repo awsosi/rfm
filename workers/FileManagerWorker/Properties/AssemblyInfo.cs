@@ -14,5 +14,4 @@ using System.Runtime.InteropServices;
 
 [assembly: Guid("8b7c1f2d-3e4a-4c5d-9f1e-2a3b4c5d6e7f")]
 
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+// AssemblyVersion and AssemblyFileVersion come from Version.targets (RFM version)

@@ -12,11 +12,9 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 
 # Build arguments
 ARG BUILD_DATE
-ARG VERSION=1.0.0
 
-# Metadata
+# Metadata (the RFM version is the API's, see backend/Dockerfile)
 LABEL maintainer="File Manager Team"
-LABEL version="${VERSION}"
 LABEL description="WebUI frontend for Modular File Manager"
 LABEL build-date="${BUILD_DATE}"
 

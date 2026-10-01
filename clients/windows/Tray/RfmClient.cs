@@ -85,7 +85,7 @@ namespace RFMTray
         {
             var http = new HttpClient { Timeout = timeout };
             http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(
-                "RFMTray", Assembly.GetExecutingAssembly().GetName().Version.ToString()));
+                "RFMTray", Assembly.GetExecutingAssembly().GetName().Version.ToString(3)));
             return http;
         }
 

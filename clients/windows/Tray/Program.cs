@@ -47,7 +47,7 @@ namespace RFMTray
             Console.SetOut(new Log.ConsoleWriter());
             Application.ThreadException += (s, e) => Log.Error("Unhandled UI exception", e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Error("Unhandled exception", e.ExceptionObject as Exception);
-            Log.Info($"RFM Tray {typeof(Program).Assembly.GetName().Version} starting as {Environment.UserDomainName}\\{Environment.UserName} " +
+            Log.Info($"RFM Tray {typeof(Program).Assembly.GetName().Version.ToString(3)} starting as {Environment.UserDomainName}\\{Environment.UserName} " +
                      $"on {Environment.MachineName}; API {config.ApiBaseUrl}; watching {string.Join(", ", settings.WatchFolders)}; " +
                      $"quiet {settings.QuietSeconds} s; paused {settings.Paused}; args {string.Join(" ", args)}");
 

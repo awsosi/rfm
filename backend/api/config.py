@@ -28,7 +28,6 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "Modular File Manager API"
-    app_version: str = "1.0.0"
     debug: bool = False
 
     # API Server

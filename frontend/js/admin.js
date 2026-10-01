@@ -523,7 +523,7 @@ async function loadWorkers() {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${worker.id}</td>
-                <td>${escapeHtml(worker.hostname || 'N/A')}</td>
+                <td>${escapeHtml(worker.hostname || 'N/A')}${worker.version ? `<br><small>RFM ${escapeHtml(worker.version)}</small>` : ''}</td>
                 <td><span class="status-badge status-${(worker.status || '').toLowerCase()}" title="${statusTitle}">${worker.status}</span></td>
                 <td>${formatDate(worker.last_heartbeat)}</td>
                 <td>
@@ -1146,7 +1146,7 @@ function renderSystemStats(stats, health) {
                 <div class="stat-value">
                     <span class="badge badge-${health.overall_status === 'healthy' ? 'success' : health.overall_status === 'degraded' ? 'warning' : 'danger'}">${health.overall_status}</span>
                 </div>
-                <div class="stat-label">Components</div>
+                <div class="stat-label">Components${health.version ? ` · Server RFM ${escapeHtml(health.version)}` : ''}</div>
                 <div class="stat-details">
                     ${healthComponentsHtml}
                 </div>

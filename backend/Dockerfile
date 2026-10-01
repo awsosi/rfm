@@ -12,11 +12,9 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 
 # Build arguments
 ARG BUILD_DATE
-ARG VERSION=1.0.0
 
-# Metadata
+# Metadata (the RFM version is computed in the "version" stage)
 LABEL maintainer="File Manager Team"
-LABEL version="${VERSION}"
 LABEL description="FastAPI backend for Modular File Manager"
 LABEL build-date="${BUILD_DATE}"
 
@@ -46,6 +44,23 @@ COPY backend/requirements.txt .
 # Install dependencies in virtual environment
 RUN pip install --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
+
+# ------------------------------------------------------------------------------
+# Stage: Version - the RFM version, <major.minor from VERSION>.<commits in HEAD>,
+# computed like Version.targets does for the worker and Windows clients. The
+# build context is the repository, so .git is mounted for the count (RUN --mount
+# needs BuildKit, which docker compose uses by default).
+# ------------------------------------------------------------------------------
+FROM python:${PYTHON_VERSION}-slim AS version
+
+RUN apt-get update && apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY VERSION /version/VERSION
+RUN --mount=type=bind,source=.git,target=/repo/.git \
+    count=$(git -c safe.directory='*' --git-dir=/repo/.git rev-list --count HEAD) && \
+    echo "$(cat /version/VERSION).${count}" > /version/RFM_VERSION && \
+    echo "RFM version: $(cat /version/RFM_VERSION)"
 
 # ------------------------------------------------------------------------------
 # Stage 2: Runtime - Create final image
@@ -95,6 +110,9 @@ COPY --chown=filemanager:filemanager backend/ /app/backend/
 
 # Copy entrypoint script
 COPY --chown=filemanager:filemanager backend/entrypoint.sh /app/entrypoint.sh
+
+# RFM version (api/version.py reads it)
+COPY --from=version /version/RFM_VERSION /app/RFM_VERSION
 
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh

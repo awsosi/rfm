@@ -13,6 +13,7 @@ This guide will help you build all three Windows components:
 - ✅ Visual Studio 2022 with C++ build tools (v143)
 - ✅ .NET Framework 4.8 SDK
 - ✅ Windows SDK
+- ✅ Git on `PATH`, in a full clone: `Version.targets` stamps every build with the RFM version `<VERSION>.<commits in HEAD>`
 
 ### Need to Install
 - ❌ WiX Toolset 3.11 or later (for Installer project)

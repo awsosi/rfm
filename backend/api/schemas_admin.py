@@ -146,6 +146,8 @@ class SystemHealthResponse(BaseModel):
     """System health check with detailed component status."""
     overall_status: str  # "healthy", "degraded", "critical"
     timestamp: datetime
+    # RFM version of this server (api.version)
+    version: str = ""
 
     components: Dict[str, Dict[str, Any]] = {
         "database": {"status": "unknown", "message": ""},

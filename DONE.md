@@ -6,6 +6,25 @@
 
 ---
 
+## 2026-10-01 - One automatic version for server, worker, Launcher, Tray and MSI
+
+**Why.** Each part had its own hand-kept version (server and worker 1.0.0, Tray and MSI
+1.2.0.0) that nobody raised, so a rebuilt worker looked like the old one and nothing
+told which build ran where.
+
+**What.** `VERSION` holds major.minor (1.3); the last part is the commit count of HEAD, so
+every commit raises it and one commit gives one version everywhere.
+- `Version.targets` (imported by the worker, Launcher, Tray and installer projects)
+  generates the assembly versions and the MSI ProductVersion. Building needs git.
+- `backend/Dockerfile` computes it in a `version` stage (`.git` mounted, BuildKit) into
+  `/app/RFM_VERSION`; `api/version.py` serves it in `/health` and the Admin Panel's System
+  Health card. Workers report theirs at registration (was a fixed "1.0.0"), shown under the
+  hostname in Admin Panel -> Workers. RFM Tray sends it as `RFMTray/<version>`.
+- `promote-dev-to-prod.sh` fast-forwards vf (refuses a merge commit, which would change
+  the count) and checks that the API reports the expected version.
+
+---
+
 ## 2026-10-01 - File names with the _w and _m photo markers
 
 Product photos are now marked `_w` / `_m`, also on AI images: `2_w.jpg`, `3_m.jpg`,

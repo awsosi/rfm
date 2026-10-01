@@ -214,6 +214,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 **Command Queue**: Commands are queued in Redis, workers poll via WebSocket or HTTP long-polling.
 
+**Versioning**: Every component carries one RFM version, `<major.minor from VERSION>.<commits in HEAD>` (e.g. `1.3.398`). `Version.targets` stamps the worker, RFM Launcher, RFM Tray and the MSI; `backend/Dockerfile` bakes it into `/app/RFM_VERSION` for `api/version.py` (`/health`, Admin Panel). Never hard-code a version; raise `VERSION` by hand only for a new major.minor. Promotion fast-forwards vf to dev-vf, so prod runs the commit the clients were built from.
+
 **Rollback**: Undo is done by the server (`backend/api/services/operation_service.py`): PUSH/PULL and UPDATE have their own undo, other operations use `_rollback_operation` (if `ENABLE_AUTO_ROLLBACK=true`). The worker keeps no backups; a failed command just reports the error.
 
 ### Frontend Architecture

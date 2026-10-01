@@ -151,6 +151,12 @@ if git -C "$PROD_DIR" merge-base --is-ancestor origin/dev-vf vf; then
     exit 0
 fi
 
+# The RFM version counts commits (see Version.targets), so prod must build the very
+# commit dev and the Windows clients were built from: a fast-forward, never a merge.
+git -C "$PROD_DIR" merge-base --is-ancestor vf origin/dev-vf \
+    || die "vf has commits that dev-vf lacks; merge vf into dev-vf and push it, so vf can fast-forward"
+ok "vf fast-forwards to dev-vf"
+
 log "Commits that will be promoted"
 git -C "$PROD_DIR" --no-pager log --oneline vf..origin/dev-vf | sed 's/^/    /'
 
@@ -214,8 +220,8 @@ trap 'printf "\n\033[1;31mPromotion failed.\033[0m Roll back with:\n  %s\n" "$RO
 # ---------------------------------------------------------------------------
 # 3. Merge
 # ---------------------------------------------------------------------------
-log "Merging origin/dev-vf into vf"
-git -C "$PROD_DIR" merge --no-edit origin/dev-vf
+log "Fast-forwarding vf to origin/dev-vf"
+git -C "$PROD_DIR" merge --ff-only origin/dev-vf
 ok "merged -> $(git -C "$PROD_DIR" rev-parse --short HEAD)"
 
 # ---------------------------------------------------------------------------
@@ -260,6 +266,11 @@ ok "alembic version: $version (head)"
 enum_has_update="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc \
     "select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='operationtype' and e.enumlabel='UPDATE';" | tr -d '[:space:]')"
 [ "$enum_has_update" = "1" ] || die "operationtype enum is missing the UPDATE value"
+
+rfm_version="$(docker exec "$PROD_API_CONTAINER" cat /app/RFM_VERSION | tr -d '[:space:]')"
+expected_version="$(tr -d '[:space:]' < "$PROD_DIR/VERSION").$(git -C "$PROD_DIR" rev-list --count HEAD)"
+[ "$rfm_version" = "$expected_version" ] || die "api reports RFM $rfm_version, the code is $expected_version"
+ok "RFM version: $rfm_version"
 ok "operationtype enum includes UPDATE"
 
 enum_has_offline="$(docker exec "$PROD_DB_CONTAINER" psql -U filemanager -d filemanager -tAc \
@@ -301,6 +312,7 @@ cat <<EOF
 $(printf '\033[1;32mPromotion complete.\033[0m')
 
   vf is now at : $(git -C "$PROD_DIR" rev-parse --short HEAD)
+  RFM version  : $rfm_version (build the worker and RFM-Setup.msi from this commit to match)
   backup       : $BACKUP_DIR
   rollback     : $ROLLBACK_CMD
 

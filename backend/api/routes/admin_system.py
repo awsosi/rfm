@@ -41,6 +41,7 @@ from api.schemas_admin import (
     LogConfigResponse,
 )
 from api.services.worker_service import WorkerService, get_worker_by_id, unwrap_worker_data
+from api.version import RFM_VERSION
 from database import get_db
 from models import User, Worker, Operation, AuditLog, WorkerStatus, OperationStatus
 from models_admin import SambaPath, SystemMetrics
@@ -746,6 +747,7 @@ async def get_system_health(
     return SystemHealthResponse(
         overall_status=overall_status,
         timestamp=datetime.now(timezone.utc),
+        version=RFM_VERSION,
         components=components,
         alerts=alerts,
     )

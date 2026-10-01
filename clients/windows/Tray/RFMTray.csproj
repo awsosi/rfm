@@ -116,4 +116,5 @@
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.3.1" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\..\..\Version.targets" />
 </Project>

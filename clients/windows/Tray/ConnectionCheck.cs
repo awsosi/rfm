@@ -105,7 +105,7 @@ namespace RFMTray
         public static string Report(IEnumerable<CheckStep> steps)
         {
             var text = new StringBuilder();
-            text.AppendLine($"RFM Tray {typeof(ConnectionCheck).Assembly.GetName().Version}, {Environment.UserDomainName}\\{Environment.UserName} @ {Environment.MachineName}, {DateTime.Now:yyyy-MM-dd HH:mm}");
+            text.AppendLine($"RFM Tray {typeof(ConnectionCheck).Assembly.GetName().Version.ToString(3)}, {Environment.UserDomainName}\\{Environment.UserName} @ {Environment.MachineName}, {DateTime.Now:yyyy-MM-dd HH:mm}");
             foreach (var step in steps)
                 text.AppendLine($"[{step.Status}] {step.Title}: {step.Detail}");
             return text.ToString();

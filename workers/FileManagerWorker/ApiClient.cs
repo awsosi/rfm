@@ -127,7 +127,7 @@ namespace FileManagerWorker
                     path_a_prefix = _config?.PathAPrefix ?? @"C:\PathA",
                     path_b_prefix = _config?.PathBPrefix ?? @"C:\PathB",
                     path_c_prefix = _config?.PathCPrefix ?? @"C:\PathC",
-                    version = "1.0.0"
+                    version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3)
                 };
 
                 var json = JsonConvert.SerializeObject(registrationData);
