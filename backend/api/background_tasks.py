@@ -7,6 +7,7 @@ Includes:
 - UPDATE upload garbage collection
 - PIM event delivery with retries
 - Image host synchronization checks
+- Nightly classification reports
 - Metrics collection
 """
 
@@ -55,6 +56,7 @@ class BackgroundTaskManager:
         self._tasks.append(asyncio.create_task(self._upload_cleanup_loop()))
         self._tasks.append(asyncio.create_task(self._pim_delivery_loop()))
         self._tasks.append(asyncio.create_task(self._remote_sync_loop()))
+        self._tasks.append(asyncio.create_task(self._reports_loop()))
 
         logger.info("Background tasks started")
 
@@ -221,6 +223,25 @@ class BackgroundTaskManager:
                 break
             except Exception as exc:
                 logger.error(f"Error in remote sync loop: {exc}")
+
+
+    async def _reports_loop(self):
+        """
+        Nightly classification reports (see report_service). Every API process
+        ticks once a minute; a report_runs row decides which one writes a report.
+        """
+        from api.services.report_service import run_scheduled_reports
+
+        while self._running:
+            try:
+                await asyncio.sleep(60)
+                if not self._running:
+                    break
+                await run_scheduled_reports()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Error in reports loop: {exc}")
 
 
 # Global background task manager instance

@@ -159,7 +159,7 @@ class AdminSystem {
                     <div class="stat-value">${stats.active_users}</div>
                     <div class="stat-label">Active Sessions</div>
                     <div class="stat-details">
-                        Total: ${stats.total_users} (${stats.admin_users} admins, ${stats.viewer_users} users)
+                        Total: ${stats.total_users} (${stats.admin_users} admins, ${stats.manager_users ?? 0} managers, ${stats.viewer_users} users)
                     </div>
                 </div>
 

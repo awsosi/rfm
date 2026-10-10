@@ -53,6 +53,7 @@ from api.routes.worker import router as worker_router
 from api.routes.path import router as path_router
 from api.routes.uploads import router as uploads_router
 from api.routes.client_actions import router as client_actions_router
+from api.routes.manager import router as manager_router
 
 
 async def _sync_env_config_to_db(settings: Settings) -> None:
@@ -211,6 +212,10 @@ async def _sync_env_config_to_db(settings: Settings) -> None:
         "push_validation_name_suffixes": (
             ("PUSH_VALIDATION_NAME_SUFFIXES",),
             settings.push_validation_name_suffixes or "",
+        ),
+        "push_validation_reject_double_dots": (
+            ("ENABLE_PUSH_VALIDATION_REJECT_DOUBLE_DOTS", "PUSH_VALIDATION_REJECT_DOUBLE_DOTS"),
+            str(settings.push_validation_reject_double_dots).lower(),
         ),
         # UPDATE behaviour
         "enable_update_archive_mirror": (
@@ -397,6 +402,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Report downloads: the file name and the report's row count / warning
+    expose_headers=["Content-Disposition", "X-Report-Rows", "X-Report-Warning"],
 )
 app.add_middleware(RequestLoggingMiddleware)
 
@@ -409,6 +416,7 @@ app.include_router(worker_router)
 app.include_router(path_router)
 app.include_router(uploads_router)
 app.include_router(client_actions_router)
+app.include_router(manager_router)
 
 
 # =============================================================================
@@ -542,8 +550,8 @@ async def run_catalog_preflight(
     from api.services.content_validation_service import (
         validate_directory_content,
         count_image_files,
-        invalid_file_names,
         invalid_files_after_actions,
+        judge_file_names,
         predict_files_after_actions,
     )
 
@@ -573,6 +581,7 @@ async def run_catalog_preflight(
             None,
             "contentValidation.tooFewImages",
             "contentValidation.typeMismatch",
+            "contentValidation.doubleDotNames",
             "contentValidation.invalidFileNames",
         )
     ):
@@ -588,19 +597,16 @@ async def run_catalog_preflight(
             content_result.files, content_result.allowed_extensions, excluded=mismatched
         )
         content_result.total_files = len(content_result.files)
-        if content_result.check_file_names:
-            content_result.invalid_names = invalid_file_names(
-                content_result.files, content_result.allowed_name_suffixes
-            )
+        name_reason = judge_file_names(content_result)
         if content_result.image_count < content_result.min_required:
             content_result.valid = False
             content_result.reason = "contentValidation.tooFewImagesAfterUpdate"
         elif content_result.invalid_files:
             content_result.valid = False
             content_result.reason = "contentValidation.typeMismatch"
-        elif content_result.invalid_names:
+        elif name_reason:
             content_result.valid = False
-            content_result.reason = "contentValidation.invalidFileNames"
+            content_result.reason = name_reason
         else:
             content_result.valid = True
             content_result.reason = None

@@ -597,6 +597,9 @@ async def get_system_stats(
     admin_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.ADMIN)
     admin_users = (await db.execute(admin_users_stmt)).scalar() or 0
 
+    manager_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.MANAGER)
+    manager_users = (await db.execute(manager_users_stmt)).scalar() or 0
+
     user_users_stmt = select(sql_func.count(User.id)).where(User.role == UserRole.USER)
     regular_users = (await db.execute(user_users_stmt)).scalar() or 0
 
@@ -638,6 +641,7 @@ async def get_system_stats(
         workers_offline=offline_workers,
         total_users=total_users,
         admin_users=admin_users,
+        manager_users=manager_users,
         operator_users=0,  # Deprecated, kept for compatibility
         viewer_users=regular_users,  # Regular users (renamed from viewer)
         avg_operation_duration_seconds=float(avg_duration) if avg_duration else None,

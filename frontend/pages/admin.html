@@ -18,6 +18,7 @@
                 <span class="user-name" id="user-name"></span>
             </span>
             <button class="btn btn-secondary" id="explorer-btn">File Explorer</button>
+            <button class="btn btn-secondary" id="manager-btn">Manager View</button>
             <button class="btn btn-secondary" id="logout-btn">Logout</button>
         </div>
     </header>
@@ -540,6 +541,14 @@
                                 </div>
 
                                 <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-push-validation-reject-double-dots" name="push_validation_reject_double_dots">
+                                        <label class="custom-control-label" for="config-push-validation-reject-double-dots">Refuse Two Dots in a Row</label>
+                                    </div>
+                                    <small><strong>On by default.</strong> A file named with two dots in a row (e.g. <code>2..jpg</code>) blocks the operation, also while Require PIM File Names is off.</small>
+                                </div>
+
+                                <div class="form-group">
                                     <label for="config-push-validation-name-suffixes">Allowed File Name Suffixes</label>
                                     <input type="text" id="config-push-validation-name-suffixes" name="push_validation_name_suffixes" class="form-control" placeholder="_ai,_w,_m,_w_ai,_m_ai">
                                     <small>Comma-separated suffixes accepted between the number and the extension, so <code>_ai</code> lets 1_ai.png through next to 1.png. Each entry is one whole suffix: <code>_w_ai</code> must be listed for 2_w_ai.jpg even when <code>_w</code> and <code>_ai</code> are. Case-insensitive (_ai, _AI, _Ai, _aI all match). Letters, digits, <code>_</code> and <code>-</code> only; leave empty to accept numbers alone.</small>
@@ -630,6 +639,144 @@
                                 <div class="form-group">
                                     <p id="sync-queue-status" class="integration-queue-status">&hellip;</p>
                                     <button type="button" class="btn btn-danger btn-sm" id="sync-stop-all-btn">Stop all active checks</button>
+                                </div>
+                            </div>
+
+                            <!-- Classification reports -->
+                            <div class="config-section" id="report-settings">
+                                <h3>Classification Reports</h3>
+                                <p class="text-muted">Monthly XLSX of the catalogs each person pushed, day by day: a merged row with the date starts each day, and a product pushed after the date in the Late Field gets the late colour. Managers download reports any time in the Manager View. The nightly job writes each person's report of the current month to the Windows share (e.g. <code>Raport_klasyfikacji_Natalia_2026_10.xlsx</code>) and on the 1st completes the month before. Files are written over SMB by the API server.</p>
+
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-reports-auto-enabled" name="reports_auto_enabled">
+                                        <label class="custom-control-label" for="config-reports-auto-enabled">Write Reports to the Share Every Night</label>
+                                    </div>
+                                    <small><strong>Off by default.</strong> A month RFM never wrote is left alone, so turning this on mid-month writes the current month only.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-reports-run-time">Run Time</label>
+                                    <input type="time" id="config-reports-run-time" name="reports_run_time" class="form-control" value="02:00">
+                                    <small>Local time of the nightly run; it covers everything up to the end of the previous day</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-reports-timezone">Time Zone</label>
+                                    <input type="text" id="config-reports-timezone" name="reports_timezone" class="form-control" placeholder="Europe/Warsaw">
+                                    <small>IANA name; decides where days and months start, and the run time</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="config-reports-retry-minutes">Retry a Failed Report After (minutes)</label>
+                                    <input type="number" id="config-reports-retry-minutes" name="reports_retry_minutes" class="form-control" min="1" max="1440" value="60">
+                                    <small>E.g. when the file is open in Excel on someone's computer; retried the same day</small>
+                                </div>
+
+                                <h4 class="mt-4">People</h4>
+                                <p class="text-muted small">One report per person, listing the catalogs that RFM user pushed. The name goes into the file name (<code>{name}</code>).</p>
+                                <div class="report-editor" id="reports-recipients-editor"></div>
+                                <textarea id="config-reports-recipients" name="reports_recipients" hidden></textarea>
+                                <datalist id="reports-usernames"></datalist>
+
+                                <h4 class="mt-4">Windows Share</h4>
+                                <div class="form-group">
+                                    <label for="config-reports-output-dir">Folder</label>
+                                    <input type="text" id="config-reports-output-dir" name="reports_output_dir" class="form-control" placeholder="\\server\share\folder\{year}\{month} {month_name}">
+                                    <small>UNC path; missing folders are created. Placeholders: <code>{year}</code> (2026), <code>{month}</code> (10), <code>{month_name}</code> (PAŹDZIERNIK), <code>{name}</code>, <code>{username}</code></small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-file-name">File Name</label>
+                                    <input type="text" id="config-reports-file-name" name="reports_file_name" class="form-control" placeholder="Raport_klasyfikacji_{name}_{year}_{month}.xlsx">
+                                    <small>Same placeholders as the folder</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-month-names">Month Names</label>
+                                    <input type="text" id="config-reports-month-names" name="reports_month_names" class="form-control">
+                                    <small>Twelve comma-separated names for <code>{month_name}</code>, January first</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-smb-username">Share Account</label>
+                                    <input type="text" id="config-reports-smb-username" name="reports_smb_username" class="form-control" placeholder="DOMAIN\user" autocomplete="off">
+                                    <small>Account with write access to the folder (NTLM). Required to write to the share.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-smb-password">Share Account Password</label>
+                                    <input type="password" id="config-reports-smb-password" name="reports_smb_password" class="form-control" autocomplete="new-password">
+                                </div>
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-reports-overwrite-foreign" name="reports_overwrite_foreign">
+                                        <label class="custom-control-label" for="config-reports-overwrite-foreign">Overwrite Files RFM Did Not Create</label>
+                                    </div>
+                                    <small><strong>Off by default:</strong> if a report file already exists and was not made by RFM (e.g. one prepared by hand), the run fails and leaves it alone. Reports RFM wrote are replaced, also after someone saved them in Excel.</small>
+                                </div>
+                                <div class="form-group">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="reports-test-share-btn">Test Share Access</button>
+                                    <small id="reports-test-share-result">Creates this month's folder for the first person and writes and removes a test file, with the values on this form (saved or not).</small>
+                                </div>
+
+                                <h4 class="mt-4">Columns</h4>
+                                <p class="text-muted small">Fields: <code>catalog_name</code>, <code>pushed_at</code> (date and time), <code>pushed_date</code>, <code>username</code>, <code>file_count</code>, <code>operation_id</code>, or <code>product.&lt;key&gt;</code> from the product details service (e.g. <code>product.designer</code>).</p>
+                                <div class="report-editor" id="reports-columns-editor"></div>
+                                <textarea id="config-reports-columns" name="reports_columns" hidden></textarea>
+                                <datalist id="reports-fields">
+                                    <option value="catalog_name"></option>
+                                    <option value="pushed_at"></option>
+                                    <option value="pushed_date"></option>
+                                    <option value="username"></option>
+                                    <option value="file_count"></option>
+                                    <option value="operation_id"></option>
+                                    <option value="product.designer"></option>
+                                    <option value="product.gender"></option>
+                                    <option value="product.release_date"></option>
+                                    <option value="product.last_send_date"></option>
+                                </datalist>
+
+                                <h4 class="mt-4">Layout</h4>
+                                <div class="form-group">
+                                    <label for="config-reports-sheet-name">Worksheet Name</label>
+                                    <input type="text" id="config-reports-sheet-name" name="reports_sheet_name" class="form-control" maxlength="31" placeholder="Raport">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-date-format">Date Format</label>
+                                    <input type="text" id="config-reports-date-format" name="reports_date_format" class="form-control" placeholder="DD.MM.YYYY">
+                                    <small>Excel number format of the dates (day rows and date columns)</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-day-row-color">Day Row Colour</label>
+                                    <input type="color" id="config-reports-day-row-color" name="reports_day_row_color" class="form-control color-input" value="#afd095">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-late-row-color">Late Product Colour</label>
+                                    <input type="color" id="config-reports-late-row-color" name="reports_late_row_color" class="form-control color-input" value="#ffa6a6">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-late-field">Late Field</label>
+                                    <input type="text" id="config-reports-late-field" name="reports_late_field" class="form-control" list="reports-fields" placeholder="product.release_date">
+                                    <small>A product pushed on a later day than this date is coloured; leave empty to colour nothing</small>
+                                </div>
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="config-reports-exclude-pulled" name="reports_exclude_pulled">
+                                        <label class="custom-control-label" for="config-reports-exclude-pulled">Leave Out Pulled Catalogs</label>
+                                    </div>
+                                    <small>A catalog pulled back after its PUSH is not listed</small>
+                                </div>
+
+                                <h4 class="mt-4">Product Data (PolkaSQL)</h4>
+                                <p class="text-muted small">The <code>RFM_ProductDetails</code> web service (docs/polkasql/RFM_ProductDetails.sql) answers the <code>product.*</code> fields of each catalog. Without it those columns stay empty and nothing is coloured late.</p>
+                                <div class="form-group">
+                                    <label for="config-reports-product-url">Product Details URL</label>
+                                    <input type="text" id="config-reports-product-url" name="reports_product_url" class="form-control" placeholder="http://polkaserver.local/RFM_ProductDetails">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-product-api-key">Product Details API Key</label>
+                                    <input type="password" id="config-reports-product-api-key" name="reports_product_api_key" class="form-control" autocomplete="new-password">
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-reports-product-timeout">Request Timeout (seconds)</label>
+                                    <input type="number" id="config-reports-product-timeout" name="reports_product_timeout" class="form-control" min="1" max="120" value="20">
                                 </div>
                             </div>
 
@@ -905,8 +1052,10 @@
                         <label for="user-role">Role</label>
                         <select id="user-role" name="role" class="form-control" required>
                             <option value="USER">User</option>
+                            <option value="MANAGER">Manager</option>
                             <option value="ADMIN">Admin</option>
                         </select>
+                        <small>Manager: a user who also opens the Manager View (operation history with filters, classification reports). Only admins assign roles.</small>
                     </div>
                     <div class="form-group">
                         <label class="checkbox-label">

@@ -250,6 +250,14 @@ class Settings(BaseSettings):
     # "2_w.jpg", "2_w_ai.jpg". Comma-separated, matched case-insensitively; empty
     # means numbers only.
     push_validation_name_suffixes: str = "_ai,_w,_m,_w_ai,_m_ai"
+    # Refuse "2..jpg" and other names with two dots in a row, also while the
+    # file name rule above is off
+    push_validation_reject_double_dots: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            'enable_push_validation_reject_double_dots', 'push_validation_reject_double_dots'
+        ),
+    )
 
     # Logging
     log_level: str = "INFO"

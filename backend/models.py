@@ -16,6 +16,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -26,7 +27,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 
 class Base(DeclarativeBase):
@@ -35,8 +36,9 @@ class Base(DeclarativeBase):
 
 
 class UserRole(str, PyEnum):
-    """User role enumeration for RBAC."""
+    """User role enumeration for RBAC: USER < MANAGER < ADMIN."""
     ADMIN = "ADMIN"
+    MANAGER = "MANAGER"  # USER plus the manager view (history, reports); set by admins only
     USER = "USER"
 
 
@@ -772,3 +774,53 @@ class DeviceAuthorizationRequest(Base):
     def is_expired(self) -> bool:
         """Check if authorization request has expired."""
         return datetime.now(timezone.utc) > self.expires_at
+
+
+class ReportRunStatus:
+    """``report_runs.status`` values (plain strings, like ``PimEventStatus``)."""
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
+class ReportRun(Base):
+    """
+    One classification report written to the Windows share.
+
+    The nightly job (``trigger`` SCHEDULED) writes one row per recipient and
+    month; a manager's "write to share now" writes MANUAL rows. A scheduled
+    row is unique per (``run_date``, ``recipient``, ``report_month``), which is
+    how only one of the API processes runs it; a FAILED one is claimed again
+    after ``reports_retry_minutes``.
+    """
+    __tablename__ = "report_runs"
+
+    id = Column(Integer, primary_key=True)
+    trigger = Column(String(16), nullable=False)  # SCHEDULED or MANUAL
+    # Local date of the scheduled run (NULL for MANUAL)
+    run_date = Column(Date, nullable=True)
+    report_month = Column(Date, nullable=False)  # first day of the reported month
+    recipient = Column(Text, nullable=False)  # RFM username whose pushes are reported
+    label = Column(Text, nullable=False)  # name used in the file name, e.g. "Natalia"
+    status = Column(String(16), nullable=False, default=ReportRunStatus.RUNNING)
+    attempts = Column(Integer, nullable=False, default=1)
+    file_path = Column(Text, nullable=True)
+    row_count = Column(Integer, nullable=True)
+    # The error of a FAILED run, or a warning of a SUCCESS one (e.g. no product data)
+    message = Column(Text, nullable=True)
+    requested_by = Column(Text, nullable=True)  # username for MANUAL runs
+    started_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_report_runs_scheduled",
+            "run_date", "recipient", "report_month",
+            unique=True,
+            postgresql_where=text("trigger = 'SCHEDULED'"),
+        ),
+        Index("ix_report_runs_started_at", "started_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ReportRun(id={self.id}, recipient={self.recipient!r}, month={self.report_month}, status={self.status})>"

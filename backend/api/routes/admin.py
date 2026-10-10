@@ -758,3 +758,37 @@ async def _report_stopped(stopped: list, action: str, target: str, current_user:
         # One refresh for every open WebUI, not one per operation
         await notify_integration_update(None)
     return IntegrationStopResponse(stopped=len(stopped), operation_ids=stopped)
+
+
+# =============================================================================
+# Classification reports
+# =============================================================================
+
+
+@router.post("/reports/test-share", response_model=MessageResponse)
+async def test_report_share(
+    body: ConfigBulkUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Check the report share with the settings on the form (``configs``, not
+    saved yet) over the saved ones: create this month's folder and write and
+    remove a test file.
+    """
+    import asyncio
+
+    from api.services import report_service
+
+    stored = await db.execute(select(Config.key, Config.value).where(Config.key.in_(report_service.DEFAULTS)))
+    values = {row.key: row.value for row in stored}
+    values.update({k: v for k, v in body.configs.items() if k in report_service.DEFAULTS})
+    try:
+        config = report_service.parse_report_config(values)
+        folder = await asyncio.to_thread(report_service.check_share, config)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+    return MessageResponse(message="The share is writable", detail=folder)

@@ -205,10 +205,11 @@ def require_role(required_role: UserRole):
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
         """Check if user has required role."""
-        # Role hierarchy: admin > user
+        # Role hierarchy: admin > manager > user
         role_levels = {
             UserRole.USER: 0,
-            UserRole.ADMIN: 1,
+            UserRole.MANAGER: 1,
+            UserRole.ADMIN: 2,
         }
 
         user_level = role_levels.get(current_user.role, 0)
@@ -226,6 +227,7 @@ def require_role(required_role: UserRole):
 
 # Convenience dependencies for common roles
 require_admin = require_role(UserRole.ADMIN)
+require_manager = require_role(UserRole.MANAGER)
 require_user = require_role(UserRole.USER)
 
 

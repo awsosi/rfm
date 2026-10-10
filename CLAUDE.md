@@ -39,6 +39,7 @@ Multi-tier distributed system with three main components:
 - **Windows Client ↔ Backend**: OAuth device flow with Windows Credential Manager storage
 - **RFMLauncher → open WebUI tab**: `/api/client-actions` relays context-menu actions to the user's tabs via Redis pub/sub (`api/services/user_events.py`); `ws_manager` alone only reaches sockets of its own uvicorn process (`API_WORKERS`=4)
 - **RFM Tray** (`clients/windows/Tray/`): pushes finished folders from watched hand-off folders via the normal PUSH API (`refuse_existing`)
+- **Manager view** (`frontend/pages/manager.html`, `/api/manager/*`): roles USER < MANAGER < ADMIN (`require_manager`); history filters/export and classification reports (`api/services/report_service.py`, `report_runs`, `reports_*` config). The nightly report job runs in every API process and claims work through a unique `report_runs` row; files go to Windows shares over SMB (`smbprotocol`)
 
 ---
 
@@ -165,7 +166,7 @@ docker-compose exec postgres psql -U filemanager
 **Single Migration Strategy**: During pre-production, all schema changes are consolidated into `backend/alembic/versions/001_initial_schema.py`. Do not create new migrations - merge changes into the initial schema.
 
 **Key Tables**:
-- `users` - Authentication with Argon2 password hashing
+- `users` - Authentication with Argon2 password hashing; `role` USER, MANAGER or ADMIN
 - `sessions` - JWT tokens (HS256), lifetime from the session policy config
 - `workers` - Windows service registration, public keys, heartbeat tracking
 - `operations` - File operation audit trail with rollback tracking

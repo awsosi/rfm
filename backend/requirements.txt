@@ -147,6 +147,18 @@ uuid==1.30
 # File handling
 aiofiles==23.2.1
 
+# IANA time zones for zoneinfo where the OS has none (classification reports)
+tzdata==2025.2
+
+# ------------------------------------------------------------------------------
+# Classification reports
+# ------------------------------------------------------------------------------
+# XLSX workbooks
+openpyxl==3.1.5
+
+# SMB client writing reports to Windows shares (pure Python, NTLM via pyspnego)
+smbprotocol==1.14.0
+
 # ------------------------------------------------------------------------------
 # CORS & Middleware
 # ------------------------------------------------------------------------------

@@ -42,7 +42,9 @@ namespace RFMTray
                 lines.Add(L.T("validation.contentTitle"));
 
                 const string nameRule = "contentValidation.invalidFileNames";
+                const string dotRule = "contentValidation.doubleDotNames";
                 var badNames = Strings(content["invalid_names"]);
+                var doubleDots = Strings(content["double_dot_names"]);
                 string forms = AcceptedNameForms(content);
                 string reason = (string)content["reason"];
                 int images = (int?)content["image_count"] ?? 0;
@@ -50,12 +52,14 @@ namespace RFMTray
 
                 if (!string.IsNullOrEmpty(reason))
                 {
-                    string names = reason == nameRule
-                        ? string.Join(", ", badNames)
+                    string names = reason == nameRule ? string.Join(", ", badNames)
+                        : reason == dotRule ? string.Join(", ", doubleDots)
                         : string.Join(", ", (content["invalid_files"] as JArray ?? new JArray()).Select(f => (string)f["name"]));
                     lines.Add(L.T("validation." + reason,
                         ("images", images), ("required", required), ("names", names), ("forms", forms)));
                 }
+                if (reason != dotRule && doubleDots.Count > 0)
+                    lines.Add(L.T("validation." + dotRule, ("names", string.Join(", ", doubleDots))));
                 if (reason != nameRule && badNames.Count > 0)
                     lines.Add(L.T("validation." + nameRule, ("names", string.Join(", ", badNames)), ("forms", forms)));
 

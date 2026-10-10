@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="manager.pageTitle">Manager view - File Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body class="manager-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-left">
+            <span class="header-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/>
+                </svg>
+            </span>
+            <h1 data-i18n="manager.title">Manager view</h1>
+        </div>
+        <div class="header-right">
+            <span class="user-info" id="user-info">
+                <span class="user-avatar" id="user-avatar" aria-hidden="true"></span>
+                <span class="user-meta">
+                    <span class="user-name" id="user-name"></span>
+                    <span class="user-role" id="user-role"></span>
+                </span>
+            </span>
+            <span class="header-divider" aria-hidden="true"></span>
+            <button class="btn btn-secondary" id="explorer-btn" data-i18n="manager.explorer">File Explorer</button>
+            <button class="btn btn-secondary" id="admin-btn" hidden data-i18n="explorer.adminPanel">Admin Panel</button>
+            <button class="btn btn-ghost" id="logout-btn" data-i18n="explorer.logout">Logout</button>
+        </div>
+    </header>
+
+    <main class="main-content manager-content">
+        <div class="tabs" role="tablist">
+            <button class="tab-btn" role="tab" data-tab="history" data-i18n="manager.tabs.history">Operation history</button>
+            <button class="tab-btn" role="tab" data-tab="reports" data-i18n="manager.tabs.reports">Reports</button>
+        </div>
+
+        <div class="tab-content">
+            <!-- ============================== History ============================== -->
+            <section class="tab-pane" id="tab-history" role="tabpanel">
+                <div class="panel manager-filters">
+                    <div class="filter-grid">
+                        <label class="filter-field filter-search">
+                            <span class="filter-label" data-i18n="manager.filters.search">Search</span>
+                            <input type="search" id="filter-q" class="form-control"
+                                   data-i18n-placeholder="manager.filters.searchPlaceholder"
+                                   placeholder="Catalog, path, user or error…">
+                        </label>
+                        <label class="filter-field">
+                            <span class="filter-label" data-i18n="manager.filters.period">Period</span>
+                            <select id="filter-period" class="form-control">
+                                <option value="today" data-i18n="manager.periods.today">Today</option>
+                                <option value="yesterday" data-i18n="manager.periods.yesterday">Yesterday</option>
+                                <option value="last7" data-i18n="manager.periods.last7">Last 7 days</option>
+                                <option value="last30" data-i18n="manager.periods.last30">Last 30 days</option>
+                                <option value="thisMonth" data-i18n="manager.periods.thisMonth">This month</option>
+                                <option value="lastMonth" data-i18n="manager.periods.lastMonth">Last month</option>
+                                <option value="all" data-i18n="manager.periods.all">All time</option>
+                                <option value="custom" data-i18n="manager.periods.custom">Custom range</option>
+                            </select>
+                        </label>
+                        <label class="filter-field">
+                            <span class="filter-label" data-i18n="manager.filters.from">From</span>
+                            <input type="date" id="filter-from" class="form-control">
+                        </label>
+                        <label class="filter-field">
+                            <span class="filter-label" data-i18n="manager.filters.to">To</span>
+                            <input type="date" id="filter-to" class="form-control">
+                        </label>
+                        <div class="filter-field">
+                            <span class="filter-label" id="filter-users-label" data-i18n="manager.filters.users">Users</span>
+                            <div class="multi-select" id="filter-users" aria-labelledby="filter-users-label"></div>
+                        </div>
+                        <label class="filter-field">
+                            <span class="filter-label" data-i18n="manager.filters.pulled">Pulled back</span>
+                            <select id="filter-pulled" class="form-control">
+                                <option value="" data-i18n="manager.filters.pulledAny">Any</option>
+                                <option value="false" data-i18n="manager.filters.pulledNo">Still published</option>
+                                <option value="true" data-i18n="manager.filters.pulledYes">Pulled back</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-chips-row">
+                        <div class="filter-chips" role="group" aria-labelledby="filter-types-label">
+                            <span class="filter-label" id="filter-types-label" data-i18n="manager.filters.types">Type</span>
+                            <div id="filter-types" class="chip-group"></div>
+                        </div>
+                        <div class="filter-chips" role="group" aria-labelledby="filter-statuses-label">
+                            <span class="filter-label" id="filter-statuses-label" data-i18n="manager.filters.statuses">Status</span>
+                            <div id="filter-statuses" class="chip-group"></div>
+                        </div>
+                        <div class="filter-actions">
+                            <button type="button" class="btn btn-ghost btn-sm" id="filter-reset" data-i18n="manager.filters.reset">Reset filters</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="export-btn" data-i18n="manager.filters.export">Export to Excel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="summary-cards" id="summary-cards" aria-live="polite"></div>
+
+                <details class="panel by-user-panel" id="by-user-panel">
+                    <summary>
+                        <span data-i18n="manager.summary.byUser">By user</span>
+                        <span class="text-muted by-user-hint" data-i18n="manager.summary.byUserHint">Click a user to show only their operations.</span>
+                    </summary>
+                    <div class="table-scroll">
+                        <table class="data-table compact-table" id="by-user-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="manager.columns.user">User</th>
+                                    <th class="num" data-i18n="manager.columns.total">Total</th>
+                                    <th class="num" data-i18n="manager.columns.pushes">Pushes</th>
+                                    <th class="num" data-i18n="manager.columns.pulls">Pulls</th>
+                                    <th class="num" data-i18n="manager.columns.updates">Updates</th>
+                                    <th class="num" data-i18n="manager.columns.failed">Failed</th>
+                                    <th class="num" data-i18n="manager.columns.filesPushed">Files pushed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="by-user-body"></tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <div class="panel">
+                    <div class="table-scroll">
+                        <table class="data-table history-table" id="history-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort-by="id"><span data-i18n="manager.columns.id">ID</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="type"><span data-i18n="manager.columns.type">Type</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="status"><span data-i18n="manager.columns.status">Status</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="catalog"><span data-i18n="manager.columns.catalog">Catalog</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="user"><span data-i18n="manager.columns.user">User</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="created_at"><span data-i18n="manager.columns.created">Created</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable" data-sort-by="completed_at"><span data-i18n="manager.columns.completed">Completed</span> <span class="sort-arrow"></span></th>
+                                    <th class="sortable num" data-sort-by="file_count"><span data-i18n="manager.columns.files">Files</span> <span class="sort-arrow"></span></th>
+                                    <th data-i18n="manager.columns.pim">PIM</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="loading-indicator hidden" id="history-loading" data-i18n="manager.table.loading">Loading operations…</div>
+                    <div class="no-operations hidden" id="history-empty" data-i18n="manager.summary.noData">No operations match these filters.</div>
+                    <div class="pager">
+                        <span class="text-muted pager-hint" data-i18n="manager.table.detailsHint">Click a row to see the details</span>
+                        <label class="pager-size">
+                            <span data-i18n="manager.table.pageSize">Rows per page</span>
+                            <select id="page-size" class="filter-select">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </label>
+                        <span id="page-range" class="pager-range"></span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="page-prev" data-i18n="manager.table.previous">Previous</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="page-next" data-i18n="manager.table.next">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================== Reports ============================== -->
+            <section class="tab-pane" id="tab-reports" role="tabpanel">
+                <div class="report-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2 data-i18n="manager.reports.generator.title">Classification report</h2>
+                        </div>
+                        <div class="panel-body">
+                            <p class="text-muted panel-help" data-i18n="manager.reports.generator.help"></p>
+                            <div class="form-group">
+                                <span class="filter-label" id="report-users-label" data-i18n="manager.reports.generator.users">People</span>
+                                <div class="multi-select" id="report-users" aria-labelledby="report-users-label"></div>
+                            </div>
+                            <div class="form-group">
+                                <span class="filter-label" data-i18n="manager.reports.generator.period">Period</span>
+                                <div class="segmented" role="radiogroup">
+                                    <label><input type="radio" name="report-mode" value="month" checked>
+                                        <span data-i18n="manager.reports.generator.month">Month</span></label>
+                                    <label><input type="radio" name="report-mode" value="range">
+                                        <span data-i18n="manager.reports.generator.customRange">Custom range</span></label>
+                                </div>
+                            </div>
+                            <div class="form-row" id="report-month-row">
+                                <input type="month" id="report-month" class="form-control"
+                                       data-i18n-aria-label="manager.reports.generator.month">
+                            </div>
+                            <div class="form-row hidden" id="report-range-row">
+                                <label class="filter-field">
+                                    <span class="filter-label" data-i18n="manager.filters.from">From</span>
+                                    <input type="date" id="report-from" class="form-control">
+                                </label>
+                                <label class="filter-field">
+                                    <span class="filter-label" data-i18n="manager.filters.to">To</span>
+                                    <input type="date" id="report-to" class="form-control">
+                                </label>
+                            </div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="report-user-column">
+                                <span data-i18n="manager.reports.generator.includeUser">Add a User column</span>
+                            </label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary" id="report-download" data-i18n="manager.reports.generator.download">Download report</button>
+                            </div>
+                            <p class="report-feedback" id="report-feedback" role="status"></p>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2 data-i18n="manager.reports.auto.title">Automatic monthly reports</h2>
+                            <span class="badge" id="auto-status"></span>
+                        </div>
+                        <div class="panel-body" id="auto-body">
+                            <p class="text-muted panel-help" id="auto-help"></p>
+                            <dl class="operation-facts" id="auto-facts"></dl>
+                            <a class="btn btn-secondary btn-sm" id="auto-admin-link" hidden
+                               href="admin.html#configuration/report-settings" data-i18n="manager.reports.auto.openAdmin">Open report settings</a>
+
+                            <h3 class="subheading" data-i18n="manager.reports.auto.writeNow">Write to the share now</h3>
+                            <div class="form-row">
+                                <label class="filter-field">
+                                    <span class="filter-label" data-i18n="manager.reports.auto.writeMonth">Month</span>
+                                    <input type="month" id="write-month" class="form-control">
+                                </label>
+                            </div>
+                            <div class="chip-group" id="write-recipients"></div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="write-btn" data-i18n="manager.reports.auto.writeButton">Write reports</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel report-runs">
+                    <div class="panel-header">
+                        <h2 data-i18n="manager.reports.runs.title">Report history</h2>
+                        <button type="button" class="btn btn-secondary btn-sm" id="runs-refresh" data-i18n="manager.reports.runs.refresh">Refresh</button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table compact-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="manager.reports.runs.started">Started</th>
+                                    <th data-i18n="manager.reports.runs.month">Month</th>
+                                    <th data-i18n="manager.reports.runs.person">Person</th>
+                                    <th data-i18n="manager.reports.runs.trigger">Run</th>
+                                    <th data-i18n="manager.reports.runs.status">Status</th>
+                                    <th class="num" data-i18n="manager.reports.runs.rows">Catalogs</th>
+                                    <th data-i18n="manager.reports.runs.file">File</th>
+                                    <th data-i18n="manager.reports.runs.message">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="runs-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="no-operations hidden" id="runs-empty" data-i18n="manager.reports.runs.empty">No reports have been written yet.</div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Operation details (operation-details.js) -->
+    <div class="modal hidden" id="operation-details-modal" role="dialog" aria-modal="true"
+         aria-labelledby="operation-details-title">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="operation-details-title" data-i18n="details.title">Operation details</h3>
+                <button class="modal-close" id="operation-details-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="operation-details-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="operation-details-ok" data-i18n="modal.close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for confirmations. Last, so it stacks above the other dialogs. -->
+    <div class="modal hidden" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title" data-i18n="modal.confirmAction">Confirm Action</h3>
+                <button class="modal-close" id="modal-close"
+                        data-i18n-aria-label="modal.close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <p id="modal-message"></p>
+                <div id="modal-input-container" class="hidden">
+                    <input type="text" id="modal-input" class="form-control">
+                </div>
+                <label class="modal-dont-ask hidden" id="modal-dont-ask">
+                    <input type="checkbox" id="modal-dont-ask-checkbox">
+                    <span data-i18n="modal.dontAskAgain">Don't ask again</span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel" data-i18n="modal.cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm" data-i18n="modal.confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../js/manager.js"></script>
+</body>
+</html>

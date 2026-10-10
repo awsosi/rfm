@@ -337,6 +337,8 @@ services:
       # WebUI server
       WEBUI_HOST: 0.0.0.0
       WEBUI_PORT: 3000
+      # Seconds the /api proxy waits (report downloads look up every product)
+      API_PROXY_TIMEOUT: ${API_PROXY_TIMEOUT:-300}
 
       # Flask settings
       FLASK_ENV: ${FLASK_ENV:-production}

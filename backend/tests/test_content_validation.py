@@ -394,3 +394,58 @@ async def test_adobe_bridge_sort_file_does_not_block_a_catalog():
 
     assert result.valid is True
     assert result.files == ["1.jpg", "2.jpg"]
+
+
+# ---------------------------------------------------------------------------
+# Two dots in a row (push_validation_reject_double_dots)
+# ---------------------------------------------------------------------------
+
+DOUBLE_DOT_PAYLOAD = {"files": ["1.jpg", "2..jpg", "3.jpg"], "total_files": 3, "image_count": 3,
+                      "non_image_files": [], "invalid_files": []}
+
+
+@pytest.mark.asyncio
+async def test_double_dot_name_is_refused_by_default():
+    """Reported 2026-10-07: RFM accepted files named like 2..jpg."""
+    result = await _validate_with(DOUBLE_DOT_PAYLOAD)
+
+    assert result.valid is False
+    assert result.reason == "contentValidation.doubleDotNames"
+    assert result.double_dot_names == ["2..jpg"]
+    # Reported once, not again under the PIM file name rule
+    assert result.invalid_names == []
+    assert result.to_dict()["double_dot_names"] == ["2..jpg"]
+
+
+@pytest.mark.asyncio
+async def test_double_dot_rule_works_without_the_file_name_rule():
+    result = await _validate_with(DOUBLE_DOT_PAYLOAD, push_validation_file_names="false")
+
+    assert result.reason == "contentValidation.doubleDotNames"
+    assert result.double_dot_names == ["2..jpg"]
+
+
+@pytest.mark.asyncio
+async def test_double_dot_rule_can_be_switched_off():
+    off = await _validate_with(
+        DOUBLE_DOT_PAYLOAD,
+        push_validation_file_names="false",
+        push_validation_reject_double_dots="false",
+    )
+    assert off.valid is True and off.double_dot_names == []
+
+    # The PIM file name rule still refuses it on its own
+    names_only = await _validate_with(DOUBLE_DOT_PAYLOAD, push_validation_reject_double_dots="false")
+    assert names_only.reason == "contentValidation.invalidFileNames"
+    assert names_only.invalid_names == ["2..jpg"]
+
+
+@pytest.mark.asyncio
+async def test_double_dot_names_are_reported_alongside_another_failure():
+    payload = {"files": ["1..jpg", "front.jpg"], "total_files": 2, "image_count": 2,
+               "non_image_files": [], "invalid_files": []}
+    result = await _validate_with(payload, push_validation_min_files="3")
+
+    assert result.reason == "contentValidation.tooFewImages"
+    assert result.double_dot_names == ["1..jpg"]
+    assert result.invalid_names == ["front.jpg"]

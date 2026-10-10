@@ -22,6 +22,10 @@ be named ``<number>.<extension>`` (e.g. ``3.png``), optionally with one of the
 AI-generated image). Those are the forms PIM accepts; anything else makes PIM
 answer 422 after the files were already copied.
 
+While ``push_validation_reject_double_dots`` is on (default), a file whose name
+holds two dots in a row (``2..jpg``) is refused as well, even with the file
+name rule off.
+
 The listing happens once, on the worker, via the ``validate_dir`` command, and
 its result feeds both this validation and the PIM ``files`` array.
 
@@ -52,6 +56,7 @@ _CONFIG_KEYS = [
     'push_validation_verify_content',
     'push_validation_file_names',
     'push_validation_name_suffixes',
+    'push_validation_reject_double_dots',
 ]
 
 # Every setting that decides which files PUSH ignores (and destroys at source)
@@ -92,8 +97,11 @@ class ContentValidationResult:
     non_image_files: List[str] = field(default_factory=list)
     # Files whose extension disagrees with their real content
     invalid_files: List[dict] = field(default_factory=list)
-    # Files whose name PIM rejects (only filled while the rule is on)
+    # Files whose name PIM rejects (only filled while the rule is on), apart
+    # from those already in double_dot_names
     invalid_names: List[str] = field(default_factory=list)
+    # Files named with two dots in a row, e.g. "2..jpg" (while that rule is on)
+    double_dot_names: List[str] = field(default_factory=list)
     # Suffixes accepted between the number and the extension, e.g. ["_ai"];
     # the WebUI shows the accepted forms, and UPDATE re-judges names with them
     allowed_name_suffixes: List[str] = field(default_factory=list)
@@ -103,8 +111,10 @@ class ContentValidationResult:
     reason: Optional[str] = None
     error_detail: Optional[str] = None
     skipped: bool = False
-    # Whether push_validation_file_names applies; lets UPDATE re-judge names
+    # Whether push_validation_file_names / push_validation_reject_double_dots
+    # apply; lets UPDATE re-judge names
     check_file_names: bool = False
+    check_double_dots: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -116,6 +126,7 @@ class ContentValidationResult:
             "non_image_files": self.non_image_files,
             "invalid_files": self.invalid_files,
             "invalid_names": self.invalid_names,
+            "double_dot_names": self.double_dot_names,
             "allowed_name_suffixes": self.allowed_name_suffixes,
             "min_required": self.min_required,
             "allowed_extensions": self.allowed_extensions,
@@ -223,6 +234,29 @@ def invalid_file_names(
     return [name for name in files if not pattern.fullmatch(name)]
 
 
+def judge_file_names(result: ContentValidationResult) -> Optional[str]:
+    """
+    Fill ``double_dot_names`` and ``invalid_names`` from ``result.files`` and
+    return the i18n reason of the first name rule broken, or None.
+
+    A name with two dots in a row is reported once, under the double-dot rule.
+    """
+    result.double_dot_names = (
+        [name for name in result.files if '..' in name] if result.check_double_dots else []
+    )
+    result.invalid_names = []
+    if result.check_file_names:
+        result.invalid_names = [
+            name for name in invalid_file_names(result.files, result.allowed_name_suffixes)
+            if name not in result.double_dot_names
+        ]
+    if result.double_dot_names:
+        return "contentValidation.doubleDotNames"
+    if result.invalid_names:
+        return "contentValidation.invalidFileNames"
+    return None
+
+
 async def validate_directory_content(
     worker,
     path: str,
@@ -249,6 +283,7 @@ async def validate_directory_content(
     ]
     verify_content = _truthy(config.get('push_validation_verify_content'), default=True)
     check_file_names = _truthy(config.get('push_validation_file_names'), default=True)
+    check_double_dots = _truthy(config.get('push_validation_reject_double_dots'), default=True)
     name_suffixes = name_suffixes_from_config(config)
     ignore_masks = ignore_masks_from_config(config)
 
@@ -342,10 +377,10 @@ async def validate_directory_content(
         allowed_extensions=allowed_extensions,
         allowed_name_suffixes=name_suffixes,
         check_file_names=check_file_names,
+        check_double_dots=check_double_dots,
     )
-    if check_file_names:
-        # Filled even when another rule fails, so the user sees every problem
-        result.invalid_names = invalid_file_names(files, name_suffixes)
+    # Filled even when another rule fails, so the user sees every problem
+    name_reason = judge_file_names(result)
 
     if image_count < min_files:
         result.valid = False
@@ -369,13 +404,15 @@ async def validate_directory_content(
         )
         return result
 
-    if result.invalid_names:
+    if name_reason:
         result.valid = False
-        result.reason = "contentValidation.invalidFileNames"
+        result.reason = name_reason
         logger.warning(
             f"Content validation failed for {path!r}: "
+            f"{len(result.double_dot_names)} file(s) with two dots in a row "
+            f"{result.double_dot_names[:10]}, "
             f"{len(result.invalid_names)} file(s) PIM would reject "
-            f"(accepted: <number>[{'|'.join(name_suffixes) or '-'}].<extension>): "
+            f"(accepted: <number>[{'|'.join(name_suffixes) or '-'}].<extension>) "
             f"{result.invalid_names[:10]}"
         )
         return result

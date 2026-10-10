@@ -199,7 +199,8 @@
       "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
       "listFailed": "Nie udało się odczytać zawartości folderu.",
       "stagedTypeMismatch": "Nowy plik dla {names} nie jest w rzeczywistości obrazem mimo swojego rozszerzenia. Niczego nie zmieniono.",
-      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono."
+      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono.",
+      "doubleDotNames": "Nazwa pliku nie może zawierać dwóch kropek obok siebie. Zmień nazwę lub usuń: {names}."
     }
   }
 }

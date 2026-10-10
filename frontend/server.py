@@ -41,6 +41,9 @@ API_URL = os.getenv('API_URL', 'http://api:8000')
 API_URL_PUBLIC = os.getenv('API_URL_PUBLIC', '')  # Public-facing API URL for browser
 WEBUI_PORT = int(os.getenv('WEBUI_PORT', 3000))
 WEBUI_HOST = os.getenv('WEBUI_HOST', '0.0.0.0')
+# Seconds the /api proxy waits for the API; report downloads look up every
+# product in PolkaSQL and can take longer than ordinary requests
+API_PROXY_TIMEOUT = int(os.getenv('API_PROXY_TIMEOUT', '300'))
 
 logger.info(f"WebUI Server starting on {WEBUI_HOST}:{WEBUI_PORT}")
 logger.info(f"API Backend URL (internal): {API_URL}")
@@ -187,7 +190,7 @@ def api_proxy(path):
             data=request.get_data(),
             params=request.args,
             allow_redirects=False,
-            timeout=30
+            timeout=API_PROXY_TIMEOUT
         )
 
         # Return response

@@ -414,6 +414,10 @@ class ContentValidationResponse(BaseModel):
         default_factory=list,
         description='Files not named "<number>[<suffix>].<extension>", the only form PIM accepts',
     )
+    double_dot_names: list[str] = Field(
+        default_factory=list,
+        description='Files whose name holds two dots in a row, e.g. "2..jpg"',
+    )
     allowed_name_suffixes: list[str] = Field(
         default_factory=list,
         description='Suffixes accepted between the number and the extension, e.g. ["_ai"]',

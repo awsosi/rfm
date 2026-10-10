@@ -199,7 +199,8 @@
       "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
       "listFailed": "The folder contents could not be read.",
       "stagedTypeMismatch": "The new file for {names} is not really an image despite its extension. Nothing was changed.",
-      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed."
+      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed.",
+      "doubleDotNames": "File names must not contain two dots in a row. Rename or remove: {names}."
     }
   }
 }

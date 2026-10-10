@@ -17,6 +17,7 @@ let wsEventHandlers = [];
  * Make authenticated API request
  * @param {string} endpoint - API endpoint
  * @param {Object} options - Fetch options
+ * @param {boolean} [options.raw] - return the fetch Response instead of its JSON (downloads)
  * @param {boolean} [passwordConfirmed] - internal: already retried after a password confirmation
  * @returns {Promise<any>}
  */
@@ -32,8 +33,9 @@ export async function apiRequest(endpoint, options = {}, passwordConfirmed = fal
         'Content-Type': 'application/json'
     };
 
+    const { raw, ...fetchOptions } = options;
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
+        ...fetchOptions,
         headers: {
             ...defaultHeaders,
             ...options.headers
@@ -64,12 +66,40 @@ export async function apiRequest(endpoint, options = {}, passwordConfirmed = fal
         throw await errorFromResponse(response);
     }
 
+    if (raw) {
+        return response;
+    }
+
     if (response.status === 204) {
         return null;
     }
 
     // Return JSON response
     return await response.json();
+}
+
+/**
+ * POST ``body`` and save the file the API answers with (e.g. an XLSX report).
+ * @param {string} endpoint - API endpoint
+ * @param {Object} body - JSON request body
+ * @returns {Promise<{filename: string, headers: Headers}>}
+ */
+export async function apiDownload(endpoint, body) {
+    const response = await apiRequest(endpoint, { method: 'POST', body: JSON.stringify(body), raw: true });
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = /filename\*=UTF-8''([^;]+)/i.exec(disposition) || /filename="([^"]+)"/i.exec(disposition);
+    const filename = match ? decodeURIComponent(match[1]) : 'download.xlsx';
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { filename, headers: response.headers };
 }
 
 /**

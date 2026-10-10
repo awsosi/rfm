@@ -2,7 +2,49 @@
 
 > **Chronological log of completed features, fixes, and improvements**
 > **Purpose:** Track project progress and implementation history
-> **Last Updated:** 2026-09-25
+> **Last Updated:** 2026-10-10
+
+---
+
+## 2026-10-10 - Manager role and view, classification reports, double-dot rule (1.4)
+
+**Why.** Grzegorz Gutek (2026-10-07) wanted an overview of who sent what, where and when,
+and a monthly `Raport_klasyfikacji_<name>_<year>_<month>.xlsx` per person (Natalia, Lena,
+Ewa) on `\\radius1\Users\Iza.Horna\...\!RAPORTY KLASYFIKACJA\<year>\<MM MONTH>`. The team
+also reported that RFM accepted files such as `2..jpg`.
+
+**What.**
+- **MANAGER role** (`userrole` gains `MANAGER`, migration 023): USER < MANAGER < ADMIN,
+  `require_manager`. Only admins assign it (Admin Panel -> Users). Explorer and Admin Panel
+  show a Manager view button; the explorer shows the role translated.
+- **Manager view** (`pages/manager.html`, `js/manager.js`, `api/routes/manager.py`), English
+  and Polish: history filtered by words, period presets or dates, users, types, statuses and
+  "pulled back"; summary cards and a per-user table for what matched; sortable, paged table;
+  the operation details dialog (moved from app.js to the shared `js/operation-details.js`);
+  XLSX export of the filtered list with headers in the user's language.
+- **Classification reports** (`api/services/report_service.py`): header row, a merged day
+  row (`#afd095`) per day, a product pushed after its release date in `#ffa6a6`. Managers
+  download one for any people and period, or write the configured monthly reports to the
+  share now; every run is in `report_runs` and shown in the view. The nightly job (off by
+  default) runs after `reports_run_time` and rewrites the month of "yesterday", so the run on
+  the 1st completes the previous month; one API process claims each report (unique
+  `report_runs` row), a failure is retried after `reports_retry_minutes`. Files go over SMB
+  (`smbprotocol`) from the API container, written beside the target and renamed over it; a
+  file RFM did not create is never overwritten unless `reports_overwrite_foreign`.
+  Every setting is a `reports_*` config row in Admin Panel -> Configuration -> Classification
+  Reports (people, folder and file name templates, month names, share account with a Test
+  button, columns, colours, date format, late field, product service).
+- **Product data** comes from a new PolkaSQL web service, `RFM_ProductDetails`
+  (`docs/polkasql/RFM_ProductDetails.sql`); its source columns are placeholders to map before
+  deploying. Without it the product columns stay blank and the run notes it.
+- **Two dots in a row** (`push_validation_reject_double_dots`, on): `2..jpg` is refused with
+  its own message (WebUI and RFM Tray), also while the PIM file name rule is off; UPDATE
+  judges the names after its actions. The name rule alone already refused it, so the
+  reports suggest that rule is off on prod.
+- `js/theme.js` replaces the theme code duplicated in app.js and admin.js; admin.js keeps one
+  config field map instead of two copies. The WebUI's `/api` proxy timeout is
+  `API_PROXY_TIMEOUT` (default 300 s, was 30 s) for report downloads.
+- `VERSION` 1.4.
 
 ---
 

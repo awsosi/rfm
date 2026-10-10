@@ -128,6 +128,7 @@ class SystemStatsResponse(BaseModel):
     # User statistics
     total_users: int
     admin_users: int
+    manager_users: int = 0
     operator_users: int
     viewer_users: int
 

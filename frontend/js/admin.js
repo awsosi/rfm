@@ -11,6 +11,7 @@ import {
 } from './api.js';
 import { showConfirm, formatDate, escapeHtml, showNotification } from './utils.js';
 import AdminSystem from './admin-system.js';
+import { loadAndApplyTheme } from './theme.js';
 
 // =========================================================================
 // State
@@ -22,45 +23,7 @@ let currentTab = 'users';
 let cachedUsers = null;
 let workerDataMap = {}; // workerId -> worker object for provision dialog pre-fill
 
-// =========================================================================
-// Theme
-// =========================================================================
-
-function getSystemTheme() {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-    }
-    return 'light';
-}
-
-function applyTheme(theme) {
-    const effectiveTheme = theme === 'system' ? getSystemTheme() : theme;
-    document.body.setAttribute('data-theme', effectiveTheme);
-    window._currentThemeSetting = theme;
-}
-
-function setupSystemThemeListener() {
-    if (window.matchMedia) {
-        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        darkModeQuery.addEventListener('change', (e) => {
-            if (window._currentThemeSetting === 'system') {
-                document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-            }
-        });
-    }
-}
-
-async function loadAndApplyTheme() {
-    try {
-        const { getPreferences } = await import('./api.js');
-        const preferences = await getPreferences();
-        applyTheme(preferences.ui_theme || 'system');
-    } catch (error) {
-        console.error('Failed to load theme preference:', error);
-        applyTheme('system');
-    }
-    setupSystemThemeListener();
-}
+const ROLE_BADGES = { ADMIN: 'primary', MANAGER: 'info', USER: 'secondary' };
 
 // =========================================================================
 // Initialization
@@ -141,6 +104,7 @@ const SECTION_TO_TAB = {
     'pim-settings': 'config',
     'validation-settings': 'config',
     'remote-sync-settings': 'config',
+    'report-settings': 'config',
     'worker-configuration': 'config',
     'operation-settings': 'config',
     'push-operation-settings': 'config',
@@ -156,6 +120,10 @@ const SECTION_TO_TAB = {
 function setupNavigation() {
     document.getElementById('explorer-btn').addEventListener('click', () => {
         window.location.href = 'explorer.html';
+    });
+
+    document.getElementById('manager-btn').addEventListener('click', () => {
+        window.location.href = 'manager.html';
     });
 
     document.getElementById('logout-btn').addEventListener('click', () => {
@@ -347,7 +315,7 @@ async function loadUsers() {
                     ? '<span class="badge badge-info" title="Authenticated via PolkaSQL">PolkaSQL</span>'
                     : '<span class="badge badge-secondary">Local</span>'
                 }</td>
-                <td><span class="badge badge-${user.role?.toUpperCase() === 'ADMIN' ? 'primary' : 'secondary'}">${user.role}</span></td>
+                <td><span class="badge badge-${ROLE_BADGES[user.role?.toUpperCase()] || 'secondary'}">${escapeHtml(user.role)}</span></td>
                 <td><span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td>${formatDate(user.created_at)}</td>
                 <td>
@@ -769,6 +737,8 @@ function setupConfigEvents() {
         }
     });
 
+    document.getElementById('reports-test-share-btn').addEventListener('click', testReportShare);
+
     setupStopAll('pim-stop-all-btn', '/api/admin/integrations/pim/stop-all',
         'Stop every PIM notification that is waiting to be sent or retrying?\n\nThey will not be retried. An attempt already in progress may still reach PIM.',
         'PIM notification(s) stopped');
@@ -810,6 +780,117 @@ async function loadIntegrationQueue() {
     }
 }
 
+// Configuration form: element id -> config key (loaded and saved alike)
+const CONFIG_FIELDS = {
+    'config-max-concurrent-users': 'max_concurrent_users',
+    'config-session-lifetime': 'session_lifetime_days',
+    'config-session-remember-me-days': 'session_remember_me_days',
+    'config-admin-reauth-minutes': 'admin_reauth_minutes',
+    'config-polka-auth-enabled': 'polka_auth_enabled',
+    'config-polka-auth-url': 'polka_auth_url',
+    'config-polka-auth-api-key': 'polka_auth_api_key',
+    'config-polka-auth-timeout': 'polka_auth_timeout',
+    'config-rosapi-enabled': 'rosapi_enabled',
+    'config-rosapi-base-url': 'rosapi_base_url',
+    'config-rosapi-auth-base-url': 'rosapi_auth_base_url',
+    'config-rosapi-auth-login-endpoint': 'rosapi_auth_login_endpoint',
+    'config-rosapi-auth-refresh-endpoint': 'rosapi_auth_refresh_endpoint',
+    'config-rosapi-auth-email': 'rosapi_auth_email',
+    'config-rosapi-auth-password': 'rosapi_auth_password',
+    'config-rosapi-timeout': 'rosapi_timeout',
+    'config-rosapi-push-enabled': 'rosapi_push_enabled',
+    'config-rosapi-push-base-url': 'rosapi_push_base_url',
+    'config-rosapi-push-endpoint': 'rosapi_push_endpoint',
+    'config-rosapi-push-method': 'rosapi_push_method',
+    'config-rosapi-push-payload': 'rosapi_push_payload',
+    'config-rosapi-pull-enabled': 'rosapi_pull_enabled',
+    'config-rosapi-pull-base-url': 'rosapi_pull_base_url',
+    'config-rosapi-pull-endpoint': 'rosapi_pull_endpoint',
+    'config-rosapi-pull-method': 'rosapi_pull_method',
+    'config-rosapi-pull-payload': 'rosapi_pull_payload',
+    'config-rosapi-verify-base-url': 'rosapi_verify_base_url',
+    'config-rosapi-verify-endpoint': 'rosapi_verify_endpoint',
+    'config-pim-enabled': 'pim_enabled',
+    'config-pim-base-url': 'pim_base_url',
+    'config-pim-endpoint': 'pim_endpoint',
+    'config-pim-method': 'pim_method',
+    'config-pim-api-token': 'pim_api_token',
+    'config-pim-timeout': 'pim_timeout',
+    'config-pim-push-enabled': 'pim_push_enabled',
+    'config-pim-push-event-type': 'pim_push_event_type',
+    'config-pim-pull-enabled': 'pim_pull_enabled',
+    'config-pim-pull-event-type': 'pim_pull_event_type',
+    'config-pim-update-enabled': 'pim_update_enabled',
+    'config-pim-update-event-type': 'pim_update_event_type',
+    'config-pim-payload-template': 'pim_payload_template',
+    'config-pim-retry-base-seconds': 'pim_retry_base_seconds',
+    'config-pim-retry-max-delay-seconds': 'pim_retry_max_delay_seconds',
+    'config-pim-retry-max-hours': 'pim_retry_max_hours',
+    'config-catalog-validation-enabled': 'catalog_validation_enabled',
+    'config-catalog-validation-url': 'catalog_validation_url',
+    'config-catalog-validation-api-key': 'catalog_validation_api_key',
+    'config-catalog-validation-timeout': 'catalog_validation_timeout',
+    'config-catalog-validation-max-suggestions': 'catalog_validation_max_suggestions',
+    'config-catalog-validation-fail-open': 'catalog_validation_fail_open',
+    'config-push-validation-enabled': 'push_validation_enabled',
+    'config-push-validation-min-files': 'push_validation_min_files',
+    'config-push-validation-allowed-extensions': 'push_validation_allowed_extensions',
+    'config-push-validation-verify-content': 'push_validation_verify_content',
+    'config-push-validation-file-names': 'push_validation_file_names',
+    'config-push-validation-name-suffixes': 'push_validation_name_suffixes',
+    'config-push-validation-reject-double-dots': 'push_validation_reject_double_dots',
+    'config-enable-update-archive-mirror': 'enable_update_archive_mirror',
+    'config-update-upload-max-mb': 'update_upload_max_mb',
+    'config-update-upload-ttl-hours': 'update_upload_ttl_hours',
+    'config-remote-sync-check-enabled': 'remote_sync_check_enabled',
+    'config-remote-sync-check-url-template': 'remote_sync_check_url_template',
+    'config-remote-sync-check-wait-for-pim': 'remote_sync_check_wait_for_pim',
+    'config-remote-sync-check-initial-delay-seconds': 'remote_sync_check_initial_delay_seconds',
+    'config-remote-sync-check-interval-seconds': 'remote_sync_check_interval_seconds',
+    'config-remote-sync-check-timeout-minutes': 'remote_sync_check_timeout_minutes',
+    'config-remote-sync-check-request-timeout': 'remote_sync_check_request_timeout',
+    'config-remote-sync-check-cache-bust': 'remote_sync_check_cache_bust',
+    'config-reports-auto-enabled': 'reports_auto_enabled',
+    'config-reports-run-time': 'reports_run_time',
+    'config-reports-timezone': 'reports_timezone',
+    'config-reports-retry-minutes': 'reports_retry_minutes',
+    'config-reports-recipients': 'reports_recipients',
+    'config-reports-output-dir': 'reports_output_dir',
+    'config-reports-file-name': 'reports_file_name',
+    'config-reports-month-names': 'reports_month_names',
+    'config-reports-smb-username': 'reports_smb_username',
+    'config-reports-smb-password': 'reports_smb_password',
+    'config-reports-overwrite-foreign': 'reports_overwrite_foreign',
+    'config-reports-columns': 'reports_columns',
+    'config-reports-sheet-name': 'reports_sheet_name',
+    'config-reports-date-format': 'reports_date_format',
+    'config-reports-day-row-color': 'reports_day_row_color',
+    'config-reports-late-row-color': 'reports_late_row_color',
+    'config-reports-late-field': 'reports_late_field',
+    'config-reports-exclude-pulled': 'reports_exclude_pulled',
+    'config-reports-product-url': 'reports_product_url',
+    'config-reports-product-api-key': 'reports_product_api_key',
+    'config-reports-product-timeout': 'reports_product_timeout',
+    'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
+    'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
+    'config-worker-timeout': 'worker_timeout',
+    'config-worker-retry': 'worker_retry_attempts',
+    'config-operation-timeout': 'operation_timeout',
+    'config-auto-rollback': 'enable_auto_rollback',
+    'config-push-flatten': 'enable_push_flatten',
+    'config-push-archive': 'enable_push_archive',
+    'config-push-ignore-masks': 'push_ignore_file_masks',
+    'config-push-ignore-system-files': 'push_ignore_system_files',
+    'config-max-listing-items': 'max_file_listing_items',
+    'config-lazy-loading': 'enable_lazy_loading',
+    'config-ip-whitelist': 'enable_ip_whitelist',
+    'config-ip-whitelist-list': 'ip_whitelist',
+    'config-rate-limiting': 'enable_rate_limiting',
+    'config-rate-limit': 'rate_limit_requests_per_minute',
+    'config-maintenance-mode': 'maintenance_mode',
+    'config-maintenance-message': 'maintenance_message'
+};
+
 /**
  * Load configuration data and populate form fields
  */
@@ -823,95 +904,8 @@ export async function loadConfigurationData() {
             configMap[cfg.key] = cfg;
         });
 
-        const fieldMappings = {
-            'config-max-concurrent-users': 'max_concurrent_users',
-            'config-session-lifetime': 'session_lifetime_days',
-            'config-session-remember-me-days': 'session_remember_me_days',
-            'config-admin-reauth-minutes': 'admin_reauth_minutes',
-            'config-polka-auth-enabled': 'polka_auth_enabled',
-            'config-polka-auth-url': 'polka_auth_url',
-            'config-polka-auth-api-key': 'polka_auth_api_key',
-            'config-polka-auth-timeout': 'polka_auth_timeout',
-            'config-rosapi-enabled': 'rosapi_enabled',
-            'config-rosapi-base-url': 'rosapi_base_url',
-            'config-rosapi-auth-base-url': 'rosapi_auth_base_url',
-            'config-rosapi-auth-login-endpoint': 'rosapi_auth_login_endpoint',
-            'config-rosapi-auth-refresh-endpoint': 'rosapi_auth_refresh_endpoint',
-            'config-rosapi-auth-email': 'rosapi_auth_email',
-            'config-rosapi-auth-password': 'rosapi_auth_password',
-            'config-rosapi-timeout': 'rosapi_timeout',
-            'config-rosapi-push-enabled': 'rosapi_push_enabled',
-            'config-rosapi-push-base-url': 'rosapi_push_base_url',
-            'config-rosapi-push-endpoint': 'rosapi_push_endpoint',
-            'config-rosapi-push-method': 'rosapi_push_method',
-            'config-rosapi-push-payload': 'rosapi_push_payload',
-            'config-rosapi-pull-enabled': 'rosapi_pull_enabled',
-            'config-rosapi-pull-base-url': 'rosapi_pull_base_url',
-            'config-rosapi-pull-endpoint': 'rosapi_pull_endpoint',
-            'config-rosapi-pull-method': 'rosapi_pull_method',
-            'config-rosapi-pull-payload': 'rosapi_pull_payload',
-            'config-rosapi-verify-base-url': 'rosapi_verify_base_url',
-            'config-rosapi-verify-endpoint': 'rosapi_verify_endpoint',
-            'config-pim-enabled': 'pim_enabled',
-            'config-pim-base-url': 'pim_base_url',
-            'config-pim-endpoint': 'pim_endpoint',
-            'config-pim-method': 'pim_method',
-            'config-pim-api-token': 'pim_api_token',
-            'config-pim-timeout': 'pim_timeout',
-            'config-pim-push-enabled': 'pim_push_enabled',
-            'config-pim-push-event-type': 'pim_push_event_type',
-            'config-pim-pull-enabled': 'pim_pull_enabled',
-            'config-pim-pull-event-type': 'pim_pull_event_type',
-            'config-pim-update-enabled': 'pim_update_enabled',
-            'config-pim-update-event-type': 'pim_update_event_type',
-            'config-pim-payload-template': 'pim_payload_template',
-            'config-pim-retry-base-seconds': 'pim_retry_base_seconds',
-            'config-pim-retry-max-delay-seconds': 'pim_retry_max_delay_seconds',
-            'config-pim-retry-max-hours': 'pim_retry_max_hours',
-            'config-catalog-validation-enabled': 'catalog_validation_enabled',
-            'config-catalog-validation-url': 'catalog_validation_url',
-            'config-catalog-validation-api-key': 'catalog_validation_api_key',
-            'config-catalog-validation-timeout': 'catalog_validation_timeout',
-            'config-catalog-validation-max-suggestions': 'catalog_validation_max_suggestions',
-            'config-catalog-validation-fail-open': 'catalog_validation_fail_open',
-            'config-push-validation-enabled': 'push_validation_enabled',
-            'config-push-validation-min-files': 'push_validation_min_files',
-            'config-push-validation-allowed-extensions': 'push_validation_allowed_extensions',
-            'config-push-validation-verify-content': 'push_validation_verify_content',
-            'config-push-validation-file-names': 'push_validation_file_names',
-            'config-push-validation-name-suffixes': 'push_validation_name_suffixes',
-            'config-enable-update-archive-mirror': 'enable_update_archive_mirror',
-            'config-update-upload-max-mb': 'update_upload_max_mb',
-            'config-update-upload-ttl-hours': 'update_upload_ttl_hours',
-            'config-remote-sync-check-enabled': 'remote_sync_check_enabled',
-            'config-remote-sync-check-url-template': 'remote_sync_check_url_template',
-            'config-remote-sync-check-wait-for-pim': 'remote_sync_check_wait_for_pim',
-            'config-remote-sync-check-initial-delay-seconds': 'remote_sync_check_initial_delay_seconds',
-            'config-remote-sync-check-interval-seconds': 'remote_sync_check_interval_seconds',
-            'config-remote-sync-check-timeout-minutes': 'remote_sync_check_timeout_minutes',
-            'config-remote-sync-check-request-timeout': 'remote_sync_check_request_timeout',
-            'config-remote-sync-check-cache-bust': 'remote_sync_check_cache_bust',
-            'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
-            'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
-            'config-worker-timeout': 'worker_timeout',
-            'config-worker-retry': 'worker_retry_attempts',
-            'config-operation-timeout': 'operation_timeout',
-            'config-auto-rollback': 'enable_auto_rollback',
-            'config-push-flatten': 'enable_push_flatten',
-            'config-push-archive': 'enable_push_archive',
-            'config-push-ignore-masks': 'push_ignore_file_masks',
-            'config-push-ignore-system-files': 'push_ignore_system_files',
-            'config-max-listing-items': 'max_file_listing_items',
-            'config-lazy-loading': 'enable_lazy_loading',
-            'config-ip-whitelist': 'enable_ip_whitelist',
-            'config-ip-whitelist-list': 'ip_whitelist',
-            'config-rate-limiting': 'enable_rate_limiting',
-            'config-rate-limit': 'rate_limit_requests_per_minute',
-            'config-maintenance-mode': 'maintenance_mode',
-            'config-maintenance-message': 'maintenance_message'
-        };
 
-        for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+        for (const [elementId, configKey] of Object.entries(CONFIG_FIELDS)) {
             const element = document.getElementById(elementId);
             if (!element) continue;
 
@@ -924,6 +918,7 @@ export async function loadConfigurationData() {
                 element.value = cfg.value || '';
             }
         }
+        renderReportEditors();
     } catch (error) {
         console.error('Failed to load configuration:', error);
     }
@@ -933,96 +928,9 @@ export async function loadConfigurationData() {
  * Save configuration data from form fields
  */
 export async function saveConfigurationData() {
-    const fieldMappings = {
-        'config-max-concurrent-users': 'max_concurrent_users',
-        'config-session-lifetime': 'session_lifetime_days',
-        'config-session-remember-me-days': 'session_remember_me_days',
-        'config-admin-reauth-minutes': 'admin_reauth_minutes',
-        'config-polka-auth-enabled': 'polka_auth_enabled',
-        'config-polka-auth-url': 'polka_auth_url',
-        'config-polka-auth-api-key': 'polka_auth_api_key',
-        'config-polka-auth-timeout': 'polka_auth_timeout',
-        'config-rosapi-enabled': 'rosapi_enabled',
-        'config-rosapi-base-url': 'rosapi_base_url',
-        'config-rosapi-auth-base-url': 'rosapi_auth_base_url',
-        'config-rosapi-auth-login-endpoint': 'rosapi_auth_login_endpoint',
-        'config-rosapi-auth-refresh-endpoint': 'rosapi_auth_refresh_endpoint',
-        'config-rosapi-auth-email': 'rosapi_auth_email',
-        'config-rosapi-auth-password': 'rosapi_auth_password',
-        'config-rosapi-timeout': 'rosapi_timeout',
-        'config-rosapi-push-enabled': 'rosapi_push_enabled',
-        'config-rosapi-push-base-url': 'rosapi_push_base_url',
-        'config-rosapi-push-endpoint': 'rosapi_push_endpoint',
-        'config-rosapi-push-method': 'rosapi_push_method',
-        'config-rosapi-push-payload': 'rosapi_push_payload',
-        'config-rosapi-pull-enabled': 'rosapi_pull_enabled',
-        'config-rosapi-pull-base-url': 'rosapi_pull_base_url',
-        'config-rosapi-pull-endpoint': 'rosapi_pull_endpoint',
-        'config-rosapi-pull-method': 'rosapi_pull_method',
-        'config-rosapi-pull-payload': 'rosapi_pull_payload',
-        'config-rosapi-verify-base-url': 'rosapi_verify_base_url',
-        'config-rosapi-verify-endpoint': 'rosapi_verify_endpoint',
-        'config-pim-enabled': 'pim_enabled',
-        'config-pim-base-url': 'pim_base_url',
-        'config-pim-endpoint': 'pim_endpoint',
-        'config-pim-method': 'pim_method',
-        'config-pim-api-token': 'pim_api_token',
-        'config-pim-timeout': 'pim_timeout',
-        'config-pim-push-enabled': 'pim_push_enabled',
-        'config-pim-push-event-type': 'pim_push_event_type',
-        'config-pim-pull-enabled': 'pim_pull_enabled',
-        'config-pim-pull-event-type': 'pim_pull_event_type',
-        'config-pim-update-enabled': 'pim_update_enabled',
-        'config-pim-update-event-type': 'pim_update_event_type',
-        'config-pim-payload-template': 'pim_payload_template',
-        'config-pim-retry-base-seconds': 'pim_retry_base_seconds',
-        'config-pim-retry-max-delay-seconds': 'pim_retry_max_delay_seconds',
-        'config-pim-retry-max-hours': 'pim_retry_max_hours',
-        'config-catalog-validation-enabled': 'catalog_validation_enabled',
-        'config-catalog-validation-url': 'catalog_validation_url',
-        'config-catalog-validation-api-key': 'catalog_validation_api_key',
-        'config-catalog-validation-timeout': 'catalog_validation_timeout',
-        'config-catalog-validation-max-suggestions': 'catalog_validation_max_suggestions',
-        'config-catalog-validation-fail-open': 'catalog_validation_fail_open',
-        'config-push-validation-enabled': 'push_validation_enabled',
-        'config-push-validation-min-files': 'push_validation_min_files',
-        'config-push-validation-allowed-extensions': 'push_validation_allowed_extensions',
-        'config-push-validation-verify-content': 'push_validation_verify_content',
-        'config-push-validation-file-names': 'push_validation_file_names',
-        'config-push-validation-name-suffixes': 'push_validation_name_suffixes',
-        'config-enable-update-archive-mirror': 'enable_update_archive_mirror',
-        'config-update-upload-max-mb': 'update_upload_max_mb',
-        'config-update-upload-ttl-hours': 'update_upload_ttl_hours',
-        'config-remote-sync-check-enabled': 'remote_sync_check_enabled',
-        'config-remote-sync-check-url-template': 'remote_sync_check_url_template',
-        'config-remote-sync-check-wait-for-pim': 'remote_sync_check_wait_for_pim',
-        'config-remote-sync-check-initial-delay-seconds': 'remote_sync_check_initial_delay_seconds',
-        'config-remote-sync-check-interval-seconds': 'remote_sync_check_interval_seconds',
-        'config-remote-sync-check-timeout-minutes': 'remote_sync_check_timeout_minutes',
-        'config-remote-sync-check-request-timeout': 'remote_sync_check_request_timeout',
-        'config-remote-sync-check-cache-bust': 'remote_sync_check_cache_bust',
-        'config-worker-heartbeat-interval': 'worker_heartbeat_interval',
-        'config-worker-heartbeat-timeout': 'worker_heartbeat_timeout',
-        'config-worker-timeout': 'worker_timeout',
-        'config-worker-retry': 'worker_retry_attempts',
-        'config-operation-timeout': 'operation_timeout',
-        'config-auto-rollback': 'enable_auto_rollback',
-        'config-push-flatten': 'enable_push_flatten',
-        'config-push-archive': 'enable_push_archive',
-        'config-push-ignore-masks': 'push_ignore_file_masks',
-        'config-push-ignore-system-files': 'push_ignore_system_files',
-        'config-max-listing-items': 'max_file_listing_items',
-        'config-lazy-loading': 'enable_lazy_loading',
-        'config-ip-whitelist': 'enable_ip_whitelist',
-        'config-ip-whitelist-list': 'ip_whitelist',
-        'config-rate-limiting': 'enable_rate_limiting',
-        'config-rate-limit': 'rate_limit_requests_per_minute',
-        'config-maintenance-mode': 'maintenance_mode',
-        'config-maintenance-message': 'maintenance_message'
-    };
 
     const configs = {};
-    for (const [elementId, configKey] of Object.entries(fieldMappings)) {
+    for (const [elementId, configKey] of Object.entries(CONFIG_FIELDS)) {
         const element = document.getElementById(elementId);
         if (!element) continue;
 
@@ -1043,6 +951,135 @@ export async function saveConfigurationData() {
         console.error('Failed to save configuration:', error);
         showNotification(error.message || 'Failed to save configuration', 'error');
         throw error;
+    }
+}
+
+// =========================================================================
+// Classification report settings: row editors behind two JSON settings
+// =========================================================================
+
+/**
+ * Rows of inputs that edit a JSON list kept in a hidden textarea
+ * (reports_recipients, reports_columns). ``fields`` describes the inputs of
+ * one row; the textarea is rewritten on every change.
+ */
+function rowEditor(containerId, textareaId, fields, addLabel) {
+    const container = document.getElementById(containerId);
+    const textarea = document.getElementById(textareaId);
+    let rows;
+    try {
+        rows = JSON.parse(textarea.value || '[]');
+        if (!Array.isArray(rows)) rows = [];
+    } catch (error) {
+        rows = [];
+    }
+
+    const write = () => {
+        textarea.value = JSON.stringify(rows.filter(row => fields.some(f => String(row[f.key] || '').trim())));
+    };
+
+    const render = () => {
+        container.textContent = '';
+        rows.forEach((row, index) => {
+            const line = document.createElement('div');
+            line.className = 'report-editor-row';
+            fields.forEach(field => {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control';
+                input.placeholder = field.placeholder;
+                input.setAttribute('aria-label', field.placeholder);
+                if (field.list) input.setAttribute('list', field.list);
+                input.value = row[field.key] || '';
+                input.addEventListener('input', () => {
+                    row[field.key] = input.value.trim();
+                    write();
+                });
+                line.appendChild(input);
+            });
+            const button = (label, title, disabled, onClick) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn btn-secondary btn-sm';
+                b.textContent = label;
+                b.title = title;
+                b.disabled = disabled;
+                b.addEventListener('click', () => {
+                    onClick();
+                    write();
+                    render();
+                });
+                line.appendChild(b);
+            };
+            button('↑', 'Move up', index === 0, () => rows.splice(index - 1, 0, rows.splice(index, 1)[0]));
+            button('↓', 'Move down', index === rows.length - 1, () => rows.splice(index + 1, 0, rows.splice(index, 1)[0]));
+            button('✕', 'Remove', false, () => rows.splice(index, 1));
+            container.appendChild(line);
+        });
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'btn btn-secondary btn-sm';
+        add.textContent = addLabel;
+        add.addEventListener('click', () => {
+            rows.push({});
+            render();
+            container.querySelector('.report-editor-row:last-of-type input')?.focus();
+        });
+        container.appendChild(add);
+    };
+
+    write();
+    render();
+}
+
+function renderReportEditors() {
+    rowEditor('reports-recipients-editor', 'config-reports-recipients', [
+        { key: 'name', placeholder: 'Name in the file name (e.g. Natalia)' },
+        { key: 'username', placeholder: 'RFM username', list: 'reports-usernames' }
+    ], 'Add person');
+    rowEditor('reports-columns-editor', 'config-reports-columns', [
+        { key: 'header', placeholder: 'Column header' },
+        { key: 'field', placeholder: 'Field (e.g. product.designer)', list: 'reports-fields' }
+    ], 'Add column');
+
+    // Offer the known usernames in the person rows
+    getUsers().then(users => {
+        const list = document.getElementById('reports-usernames');
+        list.textContent = '';
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.username;
+            list.appendChild(option);
+        });
+    }).catch(() => {});
+}
+
+/** Try the share with the values on the form (saved or not). */
+async function testReportShare() {
+    const button = document.getElementById('reports-test-share-btn');
+    const result = document.getElementById('reports-test-share-result');
+    const configs = {};
+    for (const [elementId, configKey] of Object.entries(CONFIG_FIELDS)) {
+        if (!configKey.startsWith('reports_')) continue;
+        const element = document.getElementById(elementId);
+        if (!element) continue;
+        configs[configKey] = element.type === 'checkbox' ? String(element.checked) : element.value;
+    }
+    button.disabled = true;
+    result.textContent = 'Testing…';
+    result.className = '';
+    try {
+        const answer = await apiRequest('/api/admin/reports/test-share', {
+            method: 'POST',
+            body: JSON.stringify({ configs })
+        });
+        result.textContent = `✓ ${answer.message}: ${answer.detail}`;
+        result.className = 'text-success';
+    } catch (error) {
+        result.textContent = `✗ ${error.message}`;
+        result.className = 'text-danger';
+    } finally {
+        button.disabled = false;
     }
 }
 
@@ -1127,7 +1164,7 @@ function renderSystemStats(stats, health) {
                 <div class="stat-value">${stats.active_users}</div>
                 <div class="stat-label">Active Sessions</div>
                 <div class="stat-details">
-                    Total: ${stats.total_users} (${stats.admin_users} admins, ${stats.viewer_users} users)
+                    Total: ${stats.total_users} (${stats.admin_users} admins, ${stats.manager_users ?? 0} managers, ${stats.viewer_users} users)
                 </div>
             </div>
 

@@ -70,7 +70,8 @@
     "editPathTitle": "Kliknij, aby edytować ścieżkę",
     "actionHint": "Wybierz katalog, aby go wypchnąć, albo operację, aby cofnąć lub zaktualizować.",
     "update": "Aktualizacja",
-    "unknownUser": "Nieznany"
+    "unknownUser": "Nieznany",
+    "managerView": "Widok kierownika"
   },
   "contextMenu": {
     "open": "Otwórz",
@@ -204,7 +205,8 @@
       "workerUnavailable": "Nie można połączyć się z workerem, więc zawartość folderu nie może zostać sprawdzona.",
       "listFailed": "Nie udało się odczytać zawartości folderu.",
       "stagedTypeMismatch": "Nowy plik dla {names} nie jest w rzeczywistości obrazem mimo swojego rozszerzenia. Niczego nie zmieniono.",
-      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono."
+      "stagedNotAFile": "Źródło wybrane dla {names} nie jest plikiem. Niczego nie zmieniono.",
+      "doubleDotNames": "Nazwa pliku nie może zawierać dwóch kropek obok siebie. Zmień nazwę lub usuń: {names}."
     }
   },
   "update": {
@@ -364,5 +366,164 @@
     "invalidPassword": "Nieprawidłowe hasło.",
     "missingPassword": "Wpisz hasło.",
     "notConfirmed": "Hasło nie zostało potwierdzone. Nic nie zmieniono."
+  },
+  "roles": {
+    "USER": "Użytkownik",
+    "MANAGER": "Kierownik",
+    "ADMIN": "Administrator"
+  },
+  "manager": {
+    "pageTitle": "Widok kierownika – Menedżer plików",
+    "title": "Widok kierownika",
+    "explorer": "Eksplorator plików",
+    "accessDenied": "Widok kierownika wymaga roli Kierownik lub Administrator.",
+    "tabs": {
+      "history": "Historia operacji",
+      "reports": "Raporty"
+    },
+    "filters": {
+      "search": "Szukaj",
+      "searchPlaceholder": "Katalog, ścieżka, użytkownik lub błąd…",
+      "period": "Okres",
+      "from": "Od",
+      "to": "Do",
+      "users": "Użytkownicy",
+      "allUsers": "Wszyscy użytkownicy",
+      "usersSelected": "Wybrano: {count}",
+      "selectAll": "Zaznacz wszystkich",
+      "selectNone": "Wyczyść",
+      "types": "Typ",
+      "statuses": "Status",
+      "pulled": "Cofnięte",
+      "pulledAny": "Dowolne",
+      "pulledNo": "Nadal opublikowane",
+      "pulledYes": "Cofnięte",
+      "reset": "Wyczyść filtry",
+      "export": "Eksportuj do Excela",
+      "exporting": "Przygotowywanie pliku…",
+      "exported": "Wyeksportowano operacje: {count}.",
+      "exportFailed": "Eksport nie powiódł się: {error}",
+      "inactiveUser": "nieaktywny"
+    },
+    "periods": {
+      "today": "Dzisiaj",
+      "yesterday": "Wczoraj",
+      "last7": "Ostatnie 7 dni",
+      "last30": "Ostatnie 30 dni",
+      "thisMonth": "Bieżący miesiąc",
+      "lastMonth": "Poprzedni miesiąc",
+      "all": "Cały okres",
+      "custom": "Własny zakres"
+    },
+    "types": {
+      "PUSH": "Wysłanie",
+      "PULL": "Cofnięcie",
+      "UPDATE": "Aktualizacja",
+      "COPY": "Kopiowanie",
+      "MOVE": "Przeniesienie",
+      "DELETE": "Usunięcie",
+      "MKDIR": "Nowy folder"
+    },
+    "summary": {
+      "total": "Operacje",
+      "pushes": "Wysłane",
+      "pulls": "Cofnięte",
+      "updates": "Aktualizacje",
+      "failed": "Nieudane",
+      "files": "Wysłane pliki",
+      "byUser": "Według użytkowników",
+      "byUserHint": "Kliknij użytkownika, aby pokazać tylko jego operacje.",
+      "noData": "Żadna operacja nie spełnia tych filtrów."
+    },
+    "columns": {
+      "id": "ID",
+      "type": "Typ",
+      "status": "Status",
+      "catalog": "Katalog",
+      "user": "Użytkownik",
+      "created": "Utworzono",
+      "completed": "Zakończono",
+      "files": "Pliki",
+      "pim": "PIM",
+      "source": "Źródło",
+      "destination": "Cel",
+      "error": "Błąd",
+      "pulled": "Cofnięte",
+      "pushes": "Wysłane",
+      "pulls": "Cofnięte",
+      "updates": "Aktualizacje",
+      "failed": "Nieudane",
+      "total": "Razem",
+      "filesPushed": "Wysłane pliki"
+    },
+    "table": {
+      "loading": "Wczytywanie operacji…",
+      "loadFailed": "Nie udało się wczytać operacji: {error}",
+      "range": "{from}–{to} z {total}",
+      "pageSize": "Wierszy na stronie",
+      "previous": "Poprzednia",
+      "next": "Następna",
+      "pulledBadge": "cofnięte",
+      "detailsHint": "Kliknij wiersz, aby zobaczyć szczegóły"
+    },
+    "reports": {
+      "generator": {
+        "title": "Raport klasyfikacji",
+        "help": "Katalogi wysłane przez wybrane osoby, dzień po dniu: każdy dzień zaczyna zielony wiersz z datą, a produkt wysłany po dacie premiery jest czerwony. Kolumny ustawia się w Panelu administracyjnym.",
+        "users": "Osoby",
+        "period": "Okres",
+        "month": "Miesiąc",
+        "customRange": "Własny zakres",
+        "includeUser": "Dodaj kolumnę Użytkownik",
+        "download": "Pobierz raport",
+        "downloading": "Przygotowywanie raportu…",
+        "downloaded": "Pobrano raport, liczba katalogów: {rows}.",
+        "warning": "Uwaga: {warning}",
+        "failed": "Nie udało się przygotować raportu: {error}",
+        "chooseUsers": "Wybierz co najmniej jedną osobę.",
+        "badRange": "Koniec okresu jest przed jego początkiem."
+      },
+      "auto": {
+        "title": "Automatyczne raporty miesięczne",
+        "on": "Włączone",
+        "off": "Wyłączone",
+        "offHelp": "Nocne raporty są wyłączone. Administrator włącza je w Panelu administracyjnym → Configuration → Classification Reports.",
+        "help": "Co noc po {time} ({timezone}) RFM zapisuje na udziale raport każdej osoby za dotychczasową część miesiąca. Przebieg 1. dnia miesiąca domyka poprzedni miesiąc.",
+        "nextRun": "Następne uruchomienie",
+        "folder": "Przykładowy plik",
+        "recipients": "Osoby",
+        "productData": "Dane produktów z PolkaSQL",
+        "shareAccount": "Konto udziału sieciowego",
+        "configured": "skonfigurowane",
+        "notConfigured": "nieskonfigurowane",
+        "invalid": "Ustawień raportów nie da się użyć: {error}",
+        "openAdmin": "Otwórz ustawienia raportów",
+        "writeNow": "Zapisz na udziale teraz",
+        "writeMonth": "Miesiąc",
+        "writeButton": "Zapisz raporty",
+        "writeConfirm": "Zapisać teraz na udziale raporty za {month} dla: {names}? Istniejące raporty RFM za ten miesiąc zostaną zastąpione.",
+        "writeStarted": "Zapisywanie raportów ({count})… Wynik pojawi się w historii poniżej.",
+        "writeFailed": "Nie udało się uruchomić: {error}"
+      },
+      "runs": {
+        "title": "Historia raportów",
+        "empty": "Nie zapisano jeszcze żadnego raportu.",
+        "started": "Rozpoczęto",
+        "month": "Miesiąc",
+        "person": "Osoba",
+        "trigger": "Uruchomienie",
+        "status": "Status",
+        "rows": "Katalogi",
+        "file": "Plik",
+        "message": "Uwagi",
+        "scheduled": "Nocne",
+        "manual": "Ręcznie: {user}",
+        "attempts": "próba {count}",
+        "RUNNING": "W toku",
+        "SUCCESS": "Zapisano",
+        "FAILED": "Nieudane",
+        "refresh": "Odśwież"
+      }
+    }
   }
 }

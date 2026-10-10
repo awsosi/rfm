@@ -70,7 +70,8 @@
     "editPathTitle": "Click to edit the path",
     "actionHint": "Select a directory to push, or an operation to pull or update.",
     "update": "Update",
-    "unknownUser": "Unknown"
+    "unknownUser": "Unknown",
+    "managerView": "Manager view"
   },
   "contextMenu": {
     "open": "Open",
@@ -204,7 +205,8 @@
       "workerUnavailable": "The worker could not be reached, so the folder contents cannot be checked.",
       "listFailed": "The folder contents could not be read.",
       "stagedTypeMismatch": "The new file for {names} is not really an image despite its extension. Nothing was changed.",
-      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed."
+      "stagedNotAFile": "The source chosen for {names} is not a file. Nothing was changed.",
+      "doubleDotNames": "File names must not contain two dots in a row. Rename or remove: {names}."
     }
   },
   "update": {
@@ -364,5 +366,164 @@
     "invalidPassword": "Incorrect password.",
     "missingPassword": "Enter your password.",
     "notConfirmed": "Password not confirmed. Nothing was changed."
+  },
+  "roles": {
+    "USER": "User",
+    "MANAGER": "Manager",
+    "ADMIN": "Administrator"
+  },
+  "manager": {
+    "pageTitle": "Manager view – File Manager",
+    "title": "Manager view",
+    "explorer": "File Explorer",
+    "accessDenied": "The manager view needs the Manager or Administrator role.",
+    "tabs": {
+      "history": "Operation history",
+      "reports": "Reports"
+    },
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "Catalog, path, user or error…",
+      "period": "Period",
+      "from": "From",
+      "to": "To",
+      "users": "Users",
+      "allUsers": "All users",
+      "usersSelected": "{count} selected",
+      "selectAll": "Select all",
+      "selectNone": "Clear",
+      "types": "Type",
+      "statuses": "Status",
+      "pulled": "Pulled back",
+      "pulledAny": "Any",
+      "pulledNo": "Still published",
+      "pulledYes": "Pulled back",
+      "reset": "Reset filters",
+      "export": "Export to Excel",
+      "exporting": "Preparing the file…",
+      "exported": "Exported {count} operation(s).",
+      "exportFailed": "Export failed: {error}",
+      "inactiveUser": "inactive"
+    },
+    "periods": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "all": "All time",
+      "custom": "Custom range"
+    },
+    "types": {
+      "PUSH": "Push",
+      "PULL": "Pull",
+      "UPDATE": "Update",
+      "COPY": "Copy",
+      "MOVE": "Move",
+      "DELETE": "Delete",
+      "MKDIR": "New folder"
+    },
+    "summary": {
+      "total": "Operations",
+      "pushes": "Pushes",
+      "pulls": "Pulls",
+      "updates": "Updates",
+      "failed": "Failed",
+      "files": "Files pushed",
+      "byUser": "By user",
+      "byUserHint": "Click a user to show only their operations.",
+      "noData": "No operations match these filters."
+    },
+    "columns": {
+      "id": "ID",
+      "type": "Type",
+      "status": "Status",
+      "catalog": "Catalog",
+      "user": "User",
+      "created": "Created",
+      "completed": "Completed",
+      "files": "Files",
+      "pim": "PIM",
+      "source": "Source",
+      "destination": "Destination",
+      "error": "Error",
+      "pulled": "Pulled back",
+      "pushes": "Pushes",
+      "pulls": "Pulls",
+      "updates": "Updates",
+      "failed": "Failed",
+      "total": "Total",
+      "filesPushed": "Files pushed"
+    },
+    "table": {
+      "loading": "Loading operations…",
+      "loadFailed": "Could not load operations: {error}",
+      "range": "{from}–{to} of {total}",
+      "pageSize": "Rows per page",
+      "previous": "Previous",
+      "next": "Next",
+      "pulledBadge": "pulled back",
+      "detailsHint": "Click a row to see the details"
+    },
+    "reports": {
+      "generator": {
+        "title": "Classification report",
+        "help": "The catalogs the chosen people pushed, day by day: each day starts with a green row holding the date, and a product pushed after its release date is red. The columns are set in the Admin Panel.",
+        "users": "People",
+        "period": "Period",
+        "month": "Month",
+        "customRange": "Custom range",
+        "includeUser": "Add a User column",
+        "download": "Download report",
+        "downloading": "Preparing the report…",
+        "downloaded": "Report downloaded: {rows} catalog(s).",
+        "warning": "Note: {warning}",
+        "failed": "The report could not be prepared: {error}",
+        "chooseUsers": "Choose at least one person.",
+        "badRange": "The end of the period is before its start."
+      },
+      "auto": {
+        "title": "Automatic monthly reports",
+        "on": "On",
+        "off": "Off",
+        "offHelp": "Nightly reports are switched off. An administrator turns them on in Admin Panel → Configuration → Classification Reports.",
+        "help": "Every night after {time} ({timezone}) RFM rewrites each person's report of the month so far on the share. The run on the 1st completes the month before.",
+        "nextRun": "Next run",
+        "folder": "Example file",
+        "recipients": "People",
+        "productData": "Product data from PolkaSQL",
+        "shareAccount": "Share account",
+        "configured": "configured",
+        "notConfigured": "not configured",
+        "invalid": "The report settings cannot be used: {error}",
+        "openAdmin": "Open report settings",
+        "writeNow": "Write to the share now",
+        "writeMonth": "Month",
+        "writeButton": "Write reports",
+        "writeConfirm": "Write the {month} report(s) of {names} to the share now? Existing RFM reports for that month are replaced.",
+        "writeStarted": "Writing {count} report(s)… The result appears in the history below.",
+        "writeFailed": "Could not start: {error}"
+      },
+      "runs": {
+        "title": "Report history",
+        "empty": "No reports have been written yet.",
+        "started": "Started",
+        "month": "Month",
+        "person": "Person",
+        "trigger": "Run",
+        "status": "Status",
+        "rows": "Catalogs",
+        "file": "File",
+        "message": "Notes",
+        "scheduled": "Nightly",
+        "manual": "By {user}",
+        "attempts": "attempt {count}",
+        "RUNNING": "Running",
+        "SUCCESS": "Written",
+        "FAILED": "Failed",
+        "refresh": "Refresh"
+      }
+    }
   }
 }

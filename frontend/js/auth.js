@@ -189,6 +189,15 @@ export function isAdmin() {
 }
 
 /**
+ * Whether the current user may open the manager view (MANAGER or ADMIN)
+ * @returns {boolean}
+ */
+export function isManager() {
+    const user = getCurrentUser();
+    return Boolean(user) && ['MANAGER', 'ADMIN'].includes(user.role?.toUpperCase());
+}
+
+/**
  * Send the user to the login page, coming back here after signing in.
  * The login page explains that the session expired when one was in use.
  */

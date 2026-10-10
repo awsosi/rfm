@@ -87,6 +87,18 @@
 ### Future Work (General)
 - [ ] Consider migrating to a component framework (React/Vue) — long-term
 
+### Follow-ups from the manager view and classification reports (2026-10-10)
+- [ ] **Map the columns of `RFM_ProductDetails`** (`docs/polkasql/RFM_ProductDetails.sql`, lines
+      marked `MAP:`) to the real Polka27 designer, gender, release date and last send date,
+      deploy it, then set Product Details URL / API key in the Admin Panel.
+- [ ] Compare a generated report with Grzegorz's sample report (column order, headers, what
+      "Last Send Date" means, date format) and adjust Classification Reports -> Columns.
+- [ ] Create the share account for `\\radius1\Users\Iza.Horna\...`, enter it, press Test Share
+      Access, then turn on the nightly reports.
+- [ ] Check prod's `push_validation_file_names`: the PIM name rule refuses `2..jpg` by itself,
+      so the 2026-10-07 report means it was off (or the files predate 2026-09-17).
+- [ ] Assign Grzegorz the Manager role once his account exists in RFM.
+
 ### Follow-ups from RFM Tray, tab hand-off and the PolkaSQL charset fix (2026-09-24)
 - [ ] **Decide: refuse every re-PUSH of a published catalog, not only RFM Tray's.** The worker's
       copy merges into an existing `B:/<name>` (`File.Copy(..., overwrite: true)`). With
